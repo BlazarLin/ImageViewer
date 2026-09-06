@@ -1,8 +1,10 @@
 #include "MainWindow.h"
 
 #include "core/loader/ImageLoader.h"
+#include "core/analysis/ImageAnalysis.h"
 #include "core/navigation/DirectoryModel.h"
 #include "ui/ImageView.h"
+#include "ui/AnalysisPanel.h"
 #include "ui/PreprocessPanel.h"
 #include "ui/ThumbnailBar.h"
 #include "ui/TitleBar.h"
@@ -40,6 +42,7 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , directoryModel_(std::make_unique<core::navigation::DirectoryModel>())
     , processingWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
+    , analysisWatcher_(new QFutureWatcher<core::analysis::AnalysisResult>(this))
     , processingTimer_(new QTimer(this))
 {
     setWindowTitle(QString("ImageViewer"));
@@ -58,6 +61,8 @@ MainWindow::MainWindow(QWidget* parent)
     connect(processingTimer_, &QTimer::timeout, this, &MainWindow::startPreprocess);
     connect(processingWatcher_, &QFutureWatcher<core::processing::ProcessingResult>::finished,
         this, &MainWindow::onPreprocessFinished);
+    connect(analysisWatcher_, &QFutureWatcher<core::analysis::AnalysisResult>::finished,
+        this, &MainWindow::onRoiAnalysisFinished);
     updateNavigationActions();
     updateImageInformation();
 }
@@ -65,7 +70,9 @@ MainWindow::MainWindow(QWidget* parent)
 MainWindow::~MainWindow()
 {
     ++nProcessingGeneration_;
+    ++nAnalysisGeneration_;
     processingWatcher_->waitForFinished();
+    analysisWatcher_->waitForFinished();
 }
 
 void MainWindow::setupUi()
@@ -104,6 +111,15 @@ void MainWindow::setupUi()
     addDockWidget(Qt::RightDockWidgetArea, preprocessDock_);
     preprocessDock_->hide();
 
+    analysisPanel_ = new ui::AnalysisPanel(this);
+    analysisDock_ = new QDockWidget(tr("像素与 ROI 分析"), this);
+    analysisDock_->setObjectName(QString("AnalysisDock"));
+    analysisDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    analysisDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
+    analysisDock_->setWidget(analysisPanel_);
+    addDockWidget(Qt::RightDockWidgetArea, analysisDock_);
+    analysisDock_->hide();
+
     setStyleSheet(QString(
         "QMainWindow { background:#2e3033; }"
         "QMenuBar { background:#242629; color:#ededed; padding:2px; }"
@@ -115,6 +131,13 @@ void MainWindow::setupUi()
         "QDockWidget { color:#eeeeee; }"));
 
     connect(view_, &ui::ImageView::zoomChanged, this, &MainWindow::onZoomChanged);
+    connect(view_, &ui::ImageView::pixelHovered, this,
+        [this](const QPoint& position, const QColor& color, bool bValid) {
+            if (analysisDock_->isVisible()) {
+                analysisPanel_->setPixel(position, color, bValid);
+            }
+        });
+    connect(view_, &ui::ImageView::roiSelected, this, &MainWindow::startRoiAnalysis);
     connect(thumbnailBar_, &ui::ThumbnailBar::fileActivated, this, &MainWindow::openFile);
     connect(preprocessPanel_, &ui::PreprocessPanel::parametersChanged,
         this, &MainWindow::onPreprocessParametersChanged);
@@ -158,6 +181,14 @@ void MainWindow::setupActions()
     actTogglePreprocess_ = preprocessDock_->toggleViewAction();
     actTogglePreprocess_->setText(tr("图像预处理"));
     actTogglePreprocess_->setShortcut(QKeySequence(QString("Ctrl+P")));
+    actToggleAnalysis_ = analysisDock_->toggleViewAction();
+    actToggleAnalysis_->setText(tr("像素与 ROI 分析"));
+    actToggleAnalysis_->setShortcut(QKeySequence(QString("Ctrl+I")));
+    actCompare_ = new QAction(tr("原图 / 处理图对比"), this);
+    actCompare_->setCheckable(true);
+    actCompare_->setEnabled(false);
+    actCompare_->setShortcut(QKeySequence(QString("Ctrl+D")));
+    connect(actCompare_, &QAction::toggled, this, &MainWindow::toggleComparison);
     actAbout_ = new QAction(tr("关于"), this);
     connect(actAbout_, &QAction::triggered, this, &MainWindow::onAbout);
     actExit_ = new QAction(tr("退出"), this);
@@ -183,6 +214,8 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addAction(actActualSize_);
     viewMenu->addSeparator();
     viewMenu->addAction(actTogglePreprocess_);
+    viewMenu->addAction(actToggleAnalysis_);
+    viewMenu->addAction(actCompare_);
     auto* languageMenu = appMenuBar->addMenu(tr("语言(&L)"));
     QAction* chineseAction = languageMenu->addAction(tr("简体中文"));
     QAction* englishAction = languageMenu->addAction(QString("English"));
@@ -203,6 +236,8 @@ void MainWindow::setupMenusAndToolbar()
     toolbar->addAction(actActualSize_);
     toolbar->addSeparator();
     toolbar->addAction(actTogglePreprocess_);
+    toolbar->addAction(actToggleAnalysis_);
+    toolbar->addAction(actCompare_);
 }
 
 void MainWindow::setupStatusBar()
@@ -231,8 +266,15 @@ void MainWindow::openFile(const QString& path)
     directoryModel_->loadForFile(QFileInfo(path).absoluteFilePath());
     currentPath_ = QFileInfo(path).absoluteFilePath();
     originalImage_ = result.image;
+    processedImage_ = QImage();
+    displayedImage_ = originalImage_;
     ++nProcessingGeneration_;
+    ++nAnalysisGeneration_;
     bProcessingPending_ = false;
+    bAnalysisPending_ = false;
+    analysisPanel_->clear();
+    actCompare_->setChecked(false);
+    actCompare_->setEnabled(false);
 
     if (oldFiles != directoryModel_->files()) {
         thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
@@ -327,7 +369,10 @@ void MainWindow::onPreprocessFinished()
     const core::processing::ProcessingResult result = processingWatcher_->result();
     if (nRunningGeneration_ == nProcessingGeneration_ && processingParameters_.bEnabled) {
         if (result.ok()) {
-            view_->setImage(result.image);
+            processedImage_ = result.image;
+            displayedImage_ = processedImage_;
+            actCompare_->setEnabled(true);
+            view_->setComparisonImages(originalImage_, processedImage_, actCompare_->isChecked());
             statusProcessing_->setText(tr("预处理 %1 ms").arg(result.nElapsedMs));
         } else {
             statusProcessing_->setText(tr("预处理失败"));
@@ -339,10 +384,65 @@ void MainWindow::onPreprocessFinished()
     }
 }
 
+void MainWindow::startRoiAnalysis(const QRect& region)
+{
+    if (displayedImage_.isNull() || region.isEmpty()) {
+        return;
+    }
+    pendingAnalysisRegion_ = region.intersected(displayedImage_.rect());
+    ++nAnalysisGeneration_;
+    analysisPanel_->setSelection(pendingAnalysisRegion_);
+    analysisPanel_->setBusy(true);
+    if (analysisWatcher_->isRunning()) {
+        bAnalysisPending_ = true;
+        return;
+    }
+    bAnalysisPending_ = false;
+    nRunningAnalysisGeneration_ = nAnalysisGeneration_;
+    const QImage image = displayedImage_;
+    const QRect requestedRegion = pendingAnalysisRegion_;
+    analysisWatcher_->setFuture(QtConcurrent::run([image, requestedRegion]() {
+        return core::analysis::ImageAnalysis::analyze(image, requestedRegion);
+    }));
+}
+
+void MainWindow::onRoiAnalysisFinished()
+{
+    const core::analysis::AnalysisResult result = analysisWatcher_->result();
+    if (nRunningAnalysisGeneration_ == nAnalysisGeneration_) {
+        if (result.ok()) {
+            analysisPanel_->setStatistics(result);
+        } else {
+            analysisPanel_->setBusy(false);
+            qWarning().noquote() << result.error;
+        }
+    }
+    if (bAnalysisPending_) {
+        startRoiAnalysis(pendingAnalysisRegion_);
+    }
+}
+
+void MainWindow::toggleComparison(bool bEnabled)
+{
+    if (processedImage_.isNull()) {
+        if (actCompare_->isChecked()) {
+            actCompare_->setChecked(false);
+        }
+        return;
+    }
+    view_->setComparisonImages(originalImage_, processedImage_, bEnabled);
+}
+
 void MainWindow::showOriginalImage()
 {
     if (!originalImage_.isNull()) {
-        view_->setImage(originalImage_);
+        displayedImage_ = originalImage_;
+        processedImage_ = QImage();
+        view_->setImage(originalImage_, false);
+    }
+    if (actCompare_) {
+        actCompare_->setChecked(false);
+        actCompare_->setEnabled(false);
     }
     if (statusProcessing_) {
         statusProcessing_->clear();

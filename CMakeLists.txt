@@ -65,9 +65,11 @@ set(APP_SOURCES
     src/ui/ThumbnailBar.cpp
     src/ui/TitleBar.cpp
     src/ui/PreprocessPanel.cpp
+    src/ui/AnalysisPanel.cpp
     src/core/loader/ImageLoader.cpp
     src/core/navigation/DirectoryModel.cpp
     src/core/processing/ImageProcessor.cpp
+    src/core/analysis/ImageAnalysis.cpp
 )
 
 set(APP_HEADERS
@@ -77,9 +79,11 @@ set(APP_HEADERS
     src/ui/ThumbnailBar.h
     src/ui/TitleBar.h
     src/ui/PreprocessPanel.h
+    src/ui/AnalysisPanel.h
     src/core/loader/ImageLoader.h
     src/core/navigation/DirectoryModel.h
     src/core/processing/ImageProcessor.h
+    src/core/analysis/ImageAnalysis.h
     src/util/ElapsedLog.h
 )
 
@@ -138,8 +142,10 @@ if(BUILD_TESTING)
         tests/ImageViewerCoreTests.cpp
         src/core/navigation/DirectoryModel.cpp
         src/core/processing/ImageProcessor.cpp
+        src/core/analysis/ImageAnalysis.cpp
         src/core/navigation/DirectoryModel.h
         src/core/processing/ImageProcessor.h
+        src/core/analysis/ImageAnalysis.h
     )
     target_include_directories(ImageViewerCoreTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src

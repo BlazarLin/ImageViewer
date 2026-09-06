@@ -1,7 +1,10 @@
 #pragma once
 
 #include <QGraphicsView>
+#include <QColor>
 #include <QImage>
+
+class QGraphicsPixmapItem;
 
 namespace ui {
 
@@ -13,6 +16,13 @@ public:
 
     // 设置当前展示的图像。空图像清空场景。
     void setImage(const QImage& img);
+    void setImage(const QImage& img, bool bResetView);
+
+    // 设置原图和处理图；对比启用时以同一坐标系分割展示。
+    void setComparisonImages(const QImage& original, const QImage& processed,
+        bool bEnabled);
+    void setComparisonEnabled(bool bEnabled);
+    bool comparisonEnabled() const { return bComparisonEnabled_; }
 
     // 当前图像引用。
     const QImage& image() const { return current_; }
@@ -27,11 +37,16 @@ public slots:
 
 signals:
     void zoomChanged(double factor);
+    void pixelHovered(const QPoint& position, const QColor& color, bool bValid);
+    void roiSelected(const QRect& region);
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void drawForeground(QPainter* painter, const QRectF& rect) override;
 
 private:
@@ -43,7 +58,8 @@ private:
     };
 
     void setupScene();
-    void rebuildPixmapItem();
+    void rebuildPixmapItems();
+    void updateHoverPixel(const QPoint& viewportPosition);
     void applyViewMode();
     void setZoomFactor(double factor, const QPoint& anchorPosition);
     void updateRenderMode();
@@ -51,9 +67,18 @@ private:
 
     QGraphicsScene* scene_ = nullptr;
     QGraphicsPixmapItem* pixmapItem_ = nullptr;
+    QGraphicsPixmapItem* comparisonItem_ = nullptr;
     QImage current_;
+    QImage original_;
+    QImage processed_;
     ViewMode viewMode_ = ViewMode::FitWindow;
     double lastEmittedZoom_ = -1.0;
+    double dComparisonSplit_ = 0.5;
+    QPointF roiStart_;
+    QPointF roiEnd_;
+    bool bComparisonEnabled_ = false;
+    bool bDraggingComparisonSplit_ = false;
+    bool bSelectingRoi_ = false;
 };
 
 } // namespace ui

@@ -118,9 +118,11 @@
     <ClInclude Include="ui\ThumbnailBar.h" />
     <ClInclude Include="ui\TitleBar.h" />
     <ClInclude Include="ui\PreprocessPanel.h" />
+    <ClInclude Include="ui\AnalysisPanel.h" />
     <ClInclude Include="core\loader\ImageLoader.h" />
     <ClInclude Include="core\navigation\DirectoryModel.h" />
     <ClInclude Include="core\processing\ImageProcessor.h" />
+    <ClInclude Include="core\analysis\ImageAnalysis.h" />
     <ClInclude Include="util\ElapsedLog.h" />
   </ItemGroup>
 
@@ -136,9 +138,11 @@
     <ClCompile Include="ui\ThumbnailBar.cpp" />
     <ClCompile Include="ui\TitleBar.cpp" />
     <ClCompile Include="ui\PreprocessPanel.cpp" />
+    <ClCompile Include="ui\AnalysisPanel.cpp" />
     <ClCompile Include="core\loader\ImageLoader.cpp" />
     <ClCompile Include="core\navigation\DirectoryModel.cpp" />
     <ClCompile Include="core\processing\ImageProcessor.cpp" />
+    <ClCompile Include="core\analysis\ImageAnalysis.cpp" />
   </ItemGroup>
 
   <!-- moc 生成的 cpp 参与编译(绝对路径,$(SolutionDir) 在评估时解析) -->
@@ -159,6 +163,9 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_PreprocessPanel.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_AnalysisPanel.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
   </ItemGroup>
@@ -182,6 +189,7 @@
     <MocHdrs Include="ui\ThumbnailBar.h" />
     <MocHdrs Include="ui\TitleBar.h" />
     <MocHdrs Include="ui\PreprocessPanel.h" />
+    <MocHdrs Include="ui\AnalysisPanel.h" />
   </ItemGroup>
 
   <!-- 复制运行时 DLL 到输出目录(按配置选择 Debug d 版 / Release 版) -->

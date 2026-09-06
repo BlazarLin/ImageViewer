@@ -10,6 +10,7 @@
 #include <QTextCodec>
 
 #include "core/navigation/DirectoryModel.h"
+#include "core/analysis/ImageAnalysis.h"
 #include "core/processing/ImageProcessor.h"
 
 #include <opencv2/core/utils/logger.hpp>
@@ -112,6 +113,26 @@ void testChannelSelection()
         QString("TEST-05"), QString("验证 RGB/BGR 转换后红通道值准确"));
 }
 
+void testRoiStatistics()
+{
+    QImage image(2, 1, QImage::Format_RGB888);
+    image.setPixelColor(0, 0, QColor(10, 20, 30));
+    image.setPixelColor(1, 0, QColor(30, 40, 50));
+    const auto result = core::analysis::ImageAnalysis::analyze(image, image.rect());
+    const bool bStatisticsCorrect = result.ok()
+        && result.nPixelCount == 2
+        && result.rgb[0].dMinimum == 10.0
+        && result.rgb[0].dMaximum == 30.0
+        && std::abs(result.rgb[0].dMean - 20.0) < 0.001
+        && std::abs(result.rgb[0].dStandardDeviation - 10.0) < 0.001;
+    quint64 nHistogramCount = 0;
+    for (quint64 nValue : result.grayHistogram) {
+        nHistogramCount += nValue;
+    }
+    verify(bStatisticsCorrect && nHistogramCount == 2,
+        QString("TEST-06"), QString("验证 ROI 边界、RGB 统计与灰度直方图像素守恒"));
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -131,6 +152,7 @@ int main(int argc, char* argv[])
     testBrightnessSaturation();
     testThresholdAndDimensions();
     testChannelSelection();
+    testRoiStatistics();
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

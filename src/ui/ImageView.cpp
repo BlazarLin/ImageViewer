@@ -12,6 +12,33 @@
 
 namespace ui {
 
+namespace {
+
+class ClippedPixmapItem final : public QGraphicsPixmapItem {
+public:
+    void setSplit(double dSplit)
+    {
+        dSplit_ = std::clamp(dSplit, 0.0, 1.0);
+        update();
+    }
+
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+        QWidget* widget) override
+    {
+        painter->save();
+        const QRectF bounds = boundingRect();
+        const double dLeft = bounds.left() + bounds.width() * dSplit_;
+        painter->setClipRect(QRectF(dLeft, bounds.top(), bounds.right() - dLeft, bounds.height()));
+        QGraphicsPixmapItem::paint(painter, option, widget);
+        painter->restore();
+    }
+
+private:
+    double dSplit_ = 0.5;
+};
+
+} // namespace
+
 ImageView::ImageView(QWidget* parent)
     : QGraphicsView(parent)
 {
@@ -26,6 +53,7 @@ ImageView::ImageView(QWidget* parent)
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setBackgroundBrush(QColor(46, 48, 51));
     setFrameShape(QFrame::NoFrame);
+    setMouseTracking(true);
 }
 
 void ImageView::setupScene()
@@ -36,27 +64,88 @@ void ImageView::setupScene()
 
 void ImageView::setImage(const QImage& img)
 {
+    setImage(img, true);
+}
+
+void ImageView::setImage(const QImage& img, bool bResetView)
+{
+    const QRectF oldRect = scene_->sceneRect();
     current_ = img;
-    rebuildPixmapItem();
+    original_ = QImage();
+    processed_ = QImage();
+    bComparisonEnabled_ = false;
+    rebuildPixmapItems();
     if (!current_.isNull()) {
         scene_->setSceneRect(QRectF(current_.rect()));
     } else {
         scene_->setSceneRect(QRectF());
     }
-    viewMode_ = ViewMode::FitWindow;
-    applyViewMode();
+    if (bResetView || oldRect.size() != scene_->sceneRect().size()) {
+        viewMode_ = ViewMode::FitWindow;
+        applyViewMode();
+    } else {
+        updateRenderMode();
+        viewport()->update();
+    }
 }
 
-void ImageView::rebuildPixmapItem()
+void ImageView::setComparisonImages(const QImage& original, const QImage& processed,
+    bool bEnabled)
 {
+    const QRectF oldRect = scene_->sceneRect();
+    original_ = original;
+    processed_ = processed;
+    current_ = processed_.isNull() ? original_ : processed_;
+    bComparisonEnabled_ = bEnabled && !original_.isNull() && !processed_.isNull()
+        && original_.size() == processed_.size();
+    rebuildPixmapItems();
+    scene_->setSceneRect(current_.isNull() ? QRectF() : QRectF(current_.rect()));
+    if (oldRect.size() != scene_->sceneRect().size()) {
+        viewMode_ = ViewMode::FitWindow;
+        applyViewMode();
+    } else {
+        updateRenderMode();
+        viewport()->update();
+    }
+}
+
+void ImageView::setComparisonEnabled(bool bEnabled)
+{
+    const bool bNext = bEnabled && !original_.isNull() && !processed_.isNull()
+        && original_.size() == processed_.size();
+    if (bComparisonEnabled_ == bNext) {
+        return;
+    }
+    bComparisonEnabled_ = bNext;
+    rebuildPixmapItems();
+    updateRenderMode();
+    viewport()->update();
+}
+
+void ImageView::rebuildPixmapItems()
+{
+    if (comparisonItem_) {
+        scene_->removeItem(comparisonItem_);
+        delete comparisonItem_;
+        comparisonItem_ = nullptr;
+    }
     if (pixmapItem_) {
         scene_->removeItem(pixmapItem_);
         delete pixmapItem_;
         pixmapItem_ = nullptr;
     }
     if (!current_.isNull()) {
-        pixmapItem_ = scene_->addPixmap(QPixmap::fromImage(current_));
+        const QImage& baseImage = bComparisonEnabled_ ? original_ : current_;
+        pixmapItem_ = scene_->addPixmap(QPixmap::fromImage(baseImage));
         pixmapItem_->setTransformationMode(Qt::SmoothTransformation);
+        if (bComparisonEnabled_) {
+            auto* clippedItem = new ClippedPixmapItem();
+            clippedItem->setPixmap(QPixmap::fromImage(processed_));
+            clippedItem->setSplit(dComparisonSplit_);
+            clippedItem->setTransformationMode(Qt::SmoothTransformation);
+            scene_->addItem(clippedItem);
+            comparisonItem_ = clippedItem;
+        }
     }
 }
 
@@ -130,36 +219,142 @@ void ImageView::mouseDoubleClickEvent(QMouseEvent* event)
     QGraphicsView::mouseDoubleClickEvent(event);
 }
 
+void ImageView::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && !current_.isNull()) {
+        if (event->modifiers().testFlag(Qt::ShiftModifier)) {
+            bSelectingRoi_ = true;
+            roiStart_ = mapToScene(event->pos());
+            roiEnd_ = roiStart_;
+            setDragMode(QGraphicsView::NoDrag);
+            viewport()->update();
+            event->accept();
+            return;
+        }
+        if (bComparisonEnabled_) {
+            const QPoint dividerPosition = mapFromScene(
+                QPointF(current_.width() * dComparisonSplit_, current_.height() * 0.5));
+            if (std::abs(event->pos().x() - dividerPosition.x()) <= 7) {
+                bDraggingComparisonSplit_ = true;
+                setDragMode(QGraphicsView::NoDrag);
+                event->accept();
+                return;
+            }
+        }
+    }
+    QGraphicsView::mousePressEvent(event);
+}
+
+void ImageView::mouseMoveEvent(QMouseEvent* event)
+{
+    updateHoverPixel(event->pos());
+    if (bSelectingRoi_) {
+        roiEnd_ = mapToScene(event->pos());
+        viewport()->update();
+        event->accept();
+        return;
+    }
+    if (bDraggingComparisonSplit_) {
+        dComparisonSplit_ = std::clamp(mapToScene(event->pos()).x() / current_.width(), 0.0, 1.0);
+        if (auto* clippedItem = dynamic_cast<ClippedPixmapItem*>(comparisonItem_)) {
+            clippedItem->setSplit(dComparisonSplit_);
+        }
+        viewport()->update();
+        event->accept();
+        return;
+    }
+    QGraphicsView::mouseMoveEvent(event);
+}
+
+void ImageView::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && bSelectingRoi_) {
+        bSelectingRoi_ = false;
+        setDragMode(QGraphicsView::ScrollHandDrag);
+        QRect region(QPoint(static_cast<int>(std::floor(std::min(roiStart_.x(), roiEnd_.x()))),
+                         static_cast<int>(std::floor(std::min(roiStart_.y(), roiEnd_.y())))),
+            QPoint(static_cast<int>(std::ceil(std::max(roiStart_.x(), roiEnd_.x()))) - 1,
+                static_cast<int>(std::ceil(std::max(roiStart_.y(), roiEnd_.y()))) - 1));
+        region = region.normalized().intersected(current_.rect());
+        viewport()->update();
+        if (!region.isEmpty()) {
+            emit roiSelected(region);
+        }
+        event->accept();
+        return;
+    }
+    if (event->button() == Qt::LeftButton && bDraggingComparisonSplit_) {
+        bDraggingComparisonSplit_ = false;
+        setDragMode(QGraphicsView::ScrollHandDrag);
+        event->accept();
+        return;
+    }
+    QGraphicsView::mouseReleaseEvent(event);
+}
+
+void ImageView::updateHoverPixel(const QPoint& viewportPosition)
+{
+    if (current_.isNull()) {
+        emit pixelHovered(QPoint(), QColor(), false);
+        return;
+    }
+    const QPointF scenePosition = mapToScene(viewportPosition);
+    const QPoint pixelPosition(static_cast<int>(std::floor(scenePosition.x())),
+        static_cast<int>(std::floor(scenePosition.y())));
+    const bool bValid = current_.rect().contains(pixelPosition);
+    emit pixelHovered(pixelPosition,
+        bValid ? current_.pixelColor(pixelPosition) : QColor(), bValid);
+}
+
 void ImageView::drawForeground(QPainter* painter, const QRectF& rect)
 {
     QGraphicsView::drawForeground(painter, rect);
     if (current_.isNull() || zoomFactor() < 8.0) {
-        return;
+        // 对比线和 ROI 框仍需绘制。
+    } else {
+        const QRectF imageRect(current_.rect());
+        const QRectF visible = rect.intersected(imageRect);
+        if (!visible.isEmpty()) {
+            const int nLeft = std::max(0, static_cast<int>(std::floor(visible.left())));
+            const int nRight = std::min(current_.width(), static_cast<int>(std::ceil(visible.right())));
+            const int nTop = std::max(0, static_cast<int>(std::floor(visible.top())));
+            const int nBottom = std::min(current_.height(), static_cast<int>(std::ceil(visible.bottom())));
+
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing, false);
+            QPen pen(QColor(90, 90, 90, 150));
+            pen.setCosmetic(true);
+            painter->setPen(pen);
+            for (int nX = nLeft; nX <= nRight; ++nX) {
+                painter->drawLine(QPointF(nX, nTop), QPointF(nX, nBottom));
+            }
+            for (int nY = nTop; nY <= nBottom; ++nY) {
+                painter->drawLine(QPointF(nLeft, nY), QPointF(nRight, nY));
+            }
+            painter->restore();
+        }
     }
 
-    const QRectF imageRect(current_.rect());
-    const QRectF visible = rect.intersected(imageRect);
-    if (visible.isEmpty()) {
-        return;
+    if (bComparisonEnabled_) {
+        painter->save();
+        QPen dividerPen(QColor(255, 190, 55));
+        dividerPen.setCosmetic(true);
+        dividerPen.setWidth(2);
+        painter->setPen(dividerPen);
+        const double dX = current_.width() * dComparisonSplit_;
+        painter->drawLine(QPointF(dX, 0), QPointF(dX, current_.height()));
+        painter->restore();
     }
-
-    const int nLeft = std::max(0, static_cast<int>(std::floor(visible.left())));
-    const int nRight = std::min(current_.width(), static_cast<int>(std::ceil(visible.right())));
-    const int nTop = std::max(0, static_cast<int>(std::floor(visible.top())));
-    const int nBottom = std::min(current_.height(), static_cast<int>(std::ceil(visible.bottom())));
-
-    painter->save();
-    painter->setRenderHint(QPainter::Antialiasing, false);
-    QPen pen(QColor(90, 90, 90, 150));
-    pen.setCosmetic(true);
-    painter->setPen(pen);
-    for (int nX = nLeft; nX <= nRight; ++nX) {
-        painter->drawLine(QPointF(nX, nTop), QPointF(nX, nBottom));
+    if (bSelectingRoi_) {
+        painter->save();
+        QPen roiPen(QColor(76, 190, 255));
+        roiPen.setCosmetic(true);
+        roiPen.setWidth(2);
+        painter->setPen(roiPen);
+        painter->setBrush(QColor(76, 190, 255, 35));
+        painter->drawRect(QRectF(roiStart_, roiEnd_).normalized().intersected(QRectF(current_.rect())));
+        painter->restore();
     }
-    for (int nY = nTop; nY <= nBottom; ++nY) {
-        painter->drawLine(QPointF(nLeft, nY), QPointF(nRight, nY));
-    }
-    painter->restore();
 }
 
 void ImageView::applyViewMode()
@@ -221,6 +416,10 @@ void ImageView::updateRenderMode()
     const bool bShowPixels = zoomFactor() >= 8.0;
     pixmapItem_->setTransformationMode(
         bShowPixels ? Qt::FastTransformation : Qt::SmoothTransformation);
+    if (comparisonItem_) {
+        comparisonItem_->setTransformationMode(
+            bShowPixels ? Qt::FastTransformation : Qt::SmoothTransformation);
+    }
     setRenderHint(QPainter::SmoothPixmapTransform, !bShowPixels);
     viewport()->update();
 }

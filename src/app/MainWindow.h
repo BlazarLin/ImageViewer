@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/processing/ImageProcessor.h"
+#include "core/analysis/ImageAnalysis.h"
 
 #include <QImage>
 #include <QMainWindow>
@@ -20,6 +21,7 @@ class DirectoryModel;
 
 namespace ui {
 class ImageView;
+class AnalysisPanel;
 class PreprocessPanel;
 class ThumbnailBar;
 class TitleBar;
@@ -49,6 +51,9 @@ private slots:
         const core::processing::ProcessingParameters& parameters);
     void startPreprocess();
     void onPreprocessFinished();
+    void startRoiAnalysis(const QRect& region);
+    void onRoiAnalysisFinished();
+    void toggleComparison(bool bEnabled);
     void toggleMaximized();
     void selectLanguage(const QString& localeName);
 
@@ -68,16 +73,25 @@ private:
     ui::ThumbnailBar* thumbnailBar_ = nullptr;
     ui::TitleBar* titleBar_ = nullptr;
     ui::PreprocessPanel* preprocessPanel_ = nullptr;
+    ui::AnalysisPanel* analysisPanel_ = nullptr;
     QDockWidget* preprocessDock_ = nullptr;
+    QDockWidget* analysisDock_ = nullptr;
 
     std::unique_ptr<core::navigation::DirectoryModel> directoryModel_;
     QFutureWatcher<core::processing::ProcessingResult>* processingWatcher_ = nullptr;
+    QFutureWatcher<core::analysis::AnalysisResult>* analysisWatcher_ = nullptr;
     QTimer* processingTimer_ = nullptr;
     core::processing::ProcessingParameters processingParameters_;
     QImage originalImage_;
+    QImage processedImage_;
+    QImage displayedImage_;
     quint64 nProcessingGeneration_ = 0;
     quint64 nRunningGeneration_ = 0;
     bool bProcessingPending_ = false;
+    quint64 nAnalysisGeneration_ = 0;
+    quint64 nRunningAnalysisGeneration_ = 0;
+    QRect pendingAnalysisRegion_;
+    bool bAnalysisPending_ = false;
 
     QAction* actOpen_ = nullptr;
     QAction* actPrevious_ = nullptr;
@@ -87,6 +101,8 @@ private:
     QAction* actFitHeight_ = nullptr;
     QAction* actActualSize_ = nullptr;
     QAction* actTogglePreprocess_ = nullptr;
+    QAction* actToggleAnalysis_ = nullptr;
+    QAction* actCompare_ = nullptr;
     QAction* actAbout_ = nullptr;
     QAction* actExit_ = nullptr;
 
