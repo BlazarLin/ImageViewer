@@ -3,6 +3,7 @@
 #include "core/loader/ImageLoader.h"
 #include "core/analysis/ImageAnalysis.h"
 #include "core/navigation/DirectoryModel.h"
+#include "core/processing/ProcessingPreset.h"
 #include "ui/ImageView.h"
 #include "ui/AnalysisPanel.h"
 #include "ui/PreprocessPanel.h"
@@ -16,12 +17,14 @@
 #include <QDebug>
 #include <QCursor>
 #include <QDockWidget>
+#include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFutureWatcher>
+#include <QImageWriter>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
@@ -157,6 +160,15 @@ void MainWindow::setupActions()
     actOpen_->setShortcut(QKeySequence::Open);
     connect(actOpen_, &QAction::triggered, this, &MainWindow::onOpen);
 
+    actSaveResult_ = new QAction(tr("另存当前结果…"), this);
+    actSaveResult_->setShortcut(QKeySequence(QString("Ctrl+Shift+S")));
+    actSaveResult_->setEnabled(false);
+    connect(actSaveResult_, &QAction::triggered, this, &MainWindow::onSaveResult);
+    actSavePreset_ = new QAction(tr("保存预处理预设…"), this);
+    connect(actSavePreset_, &QAction::triggered, this, &MainWindow::onSavePreset);
+    actLoadPreset_ = new QAction(tr("载入预处理预设…"), this);
+    connect(actLoadPreset_, &QAction::triggered, this, &MainWindow::onLoadPreset);
+
     actPrevious_ = new QAction(style()->standardIcon(QStyle::SP_ArrowBack), tr("上一张"), this);
     actPrevious_->setShortcut(QKeySequence(Qt::Key_Left));
     connect(actPrevious_, &QAction::triggered, this, &MainWindow::onPrevious);
@@ -205,6 +217,10 @@ void MainWindow::setupMenusAndToolbar()
     }
     auto* fileMenu = appMenuBar->addMenu(tr("文件(&F)"));
     fileMenu->addAction(actOpen_);
+    fileMenu->addAction(actSaveResult_);
+    fileMenu->addSeparator();
+    fileMenu->addAction(actSavePreset_);
+    fileMenu->addAction(actLoadPreset_);
     fileMenu->addSeparator();
     fileMenu->addAction(actExit_);
     auto* viewMenu = appMenuBar->addMenu(tr("视图(&V)"));
@@ -228,6 +244,7 @@ void MainWindow::setupMenusAndToolbar()
     toolbar->setObjectName(QString("MainToolBar"));
     toolbar->setMovable(false);
     toolbar->addAction(actOpen_);
+    toolbar->addAction(actSaveResult_);
     toolbar->addSeparator();
     toolbar->addAction(actPrevious_);
     toolbar->addAction(actNext_);
@@ -275,6 +292,7 @@ void MainWindow::openFile(const QString& path)
     analysisPanel_->clear();
     actCompare_->setChecked(false);
     actCompare_->setEnabled(false);
+    actSaveResult_->setEnabled(true);
 
     if (oldFiles != directoryModel_->files()) {
         thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
@@ -298,6 +316,64 @@ void MainWindow::onOpen()
     if (!path.isEmpty()) {
         openFile(path);
     }
+}
+
+void MainWindow::onSaveResult()
+{
+    if (displayedImage_.isNull()) {
+        return;
+    }
+    const QString suggestedName = currentPath_.isEmpty()
+        ? QString("result.png")
+        : QFileInfo(currentPath_).completeBaseName() + QString("_result.png");
+    const QString directory = currentPath_.isEmpty()
+        ? QString() : QFileInfo(currentPath_).absolutePath();
+    const QString path = QFileDialog::getSaveFileName(this, tr("另存当前结果"),
+        QDir(directory).filePath(suggestedName),
+        tr("PNG 图像 (*.png);;JPEG 图像 (*.jpg *.jpeg);;BMP 图像 (*.bmp);;TIFF 图像 (*.tif *.tiff);;WebP 图像 (*.webp)"));
+    if (path.isEmpty()) {
+        return;
+    }
+    QImageWriter writer(path);
+    writer.setQuality(95);
+    if (!writer.write(displayedImage_)) {
+        QMessageBox::warning(this, tr("保存失败"), writer.errorString());
+        return;
+    }
+    statusBar()->showMessage(tr("已保存：%1").arg(path), 4000);
+}
+
+void MainWindow::onSavePreset()
+{
+    const QString path = QFileDialog::getSaveFileName(this, tr("保存预处理预设"),
+        QString("ImageViewerPreset.json"), tr("JSON 预设 (*.json)"));
+    if (path.isEmpty()) {
+        return;
+    }
+    QString error;
+    if (!core::processing::ProcessingPreset::save(path, processingParameters_, &error)) {
+        QMessageBox::warning(this, tr("保存失败"), error);
+        return;
+    }
+    statusBar()->showMessage(tr("预设已保存：%1").arg(path), 4000);
+}
+
+void MainWindow::onLoadPreset()
+{
+    const QString path = QFileDialog::getOpenFileName(this, tr("载入预处理预设"),
+        QString(), tr("JSON 预设 (*.json)"));
+    if (path.isEmpty()) {
+        return;
+    }
+    core::processing::ProcessingParameters parameters;
+    QString error;
+    if (!core::processing::ProcessingPreset::load(path, &parameters, &error)) {
+        QMessageBox::warning(this, tr("载入失败"), error);
+        return;
+    }
+    preprocessPanel_->setParameters(parameters);
+    preprocessDock_->show();
+    statusBar()->showMessage(tr("预设已载入：%1").arg(path), 4000);
 }
 
 void MainWindow::onPrevious()

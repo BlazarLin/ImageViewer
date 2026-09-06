@@ -34,11 +34,13 @@
     <ClCompile Include="ImageViewerCoreTests.cpp" />
     <ClCompile Include="..\src\core\navigation\DirectoryModel.cpp" />
     <ClCompile Include="..\src\core\processing\ImageProcessor.cpp" />
+    <ClCompile Include="..\src\core\processing\ProcessingPreset.cpp" />
     <ClCompile Include="..\src\core\analysis\ImageAnalysis.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\core\navigation\DirectoryModel.h" />
     <ClInclude Include="..\src\core\processing\ImageProcessor.h" />
+    <ClInclude Include="..\src\core\processing\ProcessingPreset.h" />
     <ClInclude Include="..\src\core\analysis\ImageAnalysis.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

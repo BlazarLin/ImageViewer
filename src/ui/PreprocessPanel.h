@@ -21,6 +21,7 @@ public:
     explicit PreprocessPanel(QWidget* parent = nullptr);
 
     core::processing::ProcessingParameters parameters() const;
+    void setParameters(const core::processing::ProcessingParameters& parameters);
     void setProcessingEnabled(bool bEnabled);
 
 signals:

@@ -12,8 +12,11 @@
 #include "core/navigation/DirectoryModel.h"
 #include "core/analysis/ImageAnalysis.h"
 #include "core/processing/ImageProcessor.h"
+#include "core/processing/ProcessingPreset.h"
 
 #include <opencv2/core/utils/logger.hpp>
+
+#include <cmath>
 
 namespace {
 
@@ -133,6 +136,28 @@ void testRoiStatistics()
         QString("TEST-06"), QString("验证 ROI 边界、RGB 统计与灰度直方图像素守恒"));
 }
 
+void testProcessingPreset()
+{
+    core::processing::ProcessingParameters source;
+    source.bEnabled = true;
+    source.nBrightness = 31;
+    source.dGamma = 1.7;
+    source.edge = core::processing::EdgeMode::Canny;
+    source.nCannyLow = 180;
+    source.nCannyHigh = 60;
+    source.nSmoothKernel = 4;
+    core::processing::ProcessingParameters loaded;
+    QString error;
+    const bool bLoaded = core::processing::ProcessingPreset::fromJson(
+        core::processing::ProcessingPreset::toJson(source), &loaded, &error);
+    verify(bLoaded && error.isEmpty() && loaded.bEnabled
+            && loaded.nBrightness == 31 && std::abs(loaded.dGamma - 1.7) < 0.001
+            && loaded.edge == core::processing::EdgeMode::Canny
+            && loaded.nCannyLow == 60 && loaded.nCannyHigh == 180
+            && loaded.nSmoothKernel == 5,
+        QString("TEST-07"), QString("验证预处理预设 JSON 往返、奇数核归一化与 Canny 阈值排序"));
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -153,6 +178,7 @@ int main(int argc, char* argv[])
     testThresholdAndDimensions();
     testChannelSelection();
     testRoiStatistics();
+    testProcessingPreset();
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

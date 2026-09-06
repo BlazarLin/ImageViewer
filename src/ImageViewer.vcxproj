@@ -122,6 +122,7 @@
     <ClInclude Include="core\loader\ImageLoader.h" />
     <ClInclude Include="core\navigation\DirectoryModel.h" />
     <ClInclude Include="core\processing\ImageProcessor.h" />
+    <ClInclude Include="core\processing\ProcessingPreset.h" />
     <ClInclude Include="core\analysis\ImageAnalysis.h" />
     <ClInclude Include="util\ElapsedLog.h" />
   </ItemGroup>
@@ -142,6 +143,7 @@
     <ClCompile Include="core\loader\ImageLoader.cpp" />
     <ClCompile Include="core\navigation\DirectoryModel.cpp" />
     <ClCompile Include="core\processing\ImageProcessor.cpp" />
+    <ClCompile Include="core\processing\ProcessingPreset.cpp" />
     <ClCompile Include="core\analysis\ImageAnalysis.cpp" />
   </ItemGroup>
 

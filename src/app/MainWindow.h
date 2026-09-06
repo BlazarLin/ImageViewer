@@ -43,6 +43,9 @@ protected:
 
 private slots:
     void onOpen();
+    void onSaveResult();
+    void onSavePreset();
+    void onLoadPreset();
     void onPrevious();
     void onNext();
     void onAbout();
@@ -94,6 +97,9 @@ private:
     bool bAnalysisPending_ = false;
 
     QAction* actOpen_ = nullptr;
+    QAction* actSaveResult_ = nullptr;
+    QAction* actSavePreset_ = nullptr;
+    QAction* actLoadPreset_ = nullptr;
     QAction* actPrevious_ = nullptr;
     QAction* actNext_ = nullptr;
     QAction* actFit_ = nullptr;

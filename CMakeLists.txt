@@ -69,6 +69,7 @@ set(APP_SOURCES
     src/core/loader/ImageLoader.cpp
     src/core/navigation/DirectoryModel.cpp
     src/core/processing/ImageProcessor.cpp
+    src/core/processing/ProcessingPreset.cpp
     src/core/analysis/ImageAnalysis.cpp
 )
 
@@ -83,6 +84,7 @@ set(APP_HEADERS
     src/core/loader/ImageLoader.h
     src/core/navigation/DirectoryModel.h
     src/core/processing/ImageProcessor.h
+    src/core/processing/ProcessingPreset.h
     src/core/analysis/ImageAnalysis.h
     src/util/ElapsedLog.h
 )
@@ -142,9 +144,11 @@ if(BUILD_TESTING)
         tests/ImageViewerCoreTests.cpp
         src/core/navigation/DirectoryModel.cpp
         src/core/processing/ImageProcessor.cpp
+        src/core/processing/ProcessingPreset.cpp
         src/core/analysis/ImageAnalysis.cpp
         src/core/navigation/DirectoryModel.h
         src/core/processing/ImageProcessor.h
+        src/core/processing/ProcessingPreset.h
         src/core/analysis/ImageAnalysis.h
     )
     target_include_directories(ImageViewerCoreTests PRIVATE

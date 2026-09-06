@@ -191,6 +191,29 @@ void PreprocessPanel::setProcessingEnabled(bool bEnabled)
     enabledCheck_->setChecked(bEnabled);
 }
 
+void PreprocessPanel::setParameters(const core::processing::ProcessingParameters& parameters)
+{
+    bUpdatingControls_ = true;
+    enabledCheck_->setChecked(parameters.bEnabled);
+    brightnessSlider_->setValue(parameters.nBrightness);
+    contrastSlider_->setValue(qRound(parameters.dContrast * 100.0));
+    gammaSlider_->setValue(qRound(parameters.dGamma * 100.0));
+    channelCombo_->setCurrentIndex(static_cast<int>(parameters.channel));
+    smoothCombo_->setCurrentIndex(static_cast<int>(parameters.smooth));
+    smoothKernelSpin_->setValue(parameters.nSmoothKernel);
+    sharpenSlider_->setValue(qRound(parameters.dSharpenAmount * 100.0));
+    thresholdCombo_->setCurrentIndex(static_cast<int>(parameters.threshold));
+    thresholdSpin_->setValue(parameters.nThreshold);
+    edgeCombo_->setCurrentIndex(static_cast<int>(parameters.edge));
+    cannyLowSpin_->setValue(parameters.nCannyLow);
+    cannyHighSpin_->setValue(parameters.nCannyHigh);
+    morphologyCombo_->setCurrentIndex(static_cast<int>(parameters.morphology));
+    morphologyKernelSpin_->setValue(parameters.nMorphKernel);
+    morphologyIterationsSpin_->setValue(parameters.nMorphIterations);
+    bUpdatingControls_ = false;
+    emit parametersChanged(this->parameters());
+}
+
 void PreprocessPanel::emitParametersChanged()
 {
     if (!bUpdatingControls_) {
