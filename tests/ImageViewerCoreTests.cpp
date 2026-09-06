@@ -12,6 +12,8 @@
 #include "core/navigation/DirectoryModel.h"
 #include "core/processing/ImageProcessor.h"
 
+#include <opencv2/core/utils/logger.hpp>
+
 namespace {
 
 int nFailedTests = 0;
@@ -117,6 +119,7 @@ int main(int argc, char* argv[])
     SetConsoleOutputCP(CP_UTF8);
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
     QCoreApplication app(argc, argv);
+    cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_WARNING);
 
     const QString outputRoot = QDir(QCoreApplication::applicationDirPath())
         .filePath(QString("ImageViewerCoreTestsData"));

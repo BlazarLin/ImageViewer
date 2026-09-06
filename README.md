@@ -4,13 +4,19 @@
 
 - 技术栈:**C++17 / Qt 5.14.2 / OpenCV 4.5.5**
 - 平台:**Windows 10/11 x64 / VS2019 (v142)**
-- 计划详见:项目根目录由 LLM 维护的 plan 文件
+- 设计与计划详见 `docs/superpowers/`
 
 ## 当前进度
 
-**M0 骨架(完成)**:CMake + VS2019 双工程,可打开单图、拖拽、命令行参数、菜单/工具栏/状态栏、适应窗口/实际大小、Qt 单实例 IPC 占位。
+**V1 基础看图与实时预处理（完成）**：
 
-后续节点:M1 缩放、M2 目录翻页、M3 大图金字塔、M4 预处理算子、M5 EXIF/全屏/幻灯片、M6 性能与发布。详见 plan。
+- 打开、拖拽、命令行加载常见图像，支持中文路径。
+- 以光标为锚点的滚轮缩放，范围 `1%~6400%`；`800%` 起切换最近邻并显示像素网格。
+- 适应窗口、适应宽度、适应高度和实际大小。
+- 当前目录底部缩略图栏，支持点击、左右键和工具栏切图。
+- 无边框自定义标题栏，显示文件名、目录序号、缩放比、尺寸、大小、像素信息和修改时间。
+- 可显隐的右侧实时预处理面板，默认隐藏。
+- Qt `tr()` + `.ts/.qm` 多语言基础，内置简体中文和 English，切换后重启生效。
 
 ## 目录结构
 
@@ -27,14 +33,20 @@ CodeProject/
 │   ├─ app/
 │   │   ├─ Application.{h,cpp}   # 单实例 + 命令行
 │   │   ├─ MainWindow.{h,cpp}    # 主窗口
-│   │   └─ MainWindow.ui         # 占位
+│   │   └─ MainWindow.ui         # Qt Designer 兼容占位
 │   ├─ ui/
-│   │   └─ ImageView.{h,cpp}     # QGraphicsView 子类
+│   │   ├─ ImageView.{h,cpp}     # 缩放、平移与像素网格
+│   │   ├─ ThumbnailBar.{h,cpp}  # 异步缩略图导航
+│   │   ├─ TitleBar.{h,cpp}      # 自定义标题栏
+│   │   └─ PreprocessPanel.{h,cpp}
 │   ├─ core/
-│   │   └─ loader/
-│   │       └─ ImageLoader.{h,cpp}
+│   │   ├─ loader/ImageLoader.{h,cpp}
+│   │   ├─ navigation/DirectoryModel.{h,cpp}
+│   │   └─ processing/ImageProcessor.{h,cpp}
 │   └─ util/
 │       └─ ElapsedLog.h
+├─ tests/                         # 独立核心测试 EXE
+├─ translations/                  # Qt Linguist 翻译源文件
 └─ README.md
 ```
 
@@ -78,7 +90,7 @@ setx OPENCV_DIR "D:\opencv\build"
 bin\Debug\ImageViewer.exe D:\test\big_image.tif
 ```
 
-支持多文件(只打开第一张,M2 实现翻页):
+命令行可传入多文件，程序打开第一张后自动载入该目录用于翻页：
 
 ```
 ImageViewer.exe img1.png img2.jpg
@@ -100,22 +112,54 @@ cmake .. -G "Visual Studio 16 2019" -A x64 ^
 cmake --build . --config Release
 ```
 
-## 已知限制(M0 阶段)
+## 实时预处理
 
-- 缩放仅"适应窗口"和"实际大小"两个预设,**完整滚轮缩放/以光标为锚**留到 M1
-- 大图未做瓦片金字塔,**8K+ 内存可能吃紧**,留到 M3
-- 目录翻页未做,留到 M2
-- 预处理算子未做,留到 M4
-- Qt 单实例 IPC 已占位但接收回调未连接 MainWindow,留到 V1
+使用 `Ctrl+P` 显示或隐藏面板。面板包含：
 
-## 关键测试(M0 阶段手动跑)
+- 亮度、对比度、Gamma、灰度和 B/G/R 通道查看。
+- 均值、高斯、中值滤波和 Unsharp Mask 锐化。
+- 固定阈值、Otsu、Sobel、Laplacian 和 Canny。
+- 腐蚀、膨胀、开运算和闭运算。
+
+参数连续变化会在 80 ms 合并后交给后台线程处理，仅最新代次的结果能刷新界面。隐藏面板或复原参数会回到原图，不修改原文件。
+
+## 快捷键
+
+| 操作 | 快捷键 |
+|---|---|
+| 打开图片 | `Ctrl+O` |
+| 上一张 / 下一张 | `Left` / `Right` |
+| 适应窗口 | `Ctrl+0` |
+| 实际大小 | `Ctrl+1` |
+| 显示/隐藏预处理 | `Ctrl+P` |
+
+## 已知限制
+
+- 极大 TIFF/RAW 尚未实现瓦片解码和金字塔，8K+ 图像的解码峰值内存仍取决于原始格式。
+- GIF/WebP 和多页 TIFF 当前只显示解码器返回的首帧。
+- 当前预处理只提供 8 位预览，高位深工业图暂未保留 10/12/16 位定量精度。
+- 单实例已限制重复启动，但第二实例的新文件参数尚未转发给第一实例。
+
+## 构建与测试
+
+VS2019 解决方案内含独立 `ImageViewerCoreTests` EXE，Debug/Release 均会构建：
+
+```powershell
+scripts\build.ps1 -Cfg Debug
+bin\Tests\Debug\ImageViewerCoreTests.exe
+```
+
+核心测试使用中文业务日志，当前覆盖目录过滤/自然排序、原图直通、亮度饱和、Otsu/核归一化和 RGB/BGR 通道正确性。
+
+## 关键手动验收
 
 | 用例 | 期望 |
 |------|------|
-| 启动 EXE(无参数) | 空白主窗口,启动 <2s |
-| `ImageViewer.exe test.png` | 打开图片,标题显示文件名 |
+| 启动 EXE(无参数) | 空白主窗口，预处理面板默认隐藏 |
+| `ImageViewer.exe test.png` | 打开图片，标题显示文件和图像信息，底部显示目录缩略图 |
 | 拖拽 jpg/png/bmp/tif/webp 到窗口 | 正常打开 |
 | 拖拽损坏文件 | 弹错误框不崩 |
-| 菜单 视图→适应窗口/实际大小 | 图正确缩放 |
+| 滚轮与菜单缩放 | 光标锚点稳定，800% 显示像素格，四周背景为统一深灰 |
+| 打开预处理并拖动参数 | 界面不卡死，只刷新最新结果，隐藏面板后恢复原图 |
 | 启动另一个 EXE 实例 | 第一实例继续运行,第二实例退出 |
 | 中文路径图片 | 正常打开不乱码 |

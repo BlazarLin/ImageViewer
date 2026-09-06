@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
+#include <QCursor>
 #include <QDockWidget>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -33,7 +34,6 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrentRun>
 
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
 MainWindow::MainWindow(QWidget* parent)
@@ -462,13 +462,12 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, long* r
     MSG* msg = static_cast<MSG*>(message);
     if (msg && msg->message == WM_NCHITTEST && !isMaximized()) {
         constexpr int nBorder = 6;
-        POINT cursor{};
-        ::GetCursorPos(&cursor);
+        const QPoint cursor = QCursor::pos();
         const QRect frame = frameGeometry();
-        const bool bLeft = cursor.x >= frame.left() && cursor.x < frame.left() + nBorder;
-        const bool bRight = cursor.x <= frame.right() && cursor.x > frame.right() - nBorder;
-        const bool bTop = cursor.y >= frame.top() && cursor.y < frame.top() + nBorder;
-        const bool bBottom = cursor.y <= frame.bottom() && cursor.y > frame.bottom() - nBorder;
+        const bool bLeft = cursor.x() >= frame.left() && cursor.x() < frame.left() + nBorder;
+        const bool bRight = cursor.x() <= frame.right() && cursor.x() > frame.right() - nBorder;
+        const bool bTop = cursor.y() >= frame.top() && cursor.y() < frame.top() + nBorder;
+        const bool bBottom = cursor.y() <= frame.bottom() && cursor.y() > frame.bottom() - nBorder;
         if (bTop && bLeft) { *result = HTTOPLEFT; return true; }
         if (bTop && bRight) { *result = HTTOPRIGHT; return true; }
         if (bBottom && bLeft) { *result = HTBOTTOMLEFT; return true; }
