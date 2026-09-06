@@ -24,6 +24,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFutureWatcher>
+#include <QHBoxLayout>
 #include <QImageWriter>
 #include <QKeySequence>
 #include <QLabel>
@@ -36,6 +37,7 @@
 #include <QStyle>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -111,12 +113,35 @@ void MainWindow::setupUi()
     centralLayout->addWidget(thumbnailBar_);
     setCentralWidget(central);
 
+    const auto installDockTitleBar = [this](QDockWidget* dock, const QString& title) {
+        auto* titleBar = new QWidget(dock);
+        titleBar->setObjectName(QString("DockTitleBar"));
+        titleBar->setFixedHeight(38);
+        auto* layout = new QHBoxLayout(titleBar);
+        layout->setContentsMargins(12, 0, 4, 0);
+        layout->setSpacing(6);
+        auto* label = new QLabel(title, titleBar);
+        label->setObjectName(QString("DockTitleLabel"));
+        auto* closeButton = new QToolButton(titleBar);
+        closeButton->setObjectName(QString("DockCloseButton"));
+        closeButton->setText(QString("×"));
+        closeButton->setToolTip(tr("关闭"));
+        closeButton->setFixedSize(34, 30);
+        closeButton->setFocusPolicy(Qt::NoFocus);
+        layout->addWidget(label, 1);
+        layout->addWidget(closeButton);
+        connect(closeButton, &QToolButton::clicked, dock, &QDockWidget::hide);
+        dock->setTitleBarWidget(titleBar);
+        dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
+    };
+
     preprocessPanel_ = new ui::PreprocessPanel(this);
     preprocessDock_ = new QDockWidget(tr("图像预处理"), this);
     preprocessDock_->setObjectName(QString("PreprocessDock"));
     preprocessDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     preprocessDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
     preprocessDock_->setWidget(preprocessPanel_);
+    installDockTitleBar(preprocessDock_, tr("图像预处理"));
     addDockWidget(Qt::RightDockWidgetArea, preprocessDock_);
     preprocessDock_->hide();
 
@@ -126,18 +151,83 @@ void MainWindow::setupUi()
     analysisDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     analysisDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
     analysisDock_->setWidget(analysisPanel_);
+    installDockTitleBar(analysisDock_, tr("像素与 ROI 分析"));
     addDockWidget(Qt::RightDockWidgetArea, analysisDock_);
     analysisDock_->hide();
 
     setStyleSheet(QString(
-        "QMainWindow { background:#2e3033; }"
-        "QMenuBar { background:#242629; color:#ededed; padding:2px; }"
-        "QMenuBar::item:selected,QMenu::item:selected { background:#3f657d; }"
-        "QMenu { background:#2c2e32; color:#ededed; border:1px solid #44474c; }"
-        "QToolBar { background:#25272a; border:0; spacing:4px; padding:4px; }"
-        "QToolButton { color:#eeeeee; padding:5px; }"
-        "QStatusBar { background:#222427; color:#d8d8d8; }"
-        "QDockWidget { color:#eeeeee; }"));
+        "QMainWindow { background:#2d3035; color:#e5e9ef; }"
+        "QWidget { font-family:'Microsoft YaHei UI'; font-size:13px; }"
+        "QWidget#CustomTitleBar { background:#1d1f22; border-bottom:1px solid #30343a; }"
+        "QLabel#TitleInfo { color:#dce1e7; font-size:12px; }"
+        "QLabel#AppIcon { background:#1479ad; color:white; border-radius:5px; font-weight:600; }"
+        "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:18px; }"
+        "QWidget#CustomTitleBar QToolButton:hover { background:#33373d; }"
+        "QWidget#CustomTitleBar QToolButton#CloseButton:hover { background:#c42b1c; }"
+        "QMenuBar { background:#222428; color:#dfe3e8; padding:2px 6px; border-bottom:1px solid #30343a; }"
+        "QMenuBar::item { background:transparent; padding:5px 10px; border-radius:4px; }"
+        "QMenuBar::item:selected { background:#353a41; color:white; }"
+        "QMenuBar::item:pressed { background:#176b98; color:white; }"
+        "QMenu { background:#282b30; color:#e4e8ed; border:1px solid #454a52; padding:6px; }"
+        "QMenu::item { padding:7px 28px 7px 12px; border-radius:4px; }"
+        "QMenu::item:selected { background:#176b98; color:white; }"
+        "QMenu::item:disabled { color:#747a83; }"
+        "QMenu::separator { height:1px; background:#41464d; margin:5px 8px; }"
+        "QToolBar { background:#222428; border:0; border-bottom:1px solid #34383e; spacing:3px; padding:6px 8px; }"
+        "QToolBar QToolButton { color:#dfe3e8; background:transparent; border:1px solid transparent; border-radius:5px; min-height:28px; padding:3px 10px; }"
+        "QToolBar QToolButton:hover { background:#343941; border-color:#454b54; color:white; }"
+        "QToolBar QToolButton:pressed { background:#1c5e82; }"
+        "QToolBar QToolButton:checked { background:#176b98; border-color:#268bc0; color:white; }"
+        "QToolBar QToolButton:disabled { color:#666c74; background:transparent; }"
+        "QToolBar::separator { width:1px; background:#434850; margin:5px 6px; }"
+        "QStatusBar { background:#1f2124; color:#b9c0c8; border-top:1px solid #34383e; min-height:24px; }"
+        "QStatusBar QLabel { color:#b9c0c8; padding:0 10px; border-left:1px solid #34383e; }"
+        "QStatusBar QLabel#StatusFile { border-left:0; }"
+        "QDockWidget { background:#25282d; color:#e5e9ef; border-left:1px solid #3a3f46; }"
+        "QDockWidget::title { background:#22252a; color:#e5e9ef; padding:9px 10px; text-align:left; border-bottom:1px solid #3b4047; }"
+        "QDockWidget::close-button,QDockWidget::float-button { border:0; background:transparent; padding:4px; }"
+        "QDockWidget::close-button:hover,QDockWidget::float-button:hover { background:#3a3f46; }"
+        "QWidget#DockTitleBar { background:#22252a; border-bottom:1px solid #3b4047; }"
+        "QLabel#DockTitleLabel { color:#e5e9ef; font-weight:600; }"
+        "QToolButton#DockCloseButton { color:#c9cfd6; background:transparent; border:0; border-radius:4px; font-size:18px; }"
+        "QToolButton#DockCloseButton:hover { color:white; background:#c42b1c; }"
+        "QWidget#PreprocessPanel,QWidget#AnalysisPanel { background:#25282d; color:#e1e5ea; }"
+        "QFrame#ProcessingSwitchCard { background:#2b3b46; border:1px solid #31586f; border-radius:7px; }"
+        "QCheckBox#ProcessingSwitch { color:#edf4f8; font-weight:600; spacing:9px; }"
+        "QWidget#PreprocessParameters { background:transparent; }"
+        "QScrollArea#PreprocessScroll { background:transparent; border:0; }"
+        "QWidget#PreprocessPanel QGroupBox,QWidget#AnalysisPanel QGroupBox { background:#2b2e33; border:1px solid #41464e; border-radius:7px; margin-top:13px; padding-top:7px; font-weight:600; }"
+        "QWidget#PreprocessPanel QGroupBox::title,QWidget#AnalysisPanel QGroupBox::title { subcontrol-origin:margin; left:12px; padding:0 6px; color:#cfd5dc; background:#2b2e33; }"
+        "QWidget#PreprocessPanel QLabel,QWidget#AnalysisPanel QLabel { color:#cbd1d8; font-weight:400; }"
+        "QWidget#PreprocessPanel QLabel#ValueBadge { color:#dceaf2; background:#202328; border:1px solid #444a52; border-radius:4px; padding:3px 4px; }"
+        "QComboBox,QSpinBox { color:#e4e8ed; background:#34383e; border:1px solid #50565f; border-radius:4px; padding:4px 8px; selection-background-color:#176b98; }"
+        "QComboBox:hover,QSpinBox:hover { border-color:#6b747f; }"
+        "QComboBox:focus,QSpinBox:focus { border-color:#2d9bd3; }"
+        "QComboBox:disabled,QSpinBox:disabled { color:#6f757d; background:#2b2e33; border-color:#3d4147; }"
+        "QComboBox QAbstractItemView { background:#2b2e33; color:#e4e8ed; border:1px solid #50565f; selection-background-color:#176b98; outline:0; }"
+        "QSlider::groove:horizontal { height:4px; background:#474c54; border-radius:2px; }"
+        "QSlider::sub-page:horizontal { background:#258fc5; border-radius:2px; }"
+        "QSlider::handle:horizontal { width:14px; margin:-5px 0; border-radius:7px; background:#dce7ed; border:2px solid #258fc5; }"
+        "QSlider::handle:horizontal:hover { background:white; border-color:#45afe2; }"
+        "QSlider:disabled { background:transparent; }"
+        "QSlider::groove:horizontal:disabled { background:#393d43; }"
+        "QSlider::sub-page:horizontal:disabled { background:#48515a; }"
+        "QSlider::handle:horizontal:disabled { background:#626870; border-color:#484d54; }"
+        "QPushButton#SecondaryButton { color:#cfd5dc; background:#30343a; border:1px solid #50565f; border-radius:5px; padding:6px 12px; }"
+        "QPushButton#SecondaryButton:hover { color:white; background:#393e45; border-color:#69727d; }"
+        "QListWidget#ThumbnailBar { background:#222428; color:#d7dce2; border:0; border-top:1px solid #34383e; padding:6px; outline:0; }"
+        "QListWidget#ThumbnailBar::item { background:#292c31; color:#c8ced5; border:2px solid transparent; border-radius:6px; padding:3px; }"
+        "QListWidget#ThumbnailBar::item:hover { background:#31363d; border-color:#4d555f; }"
+        "QListWidget#ThumbnailBar::item:selected { background:#263f50; color:white; border-color:#2d9bd3; }"
+        "QScrollBar { background:#24272b; border:0; }"
+        "QScrollBar:vertical { width:11px; }"
+        "QScrollBar:horizontal { height:11px; }"
+        "QScrollBar::handle { background:#50565f; border-radius:5px; min-height:28px; min-width:28px; }"
+        "QScrollBar::handle:hover { background:#68717c; }"
+        "QScrollBar::add-page,QScrollBar::sub-page { background:transparent; }"
+        "QScrollBar::add-line,QScrollBar::sub-line { width:0; height:0; }"
+        "QScrollBar::up-arrow,QScrollBar::down-arrow,QScrollBar::left-arrow,QScrollBar::right-arrow { width:0; height:0; }"
+        "QToolTip { color:#f0f2f4; background:#202328; border:1px solid #535a63; padding:5px; }"));
 
     connect(view_, &ui::ImageView::zoomChanged, this, &MainWindow::onZoomChanged);
     connect(view_, &ui::ImageView::pixelHovered, this,
@@ -153,9 +243,16 @@ void MainWindow::setupUi()
     connect(preprocessPanel_, &ui::PreprocessPanel::resetRequested,
         this, &MainWindow::showOriginalImage);
     connect(preprocessDock_, &QDockWidget::visibilityChanged, this, [this](bool bVisible) {
-        if (!bVisible) {
+        if (bVisible) {
+            analysisDock_->hide();
+        } else {
             preprocessPanel_->setProcessingEnabled(false);
             showOriginalImage();
+        }
+    });
+    connect(analysisDock_, &QDockWidget::visibilityChanged, this, [this](bool bVisible) {
+        if (bVisible) {
+            preprocessDock_->hide();
         }
     });
 }
@@ -249,6 +346,7 @@ void MainWindow::setupMenusAndToolbar()
     auto* toolbar = addToolBar(tr("主工具栏"));
     toolbar->setObjectName(QString("MainToolBar"));
     toolbar->setMovable(false);
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
     toolbar->addAction(actOpen_);
     toolbar->addAction(actSaveResult_);
     toolbar->addSeparator();
@@ -266,9 +364,13 @@ void MainWindow::setupMenusAndToolbar()
 void MainWindow::setupStatusBar()
 {
     statusFile_ = new QLabel(this);
+    statusFile_->setObjectName(QString("StatusFile"));
     statusSize_ = new QLabel(this);
+    statusSize_->setObjectName(QString("StatusSize"));
     statusZoom_ = new QLabel(this);
+    statusZoom_->setObjectName(QString("StatusZoom"));
     statusProcessing_ = new QLabel(this);
+    statusProcessing_->setObjectName(QString("StatusProcessing"));
     statusBar()->addWidget(statusFile_, 1);
     statusBar()->addPermanentWidget(statusProcessing_);
     statusBar()->addPermanentWidget(statusSize_);

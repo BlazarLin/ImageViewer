@@ -318,6 +318,39 @@ void ImageView::mouseReleaseEvent(QMouseEvent* event)
     QGraphicsView::mouseReleaseEvent(event);
 }
 
+void ImageView::paintEvent(QPaintEvent* event)
+{
+    QGraphicsView::paintEvent(event);
+    if (!current_.isNull()) {
+        return;
+    }
+
+    QPainter painter(viewport());
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const QRect card = QRect(QPoint(), QSize(390, 156));
+    QRect centeredCard = card;
+    centeredCard.moveCenter(viewport()->rect().center());
+    painter.setPen(QPen(QColor(78, 84, 92), 1, Qt::DashLine));
+    painter.setBrush(QColor(41, 44, 49));
+    painter.drawRoundedRect(centeredCard, 10, 10);
+
+    QFont titleFont = painter.font();
+    titleFont.setPointSize(12);
+    titleFont.setWeight(QFont::DemiBold);
+    painter.setFont(titleFont);
+    painter.setPen(QColor(226, 230, 235));
+    painter.drawText(centeredCard.adjusted(20, 35, -20, -64),
+        Qt::AlignCenter, tr("打开或拖放图像"));
+
+    QFont hintFont = painter.font();
+    hintFont.setPointSize(9);
+    hintFont.setWeight(QFont::Normal);
+    painter.setFont(hintFont);
+    painter.setPen(QColor(151, 158, 168));
+    painter.drawText(centeredCard.adjusted(20, 78, -20, -28),
+        Qt::AlignCenter, tr("支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O"));
+}
+
 void ImageView::updateHoverPixel(const QPoint& viewportPosition)
 {
     if (current_.isNull()) {

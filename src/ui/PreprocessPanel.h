@@ -31,6 +31,7 @@ signals:
 private slots:
     void emitParametersChanged();
     void resetControls();
+    void updateControlStates();
 
 private:
     QCheckBox* enabledCheck_ = nullptr;
@@ -49,6 +50,7 @@ private:
     QComboBox* morphologyCombo_ = nullptr;
     QSpinBox* morphologyKernelSpin_ = nullptr;
     QSpinBox* morphologyIterationsSpin_ = nullptr;
+    QWidget* parametersContainer_ = nullptr;
     bool bUpdatingControls_ = false;
 };
 

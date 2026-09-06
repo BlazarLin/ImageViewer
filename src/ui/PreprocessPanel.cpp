@@ -6,6 +6,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -27,11 +28,22 @@ QWidget* makeSliderRow(QSlider*& slider, QLabel*& valueLabel,
     slider->setRange(nMinimum, nMaximum);
     slider->setValue(nValue);
     valueLabel = new QLabel(QString::number(nValue), row);
-    valueLabel->setMinimumWidth(38);
-    valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    valueLabel->setObjectName(QString("ValueBadge"));
+    valueLabel->setFixedWidth(44);
+    valueLabel->setAlignment(Qt::AlignCenter);
+    layout->setSpacing(10);
     layout->addWidget(slider, 1);
     layout->addWidget(valueLabel);
     return row;
+}
+
+void configureFormLayout(QFormLayout* layout)
+{
+    layout->setContentsMargins(14, 16, 14, 14);
+    layout->setHorizontalSpacing(14);
+    layout->setVerticalSpacing(9);
+    layout->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    layout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 }
 
 } // namespace
@@ -41,27 +53,37 @@ namespace ui {
 PreprocessPanel::PreprocessPanel(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumWidth(286);
-    setStyleSheet(QString(
-        "QWidget { background:#292b2f; color:#e5e5e5; }"
-        "QGroupBox { border:1px solid #45484d; border-radius:5px; margin-top:10px; padding-top:8px; }"
-        "QGroupBox::title { subcontrol-origin:margin; left:8px; padding:0 4px; }"
-        "QComboBox,QSpinBox { background:#36393e; border:1px solid #55585e; padding:3px; }"
-        "QPushButton { background:#3a6f91; border:0; border-radius:4px; padding:7px; }"));
+    setObjectName(QString("PreprocessPanel"));
+    setMinimumWidth(340);
 
     auto* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(8, 8, 8, 8);
-    enabledCheck_ = new QCheckBox(tr("启用实时预处理"), this);
-    rootLayout->addWidget(enabledCheck_);
+    rootLayout->setContentsMargins(12, 12, 12, 12);
+    rootLayout->setSpacing(10);
+
+    auto* switchCard = new QFrame(this);
+    switchCard->setObjectName(QString("ProcessingSwitchCard"));
+    auto* switchLayout = new QHBoxLayout(switchCard);
+    switchLayout->setContentsMargins(12, 8, 12, 8);
+    enabledCheck_ = new QCheckBox(tr("启用实时预处理"), switchCard);
+    enabledCheck_->setObjectName(QString("ProcessingSwitch"));
+    switchLayout->addWidget(enabledCheck_);
+    switchLayout->addStretch(1);
+    rootLayout->addWidget(switchCard);
 
     auto* scrollArea = new QScrollArea(this);
+    scrollArea->setObjectName(QString("PreprocessScroll"));
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
     auto* content = new QWidget(scrollArea);
+    content->setObjectName(QString("PreprocessParameters"));
+    parametersContainer_ = content;
     auto* contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(2, 2, 2, 2);
+    contentLayout->setSpacing(12);
 
     auto* toneGroup = new QGroupBox(tr("灰度与色调"), content);
     auto* toneLayout = new QFormLayout(toneGroup);
+    configureFormLayout(toneLayout);
     channelCombo_ = new QComboBox(toneGroup);
     channelCombo_->addItems({ tr("原始通道"), tr("灰度"), tr("蓝通道"), tr("绿通道"), tr("红通道") });
     toneLayout->addRow(tr("通道"), channelCombo_);
@@ -79,6 +101,7 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
 
     auto* filterGroup = new QGroupBox(tr("滤波与锐化"), content);
     auto* filterLayout = new QFormLayout(filterGroup);
+    configureFormLayout(filterLayout);
     smoothCombo_ = new QComboBox(filterGroup);
     smoothCombo_->addItems({ tr("无"), tr("均值"), tr("高斯"), tr("中值") });
     filterLayout->addRow(tr("平滑"), smoothCombo_);
@@ -94,6 +117,7 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
 
     auto* binaryGroup = new QGroupBox(tr("阈值与边缘"), content);
     auto* binaryLayout = new QFormLayout(binaryGroup);
+    configureFormLayout(binaryLayout);
     thresholdCombo_ = new QComboBox(binaryGroup);
     thresholdCombo_->addItems({ tr("无"), tr("固定阈值"), tr("Otsu 自动阈值") });
     binaryLayout->addRow(tr("阈值化"), thresholdCombo_);
@@ -116,6 +140,7 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
 
     auto* morphGroup = new QGroupBox(tr("形态学"), content);
     auto* morphLayout = new QFormLayout(morphGroup);
+    configureFormLayout(morphLayout);
     morphologyCombo_ = new QComboBox(morphGroup);
     morphologyCombo_->addItems({ tr("无"), tr("腐蚀"), tr("膨胀"), tr("开运算"), tr("闭运算") });
     morphLayout->addRow(tr("算子"), morphologyCombo_);
@@ -134,7 +159,21 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
     scrollArea->setWidget(content);
     rootLayout->addWidget(scrollArea, 1);
     auto* resetButton = new QPushButton(tr("复原全部参数"), this);
+    resetButton->setObjectName(QString("SecondaryButton"));
+    resetButton->setMinimumHeight(34);
     rootLayout->addWidget(resetButton);
+
+    const QList<QComboBox*> sizedCombos = {
+        channelCombo_, smoothCombo_, thresholdCombo_, edgeCombo_, morphologyCombo_
+    };
+    for (QComboBox* combo : sizedCombos) {
+        combo->setMinimumHeight(30);
+    }
+    const QList<QSpinBox*> sizedSpins = { smoothKernelSpin_, thresholdSpin_, cannyLowSpin_,
+        cannyHighSpin_, morphologyKernelSpin_, morphologyIterationsSpin_ };
+    for (QSpinBox* spin : sizedSpins) {
+        spin->setMinimumHeight(30);
+    }
 
     const QList<QSlider*> sliders = { brightnessSlider_, contrastSlider_, gammaSlider_, sharpenSlider_ };
     for (QSlider* slider : sliders) {
@@ -152,7 +191,10 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
     const QList<QComboBox*> combos = { channelCombo_, smoothCombo_, thresholdCombo_, edgeCombo_, morphologyCombo_ };
     for (QComboBox* combo : combos) {
         connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &PreprocessPanel::emitParametersChanged);
+            this, [this](int) {
+                updateControlStates();
+                emitParametersChanged();
+            });
     }
     const QList<QSpinBox*> spins = { smoothKernelSpin_, thresholdSpin_, cannyLowSpin_, cannyHighSpin_,
         morphologyKernelSpin_, morphologyIterationsSpin_ };
@@ -160,8 +202,12 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
         connect(spin, QOverload<int>::of(&QSpinBox::valueChanged),
             this, &PreprocessPanel::emitParametersChanged);
     }
-    connect(enabledCheck_, &QCheckBox::toggled, this, &PreprocessPanel::emitParametersChanged);
+    connect(enabledCheck_, &QCheckBox::toggled, this, [this](bool) {
+        updateControlStates();
+        emitParametersChanged();
+    });
     connect(resetButton, &QPushButton::clicked, this, &PreprocessPanel::resetControls);
+    updateControlStates();
 }
 
 core::processing::ProcessingParameters PreprocessPanel::parameters() const
@@ -211,6 +257,7 @@ void PreprocessPanel::setParameters(const core::processing::ProcessingParameters
     morphologyKernelSpin_->setValue(parameters.nMorphKernel);
     morphologyIterationsSpin_->setValue(parameters.nMorphIterations);
     bUpdatingControls_ = false;
+    updateControlStates();
     emit parametersChanged(this->parameters());
 }
 
@@ -241,8 +288,25 @@ void PreprocessPanel::resetControls()
     morphologyKernelSpin_->setValue(3);
     morphologyIterationsSpin_->setValue(1);
     bUpdatingControls_ = false;
+    updateControlStates();
     emit resetRequested();
     emit parametersChanged(parameters());
+}
+
+void PreprocessPanel::updateControlStates()
+{
+    const bool bEnabled = enabledCheck_->isChecked();
+    if (parametersContainer_) {
+        parametersContainer_->setEnabled(bEnabled);
+    }
+    smoothKernelSpin_->setEnabled(bEnabled && smoothCombo_->currentIndex() != 0);
+    thresholdSpin_->setEnabled(bEnabled && thresholdCombo_->currentIndex() == 1);
+    const bool bCanny = bEnabled && edgeCombo_->currentIndex() == 3;
+    cannyLowSpin_->setEnabled(bCanny);
+    cannyHighSpin_->setEnabled(bCanny);
+    const bool bMorphology = bEnabled && morphologyCombo_->currentIndex() != 0;
+    morphologyKernelSpin_->setEnabled(bMorphology);
+    morphologyIterationsSpin_->setEnabled(bMorphology);
 }
 
 } // namespace ui

@@ -16,7 +16,7 @@ TitleBar::TitleBar(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName(QString("CustomTitleBar"));
-    setFixedHeight(38);
+    setFixedHeight(42);
 
     iconLabel_ = new QLabel(QString("图"), this);
     iconLabel_->setAlignment(Qt::AlignCenter);
@@ -24,6 +24,7 @@ TitleBar::TitleBar(QWidget* parent)
     iconLabel_->setObjectName(QString("AppIcon"));
 
     infoLabel_ = new QLabel(tr("未打开图像  |  ImageViewer"), this);
+    infoLabel_->setObjectName(QString("TitleInfo"));
     infoLabel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     infoLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
 
@@ -33,7 +34,7 @@ TitleBar::TitleBar(QWidget* parent)
     const QList<QToolButton*> buttons = { minimizeButton_, maximizeButton_, closeButton_ };
     for (QToolButton* button : buttons) {
         button->setAutoRaise(true);
-        button->setFixedSize(46, 38);
+        button->setFixedSize(46, 42);
         button->setIconSize(QSize(15, 15));
         button->setFocusPolicy(Qt::NoFocus);
     }
@@ -45,21 +46,13 @@ TitleBar::TitleBar(QWidget* parent)
     setMaximized(false);
 
     auto* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(8, 0, 0, 0);
+    layout->setContentsMargins(10, 0, 0, 0);
     layout->setSpacing(8);
     layout->addWidget(iconLabel_);
     layout->addWidget(infoLabel_, 1);
     layout->addWidget(minimizeButton_);
     layout->addWidget(maximizeButton_);
     layout->addWidget(closeButton_);
-
-    setStyleSheet(QString(
-        "#CustomTitleBar { background:#1f2023; color:#eeeeee; }"
-        "#CustomTitleBar QLabel { color:#eeeeee; }"
-        "#AppIcon { background:#2879a8; color:white; border-radius:5px; font-weight:600; }"
-        "QToolButton { border:0; background:transparent; color:#eeeeee; font-size:18px; }"
-        "QToolButton:hover { background:#3b3d42; }"
-        "QToolButton#CloseButton:hover { background:#c42b1c; }"));
 
     connect(minimizeButton_, &QToolButton::clicked, this, &TitleBar::minimizeRequested);
     connect(maximizeButton_, &QToolButton::clicked, this, &TitleBar::maximizeRestoreRequested);

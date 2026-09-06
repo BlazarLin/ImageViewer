@@ -314,6 +314,17 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
 </context>
 <context>
+    <name>ui::ImageView</name>
+    <message>
+        <source>打开或拖放图像</source>
+        <translation>Open or drop an image</translation>
+    </message>
+    <message>
+        <source>支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O</source>
+        <translation>PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O</translation>
+    </message>
+</context>
+<context>
     <name>ui::PreprocessPanel</name>
     <message>
         <source>启用实时预处理</source>

@@ -71,15 +71,17 @@ void HistogramWidget::paintEvent(QPaintEvent* event)
 AnalysisPanel::AnalysisPanel(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumWidth(310);
-    setStyleSheet(QString(
-        "QWidget { background:#292b2f; color:#e5e5e5; }"
-        "QGroupBox { border:1px solid #45484d; border-radius:5px; margin-top:10px; padding-top:8px; }"
-        "QGroupBox::title { subcontrol-origin:margin; left:8px; padding:0 4px; }"));
+    setObjectName(QString("AnalysisPanel"));
+    setMinimumWidth(340);
 
     auto* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(12, 12, 12, 12);
+    rootLayout->setSpacing(12);
     auto* pixelGroup = new QGroupBox(tr("光标像素"), this);
     auto* pixelLayout = new QFormLayout(pixelGroup);
+    pixelLayout->setContentsMargins(14, 16, 14, 14);
+    pixelLayout->setHorizontalSpacing(14);
+    pixelLayout->setVerticalSpacing(7);
     coordinateValue_ = new QLabel(QString("-"), pixelGroup);
     rgbValue_ = new QLabel(QString("-"), pixelGroup);
     grayValue_ = new QLabel(QString("-"), pixelGroup);
@@ -94,6 +96,9 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
 
     auto* roiGroup = new QGroupBox(tr("ROI 统计"), this);
     auto* roiLayout = new QFormLayout(roiGroup);
+    roiLayout->setContentsMargins(14, 16, 14, 14);
+    roiLayout->setHorizontalSpacing(14);
+    roiLayout->setVerticalSpacing(7);
     regionValue_ = new QLabel(tr("Shift + 左键拖动选择"), roiGroup);
     countValue_ = new QLabel(QString("-"), roiGroup);
     redStatistics_ = new QLabel(QString("-"), roiGroup);
@@ -111,6 +116,7 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
 
     auto* histogramGroup = new QGroupBox(tr("灰度直方图"), this);
     auto* histogramLayout = new QVBoxLayout(histogramGroup);
+    histogramLayout->setContentsMargins(12, 16, 12, 12);
     histogram_ = new HistogramWidget(histogramGroup);
     histogramLayout->addWidget(histogram_);
     rootLayout->addWidget(histogramGroup);

@@ -31,6 +31,7 @@ ThumbnailBar::ThumbnailBar(QWidget* parent)
     , watcher_(new QFutureWatcher<QVector<ThumbnailResult>>(this))
     , loadTimer_(new QTimer(this))
 {
+    setObjectName(QString("ThumbnailBar"));
     setViewMode(QListView::IconMode);
     setFlow(QListView::LeftToRight);
     setWrapping(false);
@@ -38,14 +39,10 @@ ThumbnailBar::ThumbnailBar(QWidget* parent)
     setResizeMode(QListView::Adjust);
     setIconSize(QSize(kThumbnailWidth, kThumbnailHeight));
     setGridSize(QSize(kItemWidth, 106));
-    setFixedHeight(116);
+    setFixedHeight(122);
     setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    setSpacing(2);
-    setStyleSheet(QString(
-        "QListWidget { background:#25272a; border:0; padding:4px; }"
-        "QListWidget::item { color:#dddddd; border:2px solid transparent; border-radius:5px; }"
-        "QListWidget::item:selected { background:#315f7d; border-color:#58a6d8; }"));
+    setSpacing(4);
 
     loadTimer_->setSingleShot(true);
     loadTimer_->setInterval(40);

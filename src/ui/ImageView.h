@@ -6,6 +6,7 @@
 #include <vector>
 
 class QGraphicsPixmapItem;
+class QPaintEvent;
 template <typename T>
 class QFutureWatcher;
 
@@ -51,6 +52,7 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
     void drawForeground(QPainter* painter, const QRectF& rect) override;
 
 private:
