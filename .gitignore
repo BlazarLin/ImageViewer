@@ -19,8 +19,8 @@ x64/
 x86/
 [Bb]uild[Ll]og.*
 
-# 本机 OpenCV SDK 约 832 MB，作为外部依赖保留，不纳入普通 Git 仓库
-/3rdpart/opencv/
+# 保留 OpenCV 头文件和导入库；运行时 DLL 体积较大，不纳入普通 Git
+/3rdpart/opencv/bin/
 
 # Qt 临时
 moc_*.cpp
