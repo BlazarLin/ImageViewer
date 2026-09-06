@@ -37,9 +37,9 @@ TitleBar::TitleBar(QWidget* parent)
         button->setIconSize(QSize(15, 15));
         button->setFocusPolicy(Qt::NoFocus);
     }
-    minimizeButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarMinButton));
+    minimizeButton_->setText(QString("—"));
     minimizeButton_->setToolTip(tr("最小化"));
-    closeButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    closeButton_->setText(QString("×"));
     closeButton_->setToolTip(tr("关闭"));
     closeButton_->setObjectName(QString("CloseButton"));
     setMaximized(false);
@@ -55,8 +55,9 @@ TitleBar::TitleBar(QWidget* parent)
 
     setStyleSheet(QString(
         "#CustomTitleBar { background:#1f2023; color:#eeeeee; }"
+        "#CustomTitleBar QLabel { color:#eeeeee; }"
         "#AppIcon { background:#2879a8; color:white; border-radius:5px; font-weight:600; }"
-        "QToolButton { border:0; background:transparent; color:#eeeeee; }"
+        "QToolButton { border:0; background:transparent; color:#eeeeee; font-size:18px; }"
         "QToolButton:hover { background:#3b3d42; }"
         "QToolButton#CloseButton:hover { background:#c42b1c; }"));
 
@@ -73,8 +74,7 @@ void TitleBar::setInfoText(const QString& text, const QString& fullPath)
 
 void TitleBar::setMaximized(bool bMaximized)
 {
-    maximizeButton_->setIcon(style()->standardIcon(
-        bMaximized ? QStyle::SP_TitleBarNormalButton : QStyle::SP_TitleBarMaxButton));
+    maximizeButton_->setText(bMaximized ? QString("❐") : QString("□"));
     maximizeButton_->setToolTip(bMaximized ? tr("还原") : tr("最大化"));
 }
 
