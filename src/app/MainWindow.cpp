@@ -406,8 +406,8 @@ void MainWindow::onNext()
 void MainWindow::onAbout()
 {
     QMessageBox::about(this, tr("关于 ImageViewer"),
-        tr("ImageViewer V1\n\n支持光标锚定缩放、像素网格、目录缩略图、"
-           "自定义标题栏和 OpenCV 实时预处理。"));
+        tr("ImageViewer V2\n\n支持光标锚定缩放、像素网格、目录缩略图、"
+           "自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。"));
 }
 
 void MainWindow::onZoomChanged(double factor)
@@ -460,6 +460,8 @@ void MainWindow::onPreprocessFinished()
         if (result.ok()) {
             processedImage_ = result.image;
             displayedImage_ = processedImage_;
+            ++nAnalysisGeneration_;
+            analysisPanel_->clear();
             actCompare_->setEnabled(true);
             view_->setComparisonImages(originalImage_, processedImage_, actCompare_->isChecked());
             statusProcessing_->setText(tr("预处理 %1 ms").arg(result.nElapsedMs));

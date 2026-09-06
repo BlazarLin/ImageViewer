@@ -141,7 +141,7 @@
         <source>ImageViewer V1
 
 支持光标锚定缩放、像素网格、目录缩略图、自定义标题栏和 OpenCV 实时预处理。</source>
-        <translation>ImageViewer V1
+        <translation type="vanished">ImageViewer V1
 
 Supports cursor-anchored zoom, pixel grid, folder thumbnails, a custom title bar, and real-time OpenCV preprocessing.</translation>
     </message>
@@ -188,6 +188,129 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, a custom title bar
     <message>
         <source>语言已保存，重启程序后生效。</source>
         <translation>Language saved. Restart the application to apply it.</translation>
+    </message>
+    <message>
+        <source>像素与 ROI 分析</source>
+        <translation>Pixel and ROI Analysis</translation>
+    </message>
+    <message>
+        <source>另存当前结果…</source>
+        <translation>Save Current Result As…</translation>
+    </message>
+    <message>
+        <source>保存预处理预设…</source>
+        <translation>Save Processing Preset…</translation>
+    </message>
+    <message>
+        <source>载入预处理预设…</source>
+        <translation>Load Processing Preset…</translation>
+    </message>
+    <message>
+        <source>原图 / 处理图对比</source>
+        <translation>Original / Processed Comparison</translation>
+    </message>
+    <message>
+        <source>另存当前结果</source>
+        <translation>Save Current Result As</translation>
+    </message>
+    <message>
+        <source>PNG 图像 (*.png);;JPEG 图像 (*.jpg *.jpeg);;BMP 图像 (*.bmp);;TIFF 图像 (*.tif *.tiff);;WebP 图像 (*.webp)</source>
+        <translation>PNG image (*.png);;JPEG image (*.jpg *.jpeg);;BMP image (*.bmp);;TIFF image (*.tif *.tiff);;WebP image (*.webp)</translation>
+    </message>
+    <message>
+        <source>保存失败</source>
+        <translation>Save Failed</translation>
+    </message>
+    <message>
+        <source>已保存：%1</source>
+        <translation>Saved: %1</translation>
+    </message>
+    <message>
+        <source>保存预处理预设</source>
+        <translation>Save Processing Preset</translation>
+    </message>
+    <message>
+        <source>JSON 预设 (*.json)</source>
+        <translation>JSON preset (*.json)</translation>
+    </message>
+    <message>
+        <source>预设已保存：%1</source>
+        <translation>Preset saved: %1</translation>
+    </message>
+    <message>
+        <source>载入预处理预设</source>
+        <translation>Load Processing Preset</translation>
+    </message>
+    <message>
+        <source>载入失败</source>
+        <translation>Load Failed</translation>
+    </message>
+    <message>
+        <source>预设已载入：%1</source>
+        <translation>Preset loaded: %1</translation>
+    </message>
+    <message>
+        <source>ImageViewer V2
+
+支持光标锚定缩放、像素网格、目录缩略图、自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。</source>
+        <translation>ImageViewer V2
+
+Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, real-time processing, ROI analysis, split comparison, and a large-image display pyramid.</translation>
+    </message>
+</context>
+<context>
+    <name>ui::AnalysisPanel</name>
+    <message>
+        <source>光标像素</source>
+        <translation>Cursor Pixel</translation>
+    </message>
+    <message>
+        <source>坐标</source>
+        <translation>Coordinates</translation>
+    </message>
+    <message>
+        <source>灰度</source>
+        <translation>Grayscale</translation>
+    </message>
+    <message>
+        <source>ROI 统计</source>
+        <translation>ROI Statistics</translation>
+    </message>
+    <message>
+        <source>Shift + 左键拖动选择</source>
+        <translation>Shift + drag left mouse button</translation>
+    </message>
+    <message>
+        <source>范围</source>
+        <translation>Region</translation>
+    </message>
+    <message>
+        <source>像素数</source>
+        <translation>Pixels</translation>
+    </message>
+    <message>
+        <source>统计格式</source>
+        <translation>Format</translation>
+    </message>
+    <message>
+        <source>最小 / 最大 / 均值 / 标准差</source>
+        <translation>Min / Max / Mean / Std. Dev.</translation>
+    </message>
+    <message>
+        <source>状态</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>灰度直方图</source>
+        <translation>Grayscale Histogram</translation>
+    </message>
+    <message>
+        <source>完成</source>
+        <translation>Complete</translation>
+    </message>
+    <message>
+        <source>计算中…</source>
+        <translation>Calculating…</translation>
     </message>
 </context>
 <context>

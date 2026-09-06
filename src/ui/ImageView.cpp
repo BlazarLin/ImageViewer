@@ -325,8 +325,10 @@ void ImageView::updateHoverPixel(const QPoint& viewportPosition)
     const QPoint pixelPosition(static_cast<int>(std::floor(scenePosition.x())),
         static_cast<int>(std::floor(scenePosition.y())));
     const bool bValid = current_.rect().contains(pixelPosition);
+    const QImage& sampledImage = bComparisonEnabled_
+        && pixelPosition.x() < current_.width() * dComparisonSplit_ ? original_ : current_;
     emit pixelHovered(pixelPosition,
-        bValid ? current_.pixelColor(pixelPosition) : QColor(), bValid);
+        bValid ? sampledImage.pixelColor(pixelPosition) : QColor(), bValid);
 }
 
 void ImageView::drawForeground(QPainter* painter, const QRectF& rect)
