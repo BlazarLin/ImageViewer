@@ -20,7 +20,9 @@ endif()
 
 # ---------- Windows 平台设置 ----------
 if(WIN32)
-    add_compile_options(/W4 /permissive- /Zc:__cplusplus)
+    add_compile_options(/W4 /permissive- /Zc:__cplusplus /Zi
+        /source-charset:utf-8 /execution-charset:utf-8)
+    add_link_options(/DEBUG)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
     set(CMAKE_WIN32_EXECUTABLE ON)
 endif()
@@ -85,7 +87,3 @@ if(WIN32)
     # windeployqt 在 install 时执行
     install(TARGETS ImageViewer RUNTIME DESTINATION bin)
 endif()
-
-# ---------- 头文件目录小工具（不参与构建） ----------
-add_library(ImageViewer INTERFACE)
-target_include_directories(ImageViewer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)

@@ -38,7 +38,7 @@ void Application::parseArgs()
             continue;
         }
         QString path = a;
-        if (path.startsWith(QStringLiteral("file://"))) {
+        if (path.startsWith(QString("file://"))) {
             path = QUrl(path).toLocalFile();
         }
         if (QFileInfo(path).isFile()) {

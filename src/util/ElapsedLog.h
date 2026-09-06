@@ -19,7 +19,7 @@ public:
 
     ~ElapsedLog()
     {
-        qInfo().noquote() << QStringLiteral("[%1] %2 ms")
+        qInfo().noquote() << QString("[%1] %2 ms")
                                  .arg(tag_)
                                  .arg(timer_.elapsed());
     }

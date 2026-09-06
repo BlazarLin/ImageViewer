@@ -29,7 +29,7 @@ constexpr const char* kFilter =
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    setWindowTitle(QStringLiteral("ImageViewer"));
+    setWindowTitle(QString("ImageViewer"));
     resize(1280, 800);
     setAcceptDrops(true);
 
@@ -42,38 +42,38 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::setupActions()
 {
-    actOpen_ = new QAction(QStringLiteral("打开(&O)..."), this);
+    actOpen_ = new QAction(tr("打开(&O)..."), this);
     actOpen_->setShortcut(QKeySequence::Open);
     connect(actOpen_, &QAction::triggered, this, &MainWindow::onOpen);
 
-    actFit_ = new QAction(QStringLiteral("适应窗口(&F)"), this);
-    actFit_->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
+    actFit_ = new QAction(tr("适应窗口(&F)"), this);
+    actFit_->setShortcut(QKeySequence(QString("Ctrl+0")));
     connect(actFit_, &QAction::triggered, this, &MainWindow::onFitWindow);
 
-    actActualSize_ = new QAction(QStringLiteral("实际大小(&A)"), this);
-    actActualSize_->setShortcut(QKeySequence(QStringLiteral("Ctrl+1")));
+    actActualSize_ = new QAction(tr("实际大小(&A)"), this);
+    actActualSize_->setShortcut(QKeySequence(QString("Ctrl+1")));
     connect(actActualSize_, &QAction::triggered, this, &MainWindow::onActualSize);
 
-    actAbout_ = new QAction(QStringLiteral("关于(&A)"), this);
+    actAbout_ = new QAction(tr("关于(&A)"), this);
     connect(actAbout_, &QAction::triggered, this, &MainWindow::onAbout);
 
-    actExit_ = new QAction(QStringLiteral("退出(&X)"), this);
+    actExit_ = new QAction(tr("退出(&X)"), this);
     actExit_->setShortcut(QKeySequence::Quit);
     connect(actExit_, &QAction::triggered, qApp, &QApplication::quit);
 
-    auto* fileMenu = menuBar()->addMenu(QStringLiteral("文件(&F)"));
+    auto* fileMenu = menuBar()->addMenu(tr("文件(&F)"));
     fileMenu->addAction(actOpen_);
     fileMenu->addSeparator();
     fileMenu->addAction(actExit_);
 
-    auto* viewMenu = menuBar()->addMenu(QStringLiteral("视图(&V)"));
+    auto* viewMenu = menuBar()->addMenu(tr("视图(&V)"));
     viewMenu->addAction(actFit_);
     viewMenu->addAction(actActualSize_);
 
-    auto* helpMenu = menuBar()->addMenu(QStringLiteral("帮助(&H)"));
+    auto* helpMenu = menuBar()->addMenu(tr("帮助(&H)"));
     helpMenu->addAction(actAbout_);
 
-    auto* tb = addToolBar(QStringLiteral("主工具栏"));
+    auto* tb = addToolBar(tr("主工具栏"));
     tb->setObjectName("MainToolBar");
     tb->addAction(actOpen_);
     tb->addSeparator();
@@ -95,17 +95,17 @@ void MainWindow::setupStatusBar()
 void MainWindow::updateStatusBar()
 {
     if (currentPath_.isEmpty()) {
-        statusFile_->setText(QStringLiteral("就绪"));
+        statusFile_->setText(tr("就绪"));
     } else {
         statusFile_->setText(QFileInfo(currentPath_).fileName());
     }
     statusSize_->clear();
-    statusZoom_->setText(QStringLiteral("100%"));
+    statusZoom_->setText(QString("100%"));
 }
 
 void MainWindow::onOpen()
 {
-    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("打开图片"), QString(), QString::fromUtf8(kFilter));
+    const QString path = QFileDialog::getOpenFileName(this, tr("打开图片"), QString(), QString::fromUtf8(kFilter));
     if (path.isEmpty()) {
         return;
     }
@@ -114,11 +114,11 @@ void MainWindow::onOpen()
 
 void MainWindow::openFile(const QString& path)
 {
-    util::ElapsedLog _t(QStringLiteral("MainWindow::openFile"));
+    util::ElapsedLog _t(QString("MainWindow::openFile"));
 
     const auto result = core::loader::loadImage(path);
     if (!result.ok()) {
-        QMessageBox::warning(this, QStringLiteral("打开失败"), result.error);
+        QMessageBox::warning(this, tr("打开失败"), result.error);
         qWarning().noquote() << "load failed:" << result.error;
         return;
     }
@@ -126,7 +126,7 @@ void MainWindow::openFile(const QString& path)
     view_->setImage(result.image);
     currentPath_ = path;
     updateStatusBar();
-    setWindowTitle(QStringLiteral("ImageViewer - %1").arg(QFileInfo(path).fileName()));
+    setWindowTitle(QString("ImageViewer - %1").arg(QFileInfo(path).fileName()));
 }
 
 void MainWindow::onFitWindow()
@@ -145,8 +145,8 @@ void MainWindow::onActualSize()
 
 void MainWindow::onAbout()
 {
-    QMessageBox::about(this, QStringLiteral("关于 ImageViewer"),
-        QStringLiteral("ImageViewer\n\n"
+    QMessageBox::about(this, tr("关于 ImageViewer"),
+        tr("ImageViewer\n\n"
                        "M0 骨架版本:支持常见格式(jpg/png/bmp/tif/webp/gif)、"
                        "拖拽打开、命令行参数、适应窗口/实际大小。\n\n"
                        "计划详见项目根目录 plan 文件。"));

@@ -1,5 +1,7 @@
 #include "ImageLoader.h"
 
+#include <QCoreApplication>
+#include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QStringList>
@@ -50,17 +52,17 @@ static QImage matToQImage(const cv::Mat& mat)
 
 LoadResult loadImage(const QString& path)
 {
-    util::ElapsedLog _t(QStringLiteral("loadImage(%1)").arg(QFileInfo(path).fileName()));
+    util::ElapsedLog _t(QString("loadImage(%1)").arg(QFileInfo(path).fileName()));
 
     LoadResult result;
     if (path.isEmpty()) {
-        result.error = QStringLiteral("path is empty");
+        result.error = QCoreApplication::translate("ImageLoader", "图像路径为空");
         return result;
     }
 
     QFileInfo fi(path);
     if (!fi.exists() || !fi.isFile()) {
-        result.error = QStringLiteral("file not found: %1").arg(path);
+        result.error = QCoreApplication::translate("ImageLoader", "文件不存在：%1").arg(path);
         return result;
     }
 
@@ -78,15 +80,28 @@ LoadResult loadImage(const QString& path)
 
     // 2. OpenCV fallback(处理多通道 RAW / TIFF 等)
     {
-        const cv::Mat mat = cv::imread(path.toLocal8Bit().constData(), cv::IMREAD_UNCHANGED);
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            result.error = QCoreApplication::translate("ImageLoader", "无法读取文件：%1").arg(path);
+            return result;
+        }
+        const QByteArray bytes = file.readAll();
+        if (bytes.isEmpty()) {
+            result.error = QCoreApplication::translate("ImageLoader", "文件内容为空：%1").arg(path);
+            return result;
+        }
+        const cv::Mat encoded(1, bytes.size(), CV_8UC1,
+            const_cast<char*>(bytes.constData()));
+        const cv::Mat mat = cv::imdecode(encoded, cv::IMREAD_UNCHANGED);
         if (mat.empty()) {
-            result.error = QStringLiteral("QImageReader and cv::imread both failed: %1")
-                               .arg(path);
+            result.error = QCoreApplication::translate(
+                "ImageLoader", "Qt 和 OpenCV 均无法解码图像：%1").arg(path);
             return result;
         }
         result.image = matToQImage(mat);
         if (result.image.isNull()) {
-            result.error = QStringLiteral("unsupported cv::Mat layout for %1").arg(path);
+            result.error = QCoreApplication::translate(
+                "ImageLoader", "不支持的图像位深或通道数：%1").arg(path);
             return result;
         }
         return result;

@@ -22,8 +22,8 @@ int main(int argc, char* argv[])
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
 
     QApplication app(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("ImageViewer"));
-    QCoreApplication::setApplicationName(QStringLiteral("ImageViewer"));
+    QCoreApplication::setOrganizationName(QString("ImageViewer"));
+    QCoreApplication::setApplicationName(QString("ImageViewer"));
 
     // qInfo 默认会输出到 stderr(GUI 子系统下可能不可见)
     // 如果想要调试输出,改为 qInstallMessageHandler 自定义到文件。
