@@ -141,6 +141,9 @@ void ImageView::setComparisonEnabled(bool bEnabled)
     rebuildPixmapItems();
     updateRenderMode();
     viewport()->update();
+    if (!bComparisonEnabled_) {
+        requestPyramid();
+    }
 }
 
 void ImageView::rebuildPixmapItems()
@@ -452,7 +455,8 @@ void ImageView::updateRenderMode()
 
 void ImageView::requestPyramid()
 {
-    if (current_.isNull() || std::max(current_.width(), current_.height()) <= 2048) {
+    if (current_.isNull() || bComparisonEnabled_
+        || std::max(current_.width(), current_.height()) <= 2048) {
         return;
     }
     if (pyramidWatcher_->isRunning()) {

@@ -22,7 +22,7 @@ endif()
 if(MSVC)
     add_compile_options(/W4 /permissive- /Zc:__cplusplus /Zi /FS
         /source-charset:utf-8 /execution-charset:utf-8)
-    add_link_options(/DEBUG)
+    add_link_options(/DEBUG /ignore:4099)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
     set(CMAKE_WIN32_EXECUTABLE ON)
 endif()

@@ -53,8 +53,9 @@ void ThumbnailCache::store(const QString& sourcePath, const QSize& targetSize,
     const QString path = QDir(directory).filePath(
         keyForFile(sourcePath, targetSize) + QString(".png"));
     QSaveFile file(path);
-    if (file.open(QIODevice::WriteOnly) && thumbnail.save(&file, "PNG")) {
-        file.commit();
+    if (file.open(QIODevice::WriteOnly) && thumbnail.save(&file, "PNG")
+        && file.commit()) {
+        prune();
     }
 }
 
