@@ -71,6 +71,8 @@ set(APP_SOURCES
     src/core/processing/ImageProcessor.cpp
     src/core/processing/ProcessingPreset.cpp
     src/core/analysis/ImageAnalysis.cpp
+    src/core/cache/ImageCache.cpp
+    src/core/cache/ThumbnailCache.cpp
 )
 
 set(APP_HEADERS
@@ -86,6 +88,8 @@ set(APP_HEADERS
     src/core/processing/ImageProcessor.h
     src/core/processing/ProcessingPreset.h
     src/core/analysis/ImageAnalysis.h
+    src/core/cache/ImageCache.h
+    src/core/cache/ThumbnailCache.h
     src/util/ElapsedLog.h
 )
 
@@ -146,10 +150,14 @@ if(BUILD_TESTING)
         src/core/processing/ImageProcessor.cpp
         src/core/processing/ProcessingPreset.cpp
         src/core/analysis/ImageAnalysis.cpp
+        src/core/cache/ImageCache.cpp
+        src/core/cache/ThumbnailCache.cpp
         src/core/navigation/DirectoryModel.h
         src/core/processing/ImageProcessor.h
         src/core/processing/ProcessingPreset.h
         src/core/analysis/ImageAnalysis.h
+        src/core/cache/ImageCache.h
+        src/core/cache/ThumbnailCache.h
     )
     target_include_directories(ImageViewerCoreTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src

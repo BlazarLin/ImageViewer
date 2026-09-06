@@ -3,6 +3,8 @@
 // 目的：保证大目录中的缩略图导航响应与内存稳定。
 #include "ThumbnailBar.h"
 
+#include "core/cache/ThumbnailCache.h"
+
 #include <QFileInfo>
 #include <QFutureWatcher>
 #include <QImageReader>
@@ -12,6 +14,7 @@
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
+#include <mutex>
 
 namespace {
 constexpr int kThumbnailWidth = 112;
@@ -140,18 +143,25 @@ void ThumbnailBar::startPendingLoad()
 
     nRunningGeneration_ = nGeneration_;
     watcher_->setFuture(QtConcurrent::run([requests]() {
+        static std::once_flag pruneFlag;
+        std::call_once(pruneFlag, []() { core::cache::ThumbnailCache::prune(); });
         QVector<ThumbnailResult> results;
         results.reserve(requests.size());
         for (const auto& request : requests) {
+            const QSize targetSize(kThumbnailWidth, kThumbnailHeight);
+            QImage thumbnail = core::cache::ThumbnailCache::load(request.second, targetSize);
             QImageReader reader(request.second);
-            const QSize originalSize = reader.size();
-            if (originalSize.isValid()) {
-                reader.setScaledSize(originalSize.scaled(
-                    QSize(kThumbnailWidth, kThumbnailHeight), Qt::KeepAspectRatio));
+            if (thumbnail.isNull()) {
+                const QSize originalSize = reader.size();
+                if (originalSize.isValid()) {
+                    reader.setScaledSize(originalSize.scaled(targetSize, Qt::KeepAspectRatio));
+                }
+                thumbnail = reader.read();
+                core::cache::ThumbnailCache::store(request.second, targetSize, thumbnail);
             }
             ThumbnailResult result;
             result.nIndex = request.first;
-            result.image = reader.read();
+            result.image = thumbnail;
             results.push_back(std::move(result));
         }
         return results;

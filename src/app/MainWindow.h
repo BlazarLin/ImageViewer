@@ -2,11 +2,18 @@
 
 #include "core/processing/ImageProcessor.h"
 #include "core/analysis/ImageAnalysis.h"
+#include "core/cache/ImageCache.h"
 
 #include <QImage>
 #include <QMainWindow>
 
 #include <memory>
+#include <QVector>
+
+struct PreloadResult {
+    QString path;
+    QImage image;
+};
 
 class QAction;
 class QDockWidget;
@@ -57,6 +64,8 @@ private slots:
     void startRoiAnalysis(const QRect& region);
     void onRoiAnalysisFinished();
     void toggleComparison(bool bEnabled);
+    void scheduleNeighborPreload();
+    void onNeighborPreloadFinished();
     void toggleMaximized();
     void selectLanguage(const QString& localeName);
 
@@ -83,6 +92,7 @@ private:
     std::unique_ptr<core::navigation::DirectoryModel> directoryModel_;
     QFutureWatcher<core::processing::ProcessingResult>* processingWatcher_ = nullptr;
     QFutureWatcher<core::analysis::AnalysisResult>* analysisWatcher_ = nullptr;
+    QFutureWatcher<QVector<PreloadResult>>* preloadWatcher_ = nullptr;
     QTimer* processingTimer_ = nullptr;
     core::processing::ProcessingParameters processingParameters_;
     QImage originalImage_;
@@ -95,6 +105,8 @@ private:
     quint64 nRunningAnalysisGeneration_ = 0;
     QRect pendingAnalysisRegion_;
     bool bAnalysisPending_ = false;
+    core::cache::ImageCache imageCache_;
+    bool bPreloadPending_ = false;
 
     QAction* actOpen_ = nullptr;
     QAction* actSaveResult_ = nullptr;

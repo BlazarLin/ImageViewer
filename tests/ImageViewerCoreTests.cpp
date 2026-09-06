@@ -11,6 +11,8 @@
 
 #include "core/navigation/DirectoryModel.h"
 #include "core/analysis/ImageAnalysis.h"
+#include "core/cache/ImageCache.h"
+#include "core/cache/ThumbnailCache.h"
 #include "core/processing/ImageProcessor.h"
 #include "core/processing/ProcessingPreset.h"
 
@@ -158,6 +160,24 @@ void testProcessingPreset()
         QString("TEST-07"), QString("验证预处理预设 JSON 往返、奇数核归一化与 Canny 阈值排序"));
 }
 
+void testCacheInvalidation(const QString& outputRoot)
+{
+    const QString path = QDir(outputRoot).filePath(QString("cache_source.bin"));
+    QFile file(path);
+    file.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    file.write("a");
+    file.close();
+    const QString imageKeyBefore = core::cache::ImageCache::keyForFile(path);
+    const QString thumbnailKeyBefore = core::cache::ThumbnailCache::keyForFile(path, QSize(112, 76));
+    file.open(QIODevice::WriteOnly | QIODevice::Append);
+    file.write("b");
+    file.close();
+    const QString imageKeyAfter = core::cache::ImageCache::keyForFile(path);
+    const QString thumbnailKeyAfter = core::cache::ThumbnailCache::keyForFile(path, QSize(112, 76));
+    verify(imageKeyBefore != imageKeyAfter && thumbnailKeyBefore != thumbnailKeyAfter,
+        QString("TEST-08"), QString("验证源文件大小变化后解码缓存与缩略图缓存自动失效"));
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -179,6 +199,7 @@ int main(int argc, char* argv[])
     testChannelSelection();
     testRoiStatistics();
     testProcessingPreset();
+    testCacheInvalidation(outputRoot);
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

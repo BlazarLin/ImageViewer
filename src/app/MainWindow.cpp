@@ -41,11 +41,14 @@
 
 #include <Windows.h>
 
+#include <vector>
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , directoryModel_(std::make_unique<core::navigation::DirectoryModel>())
     , processingWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
     , analysisWatcher_(new QFutureWatcher<core::analysis::AnalysisResult>(this))
+    , preloadWatcher_(new QFutureWatcher<QVector<PreloadResult>>(this))
     , processingTimer_(new QTimer(this))
 {
     setWindowTitle(QString("ImageViewer"));
@@ -66,6 +69,8 @@ MainWindow::MainWindow(QWidget* parent)
         this, &MainWindow::onPreprocessFinished);
     connect(analysisWatcher_, &QFutureWatcher<core::analysis::AnalysisResult>::finished,
         this, &MainWindow::onRoiAnalysisFinished);
+    connect(preloadWatcher_, &QFutureWatcher<QVector<PreloadResult>>::finished,
+        this, &MainWindow::onNeighborPreloadFinished);
     updateNavigationActions();
     updateImageInformation();
 }
@@ -76,6 +81,7 @@ MainWindow::~MainWindow()
     ++nAnalysisGeneration_;
     processingWatcher_->waitForFinished();
     analysisWatcher_->waitForFinished();
+    preloadWatcher_->waitForFinished();
 }
 
 void MainWindow::setupUi()
@@ -272,7 +278,13 @@ void MainWindow::setupStatusBar()
 void MainWindow::openFile(const QString& path)
 {
     util::ElapsedLog timer(QString("MainWindow::openFile"));
-    const auto result = core::loader::loadImage(path);
+    core::loader::LoadResult result;
+    if (!imageCache_.find(path, &result.image)) {
+        result = core::loader::loadImage(path);
+        if (result.ok()) {
+            imageCache_.insert(path, result.image);
+        }
+    }
     if (!result.ok()) {
         QMessageBox::warning(this, tr("打开失败"), result.error);
         qWarning().noquote() << tr("图像加载失败：") << result.error;
@@ -307,6 +319,7 @@ void MainWindow::openFile(const QString& path)
     }
     updateNavigationActions();
     updateImageInformation();
+    scheduleNeighborPreload();
 }
 
 void MainWindow::onOpen()
@@ -507,6 +520,60 @@ void MainWindow::toggleComparison(bool bEnabled)
         return;
     }
     view_->setComparisonImages(originalImage_, processedImage_, bEnabled);
+}
+
+void MainWindow::scheduleNeighborPreload()
+{
+    if (preloadWatcher_->isRunning()) {
+        bPreloadPending_ = true;
+        return;
+    }
+    const int nCurrentIndex = directoryModel_->currentIndex();
+    if (nCurrentIndex < 0) {
+        return;
+    }
+    std::vector<QString> requests;
+    requests.reserve(4);
+    for (int nDistance = 1; nDistance <= 2; ++nDistance) {
+        const int candidates[] = { nCurrentIndex + nDistance, nCurrentIndex - nDistance };
+        for (int nIndex : candidates) {
+            if (nIndex < 0 || nIndex >= directoryModel_->count()) {
+                continue;
+            }
+            const QString path = directoryModel_->files().at(nIndex);
+            QImage cached;
+            if (!imageCache_.find(path, &cached)) {
+                requests.push_back(path);
+            }
+        }
+    }
+    if (requests.empty()) {
+        bPreloadPending_ = false;
+        return;
+    }
+    bPreloadPending_ = false;
+    preloadWatcher_->setFuture(QtConcurrent::run([requests]() {
+        QVector<PreloadResult> results;
+        results.reserve(static_cast<int>(requests.size()));
+        for (const QString& path : requests) {
+            const core::loader::LoadResult loaded = core::loader::loadImage(path);
+            if (loaded.ok()) {
+                results.push_back({ path, loaded.image });
+            }
+        }
+        return results;
+    }));
+}
+
+void MainWindow::onNeighborPreloadFinished()
+{
+    const QVector<PreloadResult> results = preloadWatcher_->result();
+    for (const PreloadResult& result : results) {
+        imageCache_.insert(result.path, result.image);
+    }
+    if (bPreloadPending_) {
+        scheduleNeighborPreload();
+    }
 }
 
 void MainWindow::showOriginalImage()
