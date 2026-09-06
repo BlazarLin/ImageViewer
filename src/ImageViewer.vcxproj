@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <!-- 第三方依赖路径(Qt / OpenCV),可在 cmake/Config.props 中调整 -->
+  <ImportGroup Label="PropertySheets">
+    <Import Project="..\cmake\Config.props" />
+  </ImportGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{B0E0F6A1-1A2B-4C3D-9E0F-1234567890AB}</ProjectGuid>
+    <RootNamespace>ImageViewer</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <!-- Qt:需要 Qt VS Tools 插件,自动处理 moc/rcc/uic。 -->
+  <PropertyGroup>
+    <QtMocDir>$(IntDir)moc\</QtMocDir>
+    <QtUicDir>$(IntDir)ui\</QtUicDir>
+    <QtRccDir>$(IntDir)qrc\</QtRccDir>
+    <QtInstall>$(QTDIR)</QtInstall>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(Configuration)\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(Configuration)\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+
+  <!-- 通用编译设置(链接按配置分别覆盖) -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;NOMINMAX;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(QtIncludeDir);$(QtIncludeDir)\QtCore;$(QtIncludeDir)\QtGui;$(QtIncludeDir)\QtWidgets;$(QtIncludeDir)\QtConcurrent;$(QtIncludeDir)\QtSvg;$(OpenCVIncludeDir);$(MSBuildThisFileDirectory);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/source-charset:utf-8 /execution-charset:utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(QtLibDir);$(OpenCVLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opencv_world455d.lib;Qt5Cored.lib;Qt5Guid.lib;Qt5Widgetsd.lib;Qt5Concurrentd.lib;Qt5Svgd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(QtLibDir);$(OpenCVLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opencv_world455.lib;Qt5Core.lib;Qt5Gui.lib;Qt5Widgets.lib;Qt5Concurrent.lib;Qt5Svg.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- 源文件 -->
+  <ItemGroup>
+    <ClInclude Include="app\Application.h" />
+    <ClInclude Include="app\MainWindow.h" />
+    <ClInclude Include="app\MainWindow.ui" />
+    <ClInclude Include="ui\ImageView.h" />
+    <ClInclude Include="core\loader\ImageLoader.h" />
+    <ClInclude Include="util\ElapsedLog.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="app\Application.cpp" />
+    <ClCompile Include="app\MainWindow.cpp" />
+    <ClCompile Include="ui\ImageView.cpp" />
+    <ClCompile Include="core\loader\ImageLoader.cpp" />
+  </ItemGroup>
+
+  <!-- moc 生成的 cpp 参与编译(绝对路径,$(SolutionDir) 在评估时解析) -->
+  <ItemGroup>
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_Application.cpp" Condition="Exists('$(SolutionDir)obj\$(Configuration)\moc_Application.cpp')">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_MainWindow.cpp" Condition="Exists('$(SolutionDir)obj\$(Configuration)\moc_MainWindow.cpp')">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_ImageView.cpp" Condition="Exists('$(SolutionDir)obj\$(Configuration)\moc_ImageView.cpp')">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <!-- Qt MOC 处理:在 ClCompile 之前生成 moc_*.cpp,无需 Qt VS Tools 插件 -->
+  <Target Name="QtMoc" BeforeTargets="ClCompile" Inputs="@(MocHdrs)" Outputs="$(SolutionDir)obj\$(Configuration)\moc_%(MocHdrs.Filename).cpp">
+    <Message Text="Moccing %(MocHdrs.Filename)..." Importance="High" />
+    <Exec Command="if not exist &quot;$(SolutionDir)obj\$(Configuration)&quot; mkdir &quot;$(SolutionDir)obj\$(Configuration)&quot;&#xD;&#xA;&quot;$(QtBinDir)\moc.exe&quot; -I &quot;$(QtIncludeDir)&quot; -I &quot;$(QtIncludeDir)\QtCore&quot; &quot;%(MocHdrs.FullPath)&quot; -o &quot;$(SolutionDir)obj\$(Configuration)\moc_%(MocHdrs.Filename).cpp&quot;" />
+  </Target>
+
+  <ItemGroup>
+    <MocHdrs Include="app\Application.h" />
+    <MocHdrs Include="app\MainWindow.h" />
+    <MocHdrs Include="ui\ImageView.h" />
+  </ItemGroup>
+
+  <!-- 复制运行时 DLL 到输出目录(按配置选择 Debug d 版 / Release 版) -->
+  <Target Name="CopyQtDlls" AfterTargets="Link">
+    <PropertyGroup>
+      <_QtSuffix Condition="'$(Configuration)'=='Debug'">d</_QtSuffix>
+      <_OpenCVSuffix Condition="'$(Configuration)'=='Debug'">d</_OpenCVSuffix>
+    </PropertyGroup>
+    <ItemGroup>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Core$(_QtSuffix).dll"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Gui$(_QtSuffix).dll"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Widgets$(_QtSuffix).dll"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Concurrent$(_QtSuffix).dll"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Svg$(_QtSuffix).dll"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Core.dll"          Condition="'$(Configuration)'!='Debug'"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Gui.dll"           Condition="'$(Configuration)'!='Debug'"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Widgets.dll"       Condition="'$(Configuration)'!='Debug'"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Concurrent.dll"    Condition="'$(Configuration)'!='Debug'"/>
+      <_QtBinFiles Include="$(QtBinDir)\Qt5Svg.dll"           Condition="'$(Configuration)'!='Debug'"/>
+      <_OpenCVBinFiles Include="$(OpenCVBinDir)\opencv_world455$(_OpenCVSuffix).dll"/>
+      <_OpenCVBinFiles Include="$(OpenCVBinDir)\opencv_videoio_ffmpeg455_64$(_OpenCVSuffix).dll"/>
+      <_OpenCVBinFiles Include="$(OpenCVBinDir)\opencv_videoio_msmf455_64$(_OpenCVSuffix).dll"/>
+    </ItemGroup>
+    <Copy SourceFiles="@(_QtBinFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(RootDir)%(Directory)%(Filename)%(Extension)')"/>
+    <Copy SourceFiles="@(_OpenCVBinFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(RootDir)%(Directory)%(Filename)%(Extension)')"/>
+  </Target>
+
+</Project>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  第三方依赖路径配置。
+  优先级: 环境变量 > 此文件默认值。
+  - QTDIR       : Qt5 安装根目录(用户机器级)
+  - OPENCV_DIR  : OpenCV 根目录(本工程使用相对路径 $(SolutionDir)3rdpart\opencv)
+
+  OpenCV 平铺结构: <dir>/include、<dir>/lib、<dir>/bin
+  Release 用 opencv_world455.lib,Debug 用 opencv_world455d.lib。
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <!-- Qt 5.14 默认路径(本机布局 C:\Qt\Qt5.14.2\5.14.2\msvc2017_64) -->
+    <QTDIR Condition="'$(QTDIR)' == ''">C:\Qt\Qt5.14.2\5.14.2\msvc2017_64</QTDIR>
+
+    <!-- OpenCV:使用本工程 3rdpart 子目录,版本随项目走,不依赖全局安装 -->
+    <OPENCV_DIR Condition="'$(OPENCV_DIR)' == ''">$(SolutionDir)3rdpart\opencv</OPENCV_DIR>
+
+    <QtBinDir>$(QTDIR)\bin</QtBinDir>
+    <QtIncludeDir>$(QTDIR)\include</QtIncludeDir>
+    <QtLibDir>$(QTDIR)\lib</QtLibDir>
+
+    <OpenCVIncludeDir>$(OPENCV_DIR)\include</OpenCVIncludeDir>
+    <OpenCVLibDir>$(OPENCV_DIR)\lib</OpenCVLibDir>
+    <OpenCVBinDir>$(OPENCV_DIR)\bin</OpenCVBinDir>
+  </PropertyGroup>
+
+</Project>

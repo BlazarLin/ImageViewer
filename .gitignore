@@ -1,0 +1,33 @@
+# VS / CMake 构建产物
+/bin/
+/obj/
+/build/
+/.vs/
+msbuild.log
+msbuild.binlog
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.cachefile
+*.VC.db
+*.VC.opendb
+ipch/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild[Ll]og.*
+
+# 本机 OpenCV SDK 约 832 MB，作为外部依赖保留，不纳入普通 Git 仓库
+/3rdpart/opencv/
+
+# Qt 临时
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+
+# 用户配置
+cmake/Config.local.props

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <!-- 占位:实际 UI 由 MainWindow.cpp 动态构建,无需 .ui 文件参与 uic 处理。
+      Qt VS Tools 若扫描此目录生成 ui_*.h 失败,可以删除本文件。 -->
+</ui>
