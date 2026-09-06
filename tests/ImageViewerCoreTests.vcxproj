@@ -38,6 +38,7 @@
     <ClCompile Include="..\src\core\analysis\ImageAnalysis.cpp" />
     <ClCompile Include="..\src\core\cache\ImageCache.cpp" />
     <ClCompile Include="..\src\core\cache\ThumbnailCache.cpp" />
+    <ClCompile Include="..\src\core\cache\ImagePyramid.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\core\navigation\DirectoryModel.h" />
@@ -46,6 +47,7 @@
     <ClInclude Include="..\src\core\analysis\ImageAnalysis.h" />
     <ClInclude Include="..\src\core\cache\ImageCache.h" />
     <ClInclude Include="..\src\core\cache\ThumbnailCache.h" />
+    <ClInclude Include="..\src\core\cache\ImagePyramid.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyTestDlls" AfterTargets="Link">

@@ -3,8 +3,11 @@
 #include <QGraphicsView>
 #include <QColor>
 #include <QImage>
+#include <vector>
 
 class QGraphicsPixmapItem;
+template <typename T>
+class QFutureWatcher;
 
 namespace ui {
 
@@ -13,6 +16,7 @@ class ImageView : public QGraphicsView {
     Q_OBJECT
 public:
     explicit ImageView(QWidget* parent = nullptr);
+    ~ImageView() override;
 
     // 设置当前展示的图像。空图像清空场景。
     void setImage(const QImage& img);
@@ -64,6 +68,9 @@ private:
     void setZoomFactor(double factor, const QPoint& anchorPosition);
     void updateRenderMode();
     void notifyZoomChanged();
+    void requestPyramid();
+    void onPyramidFinished();
+    void applyPyramidLevel();
 
     QGraphicsScene* scene_ = nullptr;
     QGraphicsPixmapItem* pixmapItem_ = nullptr;
@@ -71,6 +78,8 @@ private:
     QImage current_;
     QImage original_;
     QImage processed_;
+    std::vector<QImage> pyramid_;
+    QFutureWatcher<std::vector<QImage>>* pyramidWatcher_ = nullptr;
     ViewMode viewMode_ = ViewMode::FitWindow;
     double lastEmittedZoom_ = -1.0;
     double dComparisonSplit_ = 0.5;
@@ -79,6 +88,10 @@ private:
     bool bComparisonEnabled_ = false;
     bool bDraggingComparisonSplit_ = false;
     bool bSelectingRoi_ = false;
+    quint64 nPyramidGeneration_ = 0;
+    quint64 nRunningPyramidGeneration_ = 0;
+    int nDisplayedPyramidLevel_ = -1;
+    bool bPyramidPending_ = false;
 };
 
 } // namespace ui

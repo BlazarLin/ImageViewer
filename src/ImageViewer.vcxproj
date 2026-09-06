@@ -126,6 +126,7 @@
     <ClInclude Include="core\analysis\ImageAnalysis.h" />
     <ClInclude Include="core\cache\ImageCache.h" />
     <ClInclude Include="core\cache\ThumbnailCache.h" />
+    <ClInclude Include="core\cache\ImagePyramid.h" />
     <ClInclude Include="util\ElapsedLog.h" />
   </ItemGroup>
 
@@ -149,6 +150,7 @@
     <ClCompile Include="core\analysis\ImageAnalysis.cpp" />
     <ClCompile Include="core\cache\ImageCache.cpp" />
     <ClCompile Include="core\cache\ThumbnailCache.cpp" />
+    <ClCompile Include="core\cache\ImagePyramid.cpp" />
   </ItemGroup>
 
   <!-- moc 生成的 cpp 参与编译(绝对路径,$(SolutionDir) 在评估时解析) -->

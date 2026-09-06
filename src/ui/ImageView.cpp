@@ -1,11 +1,15 @@
 #include "ImageView.h"
 
+#include "core/cache/ImagePyramid.h"
+
 #include <QGraphicsPixmapItem>
+#include <QFutureWatcher>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QWheelEvent>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
 #include <cmath>
@@ -41,6 +45,7 @@ private:
 
 ImageView::ImageView(QWidget* parent)
     : QGraphicsView(parent)
+    , pyramidWatcher_(new QFutureWatcher<std::vector<QImage>>(this))
 {
     setupScene();
     setRenderHint(QPainter::Antialiasing, true);
@@ -54,6 +59,14 @@ ImageView::ImageView(QWidget* parent)
     setBackgroundBrush(QColor(46, 48, 51));
     setFrameShape(QFrame::NoFrame);
     setMouseTracking(true);
+    connect(pyramidWatcher_, &QFutureWatcher<std::vector<QImage>>::finished,
+        this, &ImageView::onPyramidFinished);
+}
+
+ImageView::~ImageView()
+{
+    ++nPyramidGeneration_;
+    pyramidWatcher_->waitForFinished();
 }
 
 void ImageView::setupScene()
@@ -74,12 +87,16 @@ void ImageView::setImage(const QImage& img, bool bResetView)
     original_ = QImage();
     processed_ = QImage();
     bComparisonEnabled_ = false;
+    ++nPyramidGeneration_;
+    pyramid_.clear();
+    nDisplayedPyramidLevel_ = -1;
     rebuildPixmapItems();
     if (!current_.isNull()) {
         scene_->setSceneRect(QRectF(current_.rect()));
     } else {
         scene_->setSceneRect(QRectF());
     }
+    requestPyramid();
     if (bResetView || oldRect.size() != scene_->sceneRect().size()) {
         viewMode_ = ViewMode::FitWindow;
         applyViewMode();
@@ -98,6 +115,9 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
     current_ = processed_.isNull() ? original_ : processed_;
     bComparisonEnabled_ = bEnabled && !original_.isNull() && !processed_.isNull()
         && original_.size() == processed_.size();
+    ++nPyramidGeneration_;
+    pyramid_.clear();
+    nDisplayedPyramidLevel_ = -1;
     rebuildPixmapItems();
     scene_->setSceneRect(current_.isNull() ? QRectF() : QRectF(current_.rect()));
     if (oldRect.size() != scene_->sceneRect().size()) {
@@ -107,6 +127,7 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
         updateRenderMode();
         viewport()->update();
     }
+    requestPyramid();
 }
 
 void ImageView::setComparisonEnabled(bool bEnabled)
@@ -138,6 +159,7 @@ void ImageView::rebuildPixmapItems()
         const QImage& baseImage = bComparisonEnabled_ ? original_ : current_;
         pixmapItem_ = scene_->addPixmap(QPixmap::fromImage(baseImage));
         pixmapItem_->setTransformationMode(Qt::SmoothTransformation);
+        pixmapItem_->setTransform(QTransform());
         if (bComparisonEnabled_) {
             auto* clippedItem = new ClippedPixmapItem();
             clippedItem->setPixmap(QPixmap::fromImage(processed_));
@@ -146,6 +168,7 @@ void ImageView::rebuildPixmapItems()
             scene_->addItem(clippedItem);
             comparisonItem_ = clippedItem;
         }
+        nDisplayedPyramidLevel_ = 0;
     }
 }
 
@@ -414,6 +437,7 @@ void ImageView::updateRenderMode()
         return;
     }
     const bool bShowPixels = zoomFactor() >= 8.0;
+    applyPyramidLevel();
     pixmapItem_->setTransformationMode(
         bShowPixels ? Qt::FastTransformation : Qt::SmoothTransformation);
     if (comparisonItem_) {
@@ -422,6 +446,60 @@ void ImageView::updateRenderMode()
     }
     setRenderHint(QPainter::SmoothPixmapTransform, !bShowPixels);
     viewport()->update();
+}
+
+void ImageView::requestPyramid()
+{
+    if (current_.isNull() || std::max(current_.width(), current_.height()) <= 2048) {
+        return;
+    }
+    if (pyramidWatcher_->isRunning()) {
+        bPyramidPending_ = true;
+        return;
+    }
+    bPyramidPending_ = false;
+    nRunningPyramidGeneration_ = nPyramidGeneration_;
+    const QImage source = current_;
+    pyramidWatcher_->setFuture(QtConcurrent::run([source]() {
+        return core::cache::ImagePyramid::build(source);
+    }));
+}
+
+void ImageView::onPyramidFinished()
+{
+    if (nRunningPyramidGeneration_ == nPyramidGeneration_) {
+        pyramid_ = pyramidWatcher_->result();
+        nDisplayedPyramidLevel_ = -1;
+        applyPyramidLevel();
+    }
+    if (bPyramidPending_) {
+        requestPyramid();
+    }
+}
+
+void ImageView::applyPyramidLevel()
+{
+    if (!pixmapItem_ || bComparisonEnabled_ || pyramid_.empty()) {
+        return;
+    }
+    int nLevel = 0;
+    const double dZoom = zoomFactor();
+    if (dZoom < 1.0) {
+        nLevel = static_cast<int>(std::floor(std::log2(1.0 / std::max(0.0001, dZoom))));
+        nLevel = std::clamp(nLevel, 0, static_cast<int>(pyramid_.size()) - 1);
+    }
+    if (dZoom >= 8.0) {
+        nLevel = 0;
+    }
+    if (nLevel == nDisplayedPyramidLevel_) {
+        return;
+    }
+    pixmapItem_->setPixmap(QPixmap::fromImage(pyramid_.at(nLevel)));
+    const QImage& levelImage = pyramid_.at(nLevel);
+    pixmapItem_->setTransform(QTransform::fromScale(
+        static_cast<double>(current_.width()) / levelImage.width(),
+        static_cast<double>(current_.height()) / levelImage.height()));
+    nDisplayedPyramidLevel_ = nLevel;
 }
 
 void ImageView::notifyZoomChanged()

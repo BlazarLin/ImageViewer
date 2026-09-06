@@ -13,6 +13,7 @@
 #include "core/analysis/ImageAnalysis.h"
 #include "core/cache/ImageCache.h"
 #include "core/cache/ThumbnailCache.h"
+#include "core/cache/ImagePyramid.h"
 #include "core/processing/ImageProcessor.h"
 #include "core/processing/ProcessingPreset.h"
 
@@ -178,6 +179,20 @@ void testCacheInvalidation(const QString& outputRoot)
         QString("TEST-08"), QString("验证源文件大小变化后解码缓存与缩略图缓存自动失效"));
 }
 
+void testImagePyramid()
+{
+    QImage image(4097, 2049, QImage::Format_Grayscale8);
+    image.fill(128);
+    const std::vector<QImage> levels = core::cache::ImagePyramid::build(image, 1024, 8);
+    const bool bValid = levels.size() == 4
+        && levels[0].size() == QSize(4097, 2049)
+        && levels[1].size() == QSize(2049, 1025)
+        && levels[2].size() == QSize(1025, 513)
+        && levels[3].size() == QSize(513, 257);
+    verify(bValid, QString("TEST-09"),
+        QString("验证奇数尺寸大图金字塔逐级二分、层数受限且最终层不超过阈值"));
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -200,6 +215,7 @@ int main(int argc, char* argv[])
     testRoiStatistics();
     testProcessingPreset();
     testCacheInvalidation(outputRoot);
+    testImagePyramid();
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;
