@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <ImportGroup Label="PropertySheets"><Import Project="..\cmake\Config.props" /></ImportGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion><Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{D30A67BB-4C1B-4A8D-A024-260906000001}</ProjectGuid>
+    <RootNamespace>ImageViewerCoreTests</RootNamespace><WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries><PlatformToolset>v142</PlatformToolset><CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><UseDebugLibraries>false</UseDebugLibraries><PlatformToolset>v142</PlatformToolset><CharacterSet>Unicode</CharacterSet><WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup><OutDir>$(SolutionDir)bin\Tests\$(Configuration)\</OutDir><IntDir>$(SolutionDir)obj\Tests\$(Configuration)\</IntDir></PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile><LanguageStandard>stdcpp17</LanguageStandard><WarningLevel>Level4</WarningLevel><ConformanceMode>true</ConformanceMode><MultiProcessorCompilation>true</MultiProcessorCompilation><AdditionalOptions>/source-charset:utf-8 /execution-charset:utf-8 %(AdditionalOptions)</AdditionalOptions><PreprocessorDefinitions>WIN32;_CONSOLE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalIncludeDirectories>$(QtIncludeDir);$(QtIncludeDir)\QtCore;$(QtIncludeDir)\QtGui;$(OpenCVIncludeDir);$(SolutionDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile><Optimization>Disabled</Optimization><RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary><DebugInformationFormat>ProgramDatabase</DebugInformationFormat></ClCompile>
+    <Link><SubSystem>Console</SubSystem><GenerateDebugInformation>true</GenerateDebugInformation><AdditionalLibraryDirectories>$(QtLibDir);$(OpenCVLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories><AdditionalDependencies>opencv_world455d.lib;Qt5Cored.lib;Qt5Guid.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile><Optimization>MaxSpeed</Optimization><RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary><DebugInformationFormat>ProgramDatabase</DebugInformationFormat><FunctionLevelLinking>true</FunctionLevelLinking><IntrinsicFunctions>true</IntrinsicFunctions></ClCompile>
+    <Link><SubSystem>Console</SubSystem><GenerateDebugInformation>true</GenerateDebugInformation><EnableCOMDATFolding>true</EnableCOMDATFolding><OptimizeReferences>true</OptimizeReferences><AdditionalLibraryDirectories>$(QtLibDir);$(OpenCVLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories><AdditionalDependencies>opencv_world455.lib;Qt5Core.lib;Qt5Gui.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="ImageViewerCoreTests.cpp" />
+    <ClCompile Include="..\src\core\navigation\DirectoryModel.cpp" />
+    <ClCompile Include="..\src\core\processing\ImageProcessor.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\src\core\navigation\DirectoryModel.h" />
+    <ClInclude Include="..\src\core\processing\ImageProcessor.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopyTestDlls" AfterTargets="Link">
+    <PropertyGroup><_QtSuffix Condition="'$(Configuration)'=='Debug'">d</_QtSuffix><_OpenCVSuffix Condition="'$(Configuration)'=='Debug'">d</_OpenCVSuffix></PropertyGroup>
+    <ItemGroup><_RuntimeFiles Include="$(QtBinDir)\Qt5Core$(_QtSuffix).dll"/><_RuntimeFiles Include="$(QtBinDir)\Qt5Gui$(_QtSuffix).dll"/><_RuntimeFiles Include="$(OpenCVBinDir)\opencv_world455$(_OpenCVSuffix).dll"/></ItemGroup>
+    <Copy SourceFiles="@(_RuntimeFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(RootDir)%(Directory)%(Filename)%(Extension)')"/>
+  </Target>
+</Project>

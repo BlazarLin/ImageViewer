@@ -5,8 +5,12 @@
 
 #include <Windows.h>
 #include <QApplication>
+#include <QDir>
 #include <QDebug>
+#include <QLocale>
+#include <QSettings>
 #include <QTextCodec>
+#include <QTranslator>
 #include <QtGlobal>
 
 #include <cstdio>
@@ -24,6 +28,21 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QString("ImageViewer"));
     QCoreApplication::setApplicationName(QString("ImageViewer"));
+
+    QSettings settings;
+    const QString defaultLanguage = QLocale::system().name().startsWith(QString("zh"))
+        ? QString("zh_CN") : QString("en_US");
+    const QString language = settings.value(QString("ui/language"), defaultLanguage).toString();
+    QTranslator translator;
+    if (language != QString("zh_CN")) {
+        const QString translationPath = QDir(QCoreApplication::applicationDirPath())
+            .filePath(QString("translations/ImageViewer_%1.qm").arg(language));
+        if (translator.load(translationPath)) {
+            app.installTranslator(&translator);
+        } else {
+            qWarning().noquote() << "translation file not found:" << translationPath;
+        }
+    }
 
     // qInfo 默认会输出到 stderr(GUI 子系统下可能不可见)
     // 如果想要调试输出,改为 qInstallMessageHandler 自定义到文件。

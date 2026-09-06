@@ -4,6 +4,8 @@ VisualStudioVersion = 16.0.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ImageViewer", "src\ImageViewer.vcxproj", "{B0E0F6A1-1A2B-4C3D-9E0F-1234567890AB}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ImageViewerCoreTests", "tests\ImageViewerCoreTests.vcxproj", "{D30A67BB-4C1B-4A8D-A024-260906000001}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -14,6 +16,10 @@ Global
 		{B0E0F6A1-1A2B-4C3D-9E0F-1234567890AB}.Debug|x64.Build.0 = Debug|x64
 		{B0E0F6A1-1A2B-4C3D-9E0F-1234567890AB}.Release|x64.ActiveCfg = Release|x64
 		{B0E0F6A1-1A2B-4C3D-9E0F-1234567890AB}.Release|x64.Build.0 = Release|x64
+		{D30A67BB-4C1B-4A8D-A024-260906000001}.Debug|x64.ActiveCfg = Debug|x64
+		{D30A67BB-4C1B-4A8D-A024-260906000001}.Debug|x64.Build.0 = Debug|x64
+		{D30A67BB-4C1B-4A8D-A024-260906000001}.Release|x64.ActiveCfg = Release|x64
+		{D30A67BB-4C1B-4A8D-A024-260906000001}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

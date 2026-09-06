@@ -19,6 +19,12 @@
     <Filter Include="工具">
       <UniqueIdentifier>{1A1A1A1A-0000-0000-0000-000000000006}</UniqueIdentifier>
     </Filter>
+    <Filter Include="核心\navigation">
+      <UniqueIdentifier>{1A1A1A1A-0000-0000-0000-000000000007}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="核心\processing">
+      <UniqueIdentifier>{1A1A1A1A-0000-0000-0000-000000000008}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 
   <ItemGroup>
@@ -26,7 +32,12 @@
     <ClInclude Include="app\MainWindow.h"><Filter>入口\app</Filter></ClInclude>
     <ClInclude Include="app\MainWindow.ui"><Filter>入口\app</Filter></ClInclude>
     <ClInclude Include="ui\ImageView.h"><Filter>入口\ui</Filter></ClInclude>
+    <ClInclude Include="ui\ThumbnailBar.h"><Filter>入口\ui</Filter></ClInclude>
+    <ClInclude Include="ui\TitleBar.h"><Filter>入口\ui</Filter></ClInclude>
+    <ClInclude Include="ui\PreprocessPanel.h"><Filter>入口\ui</Filter></ClInclude>
     <ClInclude Include="core\loader\ImageLoader.h"><Filter>核心\loader</Filter></ClInclude>
+    <ClInclude Include="core\navigation\DirectoryModel.h"><Filter>核心\navigation</Filter></ClInclude>
+    <ClInclude Include="core\processing\ImageProcessor.h"><Filter>核心\processing</Filter></ClInclude>
     <ClInclude Include="util\ElapsedLog.h"><Filter>工具</Filter></ClInclude>
   </ItemGroup>
 
@@ -35,6 +46,14 @@
     <ClCompile Include="app\Application.cpp"><Filter>入口\app</Filter></ClCompile>
     <ClCompile Include="app\MainWindow.cpp"><Filter>入口\app</Filter></ClCompile>
     <ClCompile Include="ui\ImageView.cpp"><Filter>入口\ui</Filter></ClCompile>
+    <ClCompile Include="ui\ThumbnailBar.cpp"><Filter>入口\ui</Filter></ClCompile>
+    <ClCompile Include="ui\TitleBar.cpp"><Filter>入口\ui</Filter></ClCompile>
+    <ClCompile Include="ui\PreprocessPanel.cpp"><Filter>入口\ui</Filter></ClCompile>
     <ClCompile Include="core\loader\ImageLoader.cpp"><Filter>核心\loader</Filter></ClCompile>
+    <ClCompile Include="core\navigation\DirectoryModel.cpp"><Filter>核心\navigation</Filter></ClCompile>
+    <ClCompile Include="core\processing\ImageProcessor.cpp"><Filter>核心\processing</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\translations\ImageViewer_en_US.ts" />
   </ItemGroup>
 </Project>

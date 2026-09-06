@@ -28,6 +28,7 @@ moc_*.h
 qrc_*.cpp
 ui_*.h
 *.qmlc
+*.qm
 
 # 用户配置
 cmake/Config.local.props

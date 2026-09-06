@@ -115,8 +115,17 @@
     <ClInclude Include="app\MainWindow.h" />
     <ClInclude Include="app\MainWindow.ui" />
     <ClInclude Include="ui\ImageView.h" />
+    <ClInclude Include="ui\ThumbnailBar.h" />
+    <ClInclude Include="ui\TitleBar.h" />
+    <ClInclude Include="ui\PreprocessPanel.h" />
     <ClInclude Include="core\loader\ImageLoader.h" />
+    <ClInclude Include="core\navigation\DirectoryModel.h" />
+    <ClInclude Include="core\processing\ImageProcessor.h" />
     <ClInclude Include="util\ElapsedLog.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\translations\ImageViewer_en_US.ts" />
   </ItemGroup>
 
   <ItemGroup>
@@ -124,23 +133,41 @@
     <ClCompile Include="app\Application.cpp" />
     <ClCompile Include="app\MainWindow.cpp" />
     <ClCompile Include="ui\ImageView.cpp" />
+    <ClCompile Include="ui\ThumbnailBar.cpp" />
+    <ClCompile Include="ui\TitleBar.cpp" />
+    <ClCompile Include="ui\PreprocessPanel.cpp" />
     <ClCompile Include="core\loader\ImageLoader.cpp" />
+    <ClCompile Include="core\navigation\DirectoryModel.cpp" />
+    <ClCompile Include="core\processing\ImageProcessor.cpp" />
   </ItemGroup>
 
   <!-- moc 生成的 cpp 参与编译(绝对路径,$(SolutionDir) 在评估时解析) -->
   <ItemGroup>
-    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_Application.cpp" Condition="Exists('$(SolutionDir)obj\$(Configuration)\moc_Application.cpp')">
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_Application.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_MainWindow.cpp" Condition="Exists('$(SolutionDir)obj\$(Configuration)\moc_MainWindow.cpp')">
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_MainWindow.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_ImageView.cpp" Condition="Exists('$(SolutionDir)obj\$(Configuration)\moc_ImageView.cpp')">
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_ImageView.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_ThumbnailBar.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_TitleBar.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)obj\$(Configuration)\moc_PreprocessPanel.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <Target Name="QtTranslations" BeforeTargets="PrepareForBuild">
+    <Exec Command="if not exist &quot;$(OutDir)translations&quot; mkdir &quot;$(OutDir)translations&quot;&#xD;&#xA;&quot;$(QtBinDir)\lrelease.exe&quot; &quot;$(SolutionDir)translations\ImageViewer_en_US.ts&quot; -qm &quot;$(OutDir)translations\ImageViewer_en_US.qm&quot;" />
+  </Target>
 
   <!-- Qt MOC 处理:在 ClCompile 之前生成 moc_*.cpp,无需 Qt VS Tools 插件 -->
   <Target Name="QtMoc" BeforeTargets="ClCompile" Inputs="@(MocHdrs)" Outputs="$(SolutionDir)obj\$(Configuration)\moc_%(MocHdrs.Filename).cpp">
@@ -152,6 +179,9 @@
     <MocHdrs Include="app\Application.h" />
     <MocHdrs Include="app\MainWindow.h" />
     <MocHdrs Include="ui\ImageView.h" />
+    <MocHdrs Include="ui\ThumbnailBar.h" />
+    <MocHdrs Include="ui\TitleBar.h" />
+    <MocHdrs Include="ui\PreprocessPanel.h" />
   </ItemGroup>
 
   <!-- 复制运行时 DLL 到输出目录(按配置选择 Debug d 版 / Release 版) -->
