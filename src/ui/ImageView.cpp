@@ -2,12 +2,19 @@
 
 #include "core/cache/ImagePyramid.h"
 
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QFileInfo>
 #include <QGraphicsPixmapItem>
 #include <QFutureWatcher>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPixmap>
 #include <QResizeEvent>
 #include <QScrollBar>
+#include <QUrl>
 #include <QWheelEvent>
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -41,6 +48,20 @@ private:
     double dSplit_ = 0.5;
 };
 
+QString firstLocalFilePath(const QMimeData* mimeData)
+{
+    if (!mimeData || !mimeData->hasUrls()) {
+        return {};
+    }
+    for (const QUrl& url : mimeData->urls()) {
+        const QString path = url.toLocalFile();
+        if (!path.isEmpty() && QFileInfo(path).isFile()) {
+            return QFileInfo(path).absoluteFilePath();
+        }
+    }
+    return {};
+}
+
 } // namespace
 
 ImageView::ImageView(QWidget* parent)
@@ -56,8 +77,9 @@ ImageView::ImageView(QWidget* parent)
     setViewportUpdateMode(QGraphicsView::SmartViewportUpdate);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setBackgroundBrush(QColor(46, 48, 51));
     setFrameShape(QFrame::NoFrame);
+    setAcceptDrops(true);
+    viewport()->setAcceptDrops(true);
     setMouseTracking(true);
     connect(pyramidWatcher_, &QFutureWatcher<std::vector<QImage>>::finished,
         this, &ImageView::onPyramidFinished);
@@ -318,6 +340,35 @@ void ImageView::mouseReleaseEvent(QMouseEvent* event)
     QGraphicsView::mouseReleaseEvent(event);
 }
 
+void ImageView::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (!firstLocalFilePath(event->mimeData()).isEmpty()) {
+        event->acceptProposedAction();
+        return;
+    }
+    QGraphicsView::dragEnterEvent(event);
+}
+
+void ImageView::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (!firstLocalFilePath(event->mimeData()).isEmpty()) {
+        event->acceptProposedAction();
+        return;
+    }
+    QGraphicsView::dragMoveEvent(event);
+}
+
+void ImageView::dropEvent(QDropEvent* event)
+{
+    const QString path = firstLocalFilePath(event->mimeData());
+    if (!path.isEmpty()) {
+        emit fileDropped(path);
+        event->acceptProposedAction();
+        return;
+    }
+    QGraphicsView::dropEvent(event);
+}
+
 void ImageView::paintEvent(QPaintEvent* event)
 {
     QGraphicsView::paintEvent(event);
@@ -349,6 +400,25 @@ void ImageView::paintEvent(QPaintEvent* event)
     painter.setPen(QColor(151, 158, 168));
     painter.drawText(centeredCard.adjusted(20, 78, -20, -28),
         Qt::AlignCenter, tr("支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O"));
+}
+
+void ImageView::drawBackground(QPainter* painter, const QRectF& rect)
+{
+    Q_UNUSED(rect)
+    static const QPixmap checkerPattern = []() {
+        constexpr int nCellSize = 12;
+        QPixmap pattern(nCellSize * 2, nCellSize * 2);
+        pattern.fill(QColor(42, 44, 48));
+        QPainter patternPainter(&pattern);
+        patternPainter.fillRect(nCellSize, 0, nCellSize, nCellSize, QColor(52, 54, 59));
+        patternPainter.fillRect(0, nCellSize, nCellSize, nCellSize, QColor(52, 54, 59));
+        return pattern;
+    }();
+
+    painter->save();
+    painter->resetTransform();
+    painter->fillRect(viewport()->rect(), QBrush(checkerPattern));
+    painter->restore();
 }
 
 void ImageView::updateHoverPixel(const QPoint& viewportPosition)

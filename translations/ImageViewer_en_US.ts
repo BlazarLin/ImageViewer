@@ -163,11 +163,11 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, a custom title bar
     </message>
     <message>
         <source>未打开图像  |  ImageViewer</source>
-        <translation>No image open  |  ImageViewer</translation>
+        <translation type="vanished">No image open  |  ImageViewer</translation>
     </message>
     <message>
         <source>%1  |  %2/%3 个文件  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer</source>
-        <translation>%1  |  %2/%3 files  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer</translation>
+        <translation type="vanished">%1  |  %2/%3 files  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer</translation>
     </message>
     <message>
         <source>灰度/%1-bit</source>
@@ -253,9 +253,45 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, a custom title bar
         <source>ImageViewer V2
 
 支持光标锚定缩放、像素网格、目录缩略图、自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。</source>
-        <translation>ImageViewer V2
+        <translation type="vanished">ImageViewer V2
 
 Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, real-time processing, ROI analysis, split comparison, and a large-image display pyramid.</translation>
+    </message>
+    <message>
+        <source>关闭</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>显示调试终端</source>
+        <translation>Show debug console</translation>
+    </message>
+    <message>
+        <source>设置(&amp;S)</source>
+        <translation>Settings(&amp;S)</translation>
+    </message>
+    <message>
+        <source>ImageViewer v%1
+
+支持光标锚定缩放、像素网格、目录缩略图、自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。</source>
+        <translation>ImageViewer v%1
+
+Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, real-time preprocessing, ROI analysis, split comparison, and image pyramids for large images.</translation>
+    </message>
+    <message>
+        <source>未打开图像  |  ImageViewer v%1</source>
+        <translation>No image open  |  ImageViewer v%1</translation>
+    </message>
+    <message>
+        <source>%1  |  %2/%3 个文件  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10</source>
+        <translation>%1  |  %2/%3 files  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10</translation>
+    </message>
+    <message>
+        <source>设置失败</source>
+        <translation>Settings Error</translation>
+    </message>
+    <message>
+        <source>无法切换调试终端。</source>
+        <translation>Unable to change the debug console state.</translation>
     </message>
 </context>
 <context>

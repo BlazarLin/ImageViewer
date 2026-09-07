@@ -59,6 +59,7 @@ endif()
 # ---------- 可执行目标 ----------
 set(APP_SOURCES
     src/main.cpp
+    src/util/DebugConsole.cpp
     src/app/Application.cpp
     src/app/MainWindow.cpp
     src/ui/ImageView.cpp
@@ -78,12 +79,14 @@ set(APP_SOURCES
 
 set(APP_HEADERS
     src/app/Application.h
+    src/app/AppVersion.h
     src/app/MainWindow.h
     src/ui/ImageView.h
     src/ui/ThumbnailBar.h
     src/ui/TitleBar.h
     src/ui/PreprocessPanel.h
     src/ui/AnalysisPanel.h
+    src/ui/AppIcon.h
     src/core/loader/ImageLoader.h
     src/core/navigation/DirectoryModel.h
     src/core/processing/ImageProcessor.h
@@ -93,6 +96,7 @@ set(APP_HEADERS
     src/core/cache/ThumbnailCache.h
     src/core/cache/ImagePyramid.h
     src/util/ElapsedLog.h
+    src/util/DebugConsole.h
 )
 
 set(APP_UI

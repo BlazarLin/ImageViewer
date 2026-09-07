@@ -16,7 +16,10 @@
 #include <cstdio>
 
 #include "app/Application.h"
+#include "app/AppVersion.h"
 #include "app/MainWindow.h"
+#include "ui/AppIcon.h"
+#include "util/DebugConsole.h"
 
 int main(int argc, char* argv[])
 {
@@ -28,8 +31,11 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QString("ImageViewer"));
     QCoreApplication::setApplicationName(QString("ImageViewer"));
+    QCoreApplication::setApplicationVersion(app::version());
+    QApplication::setWindowIcon(ui::createAppIcon());
 
     QSettings settings;
+    util::setDebugConsoleVisible(settings.value(QString("ui/showDebugConsole"), false).toBool());
     const QString defaultLanguage = QLocale::system().name().startsWith(QString("zh"))
         ? QString("zh_CN") : QString("en_US");
     const QString language = settings.value(QString("ui/language"), defaultLanguage).toString();
@@ -44,8 +50,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    // qInfo 默认会输出到 stderr(GUI 子系统下可能不可见)
-    // 如果想要调试输出,改为 qInstallMessageHandler 自定义到文件。
+    // qInfo 默认输出到 stderr；需要现场诊断时可在“设置”中显示调试终端。
     qInfo() << "ImageViewer starting. Qt" << qVersion();
 
     Application appl(&app);

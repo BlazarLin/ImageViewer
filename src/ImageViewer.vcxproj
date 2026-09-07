@@ -84,10 +84,10 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(QtLibDir);$(OpenCVLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opencv_world455d.lib;Qt5Cored.lib;Qt5Guid.lib;Qt5Widgetsd.lib;Qt5Concurrentd.lib;Qt5Svgd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opencv_world455d.lib;qtmaind.lib;Qt5Cored.lib;Qt5Guid.lib;Qt5Widgetsd.lib;Qt5Concurrentd.lib;Qt5Svgd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -100,18 +100,19 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>$(QtLibDir);$(OpenCVLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opencv_world455.lib;Qt5Core.lib;Qt5Gui.lib;Qt5Widgets.lib;Qt5Concurrent.lib;Qt5Svg.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opencv_world455.lib;qtmain.lib;Qt5Core.lib;Qt5Gui.lib;Qt5Widgets.lib;Qt5Concurrent.lib;Qt5Svg.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
   <!-- 源文件 -->
   <ItemGroup>
     <ClInclude Include="app\Application.h" />
+    <ClInclude Include="app\AppVersion.h" />
     <ClInclude Include="app\MainWindow.h" />
     <ClInclude Include="app\MainWindow.ui" />
     <ClInclude Include="ui\ImageView.h" />
@@ -119,6 +120,7 @@
     <ClInclude Include="ui\TitleBar.h" />
     <ClInclude Include="ui\PreprocessPanel.h" />
     <ClInclude Include="ui\AnalysisPanel.h" />
+    <ClInclude Include="ui\AppIcon.h" />
     <ClInclude Include="core\loader\ImageLoader.h" />
     <ClInclude Include="core\navigation\DirectoryModel.h" />
     <ClInclude Include="core\processing\ImageProcessor.h" />
@@ -128,6 +130,7 @@
     <ClInclude Include="core\cache\ThumbnailCache.h" />
     <ClInclude Include="core\cache\ImagePyramid.h" />
     <ClInclude Include="util\ElapsedLog.h" />
+    <ClInclude Include="util\DebugConsole.h" />
   </ItemGroup>
 
   <ItemGroup>
@@ -136,6 +139,7 @@
 
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="util\DebugConsole.cpp" />
     <ClCompile Include="app\Application.cpp" />
     <ClCompile Include="app\MainWindow.cpp" />
     <ClCompile Include="ui\ImageView.cpp" />

@@ -6,6 +6,9 @@
 #include <vector>
 
 class QGraphicsPixmapItem;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
 class QPaintEvent;
 template <typename T>
 class QFutureWatcher;
@@ -44,6 +47,7 @@ signals:
     void zoomChanged(double factor);
     void pixelHovered(const QPoint& position, const QColor& color, bool bValid);
     void roiSelected(const QRect& region);
+    void fileDropped(const QString& path);
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
@@ -52,7 +56,11 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
+    void drawBackground(QPainter* painter, const QRectF& rect) override;
     void drawForeground(QPainter* painter, const QRectF& rect) override;
 
 private:

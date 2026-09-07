@@ -68,6 +68,7 @@ private slots:
     void onNeighborPreloadFinished();
     void toggleMaximized();
     void selectLanguage(const QString& localeName);
+    void setDebugConsoleVisible(bool bVisible);
 
 private:
     void setupUi();
@@ -121,6 +122,7 @@ private:
     QAction* actTogglePreprocess_ = nullptr;
     QAction* actToggleAnalysis_ = nullptr;
     QAction* actCompare_ = nullptr;
+    QAction* actShowConsole_ = nullptr;
     QAction* actAbout_ = nullptr;
     QAction* actExit_ = nullptr;
 

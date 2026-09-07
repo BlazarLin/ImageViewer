@@ -4,12 +4,14 @@
 #include "core/analysis/ImageAnalysis.h"
 #include "core/navigation/DirectoryModel.h"
 #include "core/processing/ProcessingPreset.h"
+#include "app/AppVersion.h"
 #include "ui/ImageView.h"
 #include "ui/AnalysisPanel.h"
 #include "ui/PreprocessPanel.h"
 #include "ui/ThumbnailBar.h"
 #include "ui/TitleBar.h"
 #include "util/ElapsedLog.h"
+#include "util/DebugConsole.h"
 
 #include <QAction>
 #include <QApplication>
@@ -33,6 +35,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTimer>
@@ -237,6 +240,7 @@ void MainWindow::setupUi()
             }
         });
     connect(view_, &ui::ImageView::roiSelected, this, &MainWindow::startRoiAnalysis);
+    connect(view_, &ui::ImageView::fileDropped, this, &MainWindow::openFile);
     connect(thumbnailBar_, &ui::ThumbnailBar::fileActivated, this, &MainWindow::openFile);
     connect(preprocessPanel_, &ui::PreprocessPanel::parametersChanged,
         this, &MainWindow::onPreprocessParametersChanged);
@@ -304,6 +308,10 @@ void MainWindow::setupActions()
     actCompare_->setEnabled(false);
     actCompare_->setShortcut(QKeySequence(QString("Ctrl+D")));
     connect(actCompare_, &QAction::toggled, this, &MainWindow::toggleComparison);
+    actShowConsole_ = new QAction(tr("显示调试终端"), this);
+    actShowConsole_->setCheckable(true);
+    actShowConsole_->setChecked(QSettings().value(QString("ui/showDebugConsole"), false).toBool());
+    connect(actShowConsole_, &QAction::toggled, this, &MainWindow::setDebugConsoleVisible);
     actAbout_ = new QAction(tr("关于"), this);
     connect(actAbout_, &QAction::triggered, this, &MainWindow::onAbout);
     actExit_ = new QAction(tr("退出"), this);
@@ -340,6 +348,8 @@ void MainWindow::setupMenusAndToolbar()
     QAction* englishAction = languageMenu->addAction(QString("English"));
     connect(chineseAction, &QAction::triggered, this, [this]() { selectLanguage(QString("zh_CN")); });
     connect(englishAction, &QAction::triggered, this, [this]() { selectLanguage(QString("en_US")); });
+    auto* settingsMenu = appMenuBar->addMenu(tr("设置(&S)"));
+    settingsMenu->addAction(actShowConsole_);
     auto* helpMenu = appMenuBar->addMenu(tr("帮助(&H)"));
     helpMenu->addAction(actAbout_);
 
@@ -508,8 +518,9 @@ void MainWindow::onNext()
 void MainWindow::onAbout()
 {
     QMessageBox::about(this, tr("关于 ImageViewer"),
-        tr("ImageViewer V2\n\n支持光标锚定缩放、像素网格、目录缩略图、"
-           "自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。"));
+        tr("ImageViewer v%1\n\n支持光标锚定缩放、像素网格、目录缩略图、"
+           "自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。")
+            .arg(app::version()));
 }
 
 void MainWindow::onZoomChanged(double factor)
@@ -714,7 +725,7 @@ void MainWindow::updateImageInformation()
         if (statusZoom_) {
             statusZoom_->setText(QString("100%"));
         }
-        titleBar_->setInfoText(tr("未打开图像  |  ImageViewer"), QString());
+        titleBar_->setInfoText(tr("未打开图像  |  ImageViewer v%1").arg(app::version()), QString());
         return;
     }
     statusFile_->setText(QFileInfo(currentPath_).fileName());
@@ -727,7 +738,7 @@ QString MainWindow::formatTitleText() const
 {
     const QFileInfo info(currentPath_);
     const int nIndex = directoryModel_->currentIndex();
-    return tr("%1  |  %2/%3 个文件  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer")
+    return tr("%1  |  %2/%3 个文件  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10")
         .arg(info.fileName())
         .arg(nIndex >= 0 ? nIndex + 1 : 0)
         .arg(directoryModel_->count())
@@ -735,7 +746,8 @@ QString MainWindow::formatTitleText() const
         .arg(originalImage_.width()).arg(originalImage_.height())
         .arg(formatFileSize(info.size()))
         .arg(pixelFormatText(originalImage_))
-        .arg(info.lastModified().toString(QString("yyyy/MM/dd HH:mm:ss")));
+        .arg(info.lastModified().toString(QString("yyyy/MM/dd HH:mm:ss")))
+        .arg(app::version());
 }
 
 QString MainWindow::pixelFormatText(const QImage& image) const
@@ -774,6 +786,18 @@ void MainWindow::selectLanguage(const QString& localeName)
     QSettings settings;
     settings.setValue(QString("ui/language"), localeName);
     QMessageBox::information(this, tr("语言设置"), tr("语言已保存，重启程序后生效。"));
+}
+
+void MainWindow::setDebugConsoleVisible(bool bVisible)
+{
+    if (!util::setDebugConsoleVisible(bVisible)) {
+        const QSignalBlocker blocker(actShowConsole_);
+        actShowConsole_->setChecked(!bVisible);
+        QMessageBox::warning(this, tr("设置失败"), tr("无法切换调试终端。"));
+        return;
+    }
+    QSettings settings;
+    settings.setValue(QString("ui/showDebugConsole"), bVisible);
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)

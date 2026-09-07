@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <ClInclude Include="app\Application.h"><Filter>入口\app</Filter></ClInclude>
+    <ClInclude Include="app\AppVersion.h"><Filter>入口\app</Filter></ClInclude>
     <ClInclude Include="app\MainWindow.h"><Filter>入口\app</Filter></ClInclude>
     <ClInclude Include="app\MainWindow.ui"><Filter>入口\app</Filter></ClInclude>
     <ClInclude Include="ui\ImageView.h"><Filter>入口\ui</Filter></ClInclude>
@@ -42,6 +43,7 @@
     <ClInclude Include="ui\TitleBar.h"><Filter>入口\ui</Filter></ClInclude>
     <ClInclude Include="ui\PreprocessPanel.h"><Filter>入口\ui</Filter></ClInclude>
     <ClInclude Include="ui\AnalysisPanel.h"><Filter>入口\ui</Filter></ClInclude>
+    <ClInclude Include="ui\AppIcon.h"><Filter>入口\ui</Filter></ClInclude>
     <ClInclude Include="core\loader\ImageLoader.h"><Filter>核心\loader</Filter></ClInclude>
     <ClInclude Include="core\navigation\DirectoryModel.h"><Filter>核心\navigation</Filter></ClInclude>
     <ClInclude Include="core\processing\ImageProcessor.h"><Filter>核心\processing</Filter></ClInclude>
@@ -51,10 +53,12 @@
     <ClInclude Include="core\cache\ThumbnailCache.h"><Filter>核心\cache</Filter></ClInclude>
     <ClInclude Include="core\cache\ImagePyramid.h"><Filter>核心\cache</Filter></ClInclude>
     <ClInclude Include="util\ElapsedLog.h"><Filter>工具</Filter></ClInclude>
+    <ClInclude Include="util\DebugConsole.h"><Filter>工具</Filter></ClInclude>
   </ItemGroup>
 
   <ItemGroup>
     <ClCompile Include="main.cpp"><Filter>入口</Filter></ClCompile>
+    <ClCompile Include="util\DebugConsole.cpp"><Filter>工具</Filter></ClCompile>
     <ClCompile Include="app\Application.cpp"><Filter>入口\app</Filter></ClCompile>
     <ClCompile Include="app\MainWindow.cpp"><Filter>入口\app</Filter></ClCompile>
     <ClCompile Include="ui\ImageView.cpp"><Filter>入口\ui</Filter></ClCompile>

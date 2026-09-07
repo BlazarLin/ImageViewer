@@ -2,6 +2,7 @@
 // 功能：实现自定义标题栏布局、窗口按钮和拖动交互。
 // 目的：保留 Windows 常用窗口操作的同时提高图像信息密度。
 #include "TitleBar.h"
+#include "AppIcon.h"
 
 #include <QApplication>
 #include <QHBoxLayout>
@@ -18,15 +19,17 @@ TitleBar::TitleBar(QWidget* parent)
     setObjectName(QString("CustomTitleBar"));
     setFixedHeight(42);
 
-    iconLabel_ = new QLabel(QString("图"), this);
+    iconLabel_ = new QLabel(this);
     iconLabel_->setAlignment(Qt::AlignCenter);
     iconLabel_->setFixedSize(26, 26);
     iconLabel_->setObjectName(QString("AppIcon"));
+    iconLabel_->setPixmap(createAppIcon().pixmap(26, 26));
+    iconLabel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     infoLabel_ = new QLabel(tr("未打开图像  |  ImageViewer"), this);
     infoLabel_->setObjectName(QString("TitleInfo"));
     infoLabel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    infoLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    infoLabel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     minimizeButton_ = new QToolButton(this);
     maximizeButton_ = new QToolButton(this);
