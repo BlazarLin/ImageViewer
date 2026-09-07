@@ -38,7 +38,10 @@ find_package(Qt5 5.14 REQUIRED COMPONENTS
 )
 
 # OpenCV 4.5.5：优先使用本工程的平铺 include/lib/bin 结构。
-set(LOCAL_OPENCV_ROOT "${CMAKE_SOURCE_DIR}/3rdpart/opencv")
+set(LOCAL_OPENCV_ROOT "$ENV{OPENCV_DIR}")
+if(NOT LOCAL_OPENCV_ROOT)
+    set(LOCAL_OPENCV_ROOT "${CMAKE_SOURCE_DIR}/3rdpart/opencv")
+endif()
 if(EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
     set(OpenCV_INCLUDE_DIRS "${LOCAL_OPENCV_ROOT}/include")
     add_library(opencv_world SHARED IMPORTED)
@@ -152,6 +155,14 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(ImageViewerCoreTests
         tests/ImageViewerCoreTests.cpp
+        src/app/MainWindow.cpp
+        src/ui/ImageView.cpp
+        src/ui/ThumbnailBar.cpp
+        src/ui/TitleBar.cpp
+        src/ui/PreprocessPanel.cpp
+        src/ui/AnalysisPanel.cpp
+        src/util/DebugConsole.cpp
+        src/core/loader/ImageLoader.cpp
         src/core/navigation/DirectoryModel.cpp
         src/core/processing/ImageProcessor.cpp
         src/core/processing/ProcessingPreset.cpp
@@ -167,16 +178,32 @@ if(BUILD_TESTING)
         src/core/cache/ThumbnailCache.h
         src/core/cache/ImagePyramid.h
     )
+    set_target_properties(ImageViewerCoreTests PROPERTIES WIN32_EXECUTABLE FALSE)
     target_include_directories(ImageViewerCoreTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${OpenCV_INCLUDE_DIRS}
     )
-    target_link_libraries(ImageViewerCoreTests PRIVATE Qt5::Core Qt5::Gui opencv_world)
+    target_link_libraries(ImageViewerCoreTests PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Concurrent opencv_world)
     add_custom_command(TARGET ImageViewerCoreTests POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
+            $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent>
             $<TARGET_FILE:opencv_world>
             "$<TARGET_FILE_DIR:ImageViewerCoreTests>"
     )
     add_test(NAME ImageViewerCoreTests COMMAND ImageViewerCoreTests)
 endif()
+
+# Qt 平台与图片插件必须随 EXE 部署，避免构建成功却无法启动或打开 JPEG。
+get_target_property(QT_QMAKE_EXECUTABLE Qt5::qmake IMPORTED_LOCATION)
+execute_process(COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
+    OUTPUT_VARIABLE QT_PLUGINS_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+foreach(runtime_target ImageViewer ImageViewerCoreTests)
+    if(TARGET ${runtime_target})
+        add_custom_command(TARGET ${runtime_target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_PLUGINS_DIR}/platforms"
+                "$<TARGET_FILE_DIR:${runtime_target}>/platforms"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_PLUGINS_DIR}/imageformats"
+                "$<TARGET_FILE_DIR:${runtime_target}>/imageformats")
+    endif()
+endforeach()

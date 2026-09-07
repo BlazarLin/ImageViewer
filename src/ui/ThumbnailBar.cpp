@@ -232,12 +232,20 @@ void ThumbnailBar::startPendingLoad()
             const QSize targetSize(kThumbnailWidth, kThumbnailHeight);
             QImage thumbnail = core::cache::ThumbnailCache::load(request.second, targetSize);
             QImageReader reader(request.second);
+            reader.setAutoTransform(true);
             if (thumbnail.isNull()) {
                 const QSize originalSize = reader.size();
                 if (originalSize.isValid()) {
-                    reader.setScaledSize(originalSize.scaled(targetSize, Qt::KeepAspectRatio));
+                    QSize decodeTarget = targetSize;
+                    if (reader.transformation().testFlag(QImageIOHandler::TransformationRotate90)) {
+                        decodeTarget.transpose();
+                    }
+                    reader.setScaledSize(originalSize.scaled(decodeTarget, Qt::KeepAspectRatio));
                 }
                 thumbnail = reader.read();
+                if (!thumbnail.isNull()) {
+                    thumbnail = thumbnail.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                }
                 core::cache::ThumbnailCache::store(request.second, targetSize, thumbnail);
             }
             ThumbnailResult result;

@@ -27,6 +27,10 @@
         <source>不支持的图像位深或通道数：%1</source>
         <translation>Unsupported image depth or channel count: %1</translation>
     </message>
+    <message>
+        <source>图像解码失败：%1</source>
+        <translation>Image decoding failed: %1</translation>
+    </message>
 </context>
 <context>
     <name>ImageProcessor</name>
@@ -119,11 +123,11 @@
     </message>
     <message>
         <source>打开失败</source>
-        <translation>Open failed</translation>
+        <translation type="vanished">Open failed</translation>
     </message>
     <message>
         <source>图像加载失败：</source>
-        <translation>Image loading failed:</translation>
+        <translation type="vanished">Image loading failed:</translation>
     </message>
     <message>
         <source>图像 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp *.gif);;所有文件 (*.*)</source>
@@ -292,6 +296,36 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     <message>
         <source>无法切换调试终端。</source>
         <translation>Unable to change the debug console state.</translation>
+    </message>
+    <message>
+        <source>滚轮缩放；双击切换适配 / 100%；Shift + 拖动选择 ROI；Esc 清除选区</source>
+        <translation>Wheel: zoom; double-click: fit / 100%; Shift + drag: select ROI; Esc: clear selection</translation>
+    </message>
+    <message>
+        <source>刷新图像和目录</source>
+        <translation>Refresh image and directory</translation>
+    </message>
+    <message>
+        <source>正在打开：%1</source>
+        <translation>Opening: %1</translation>
+    </message>
+    <message>
+        <source>打开失败：%1</source>
+        <translation>Failed to open: %1</translation>
+    </message>
+    <message>
+        <source>等待预处理…</source>
+        <translation>Waiting for processing…</translation>
+    </message>
+    <message>
+        <source>确认覆盖</source>
+        <translation>Confirm overwrite</translation>
+    </message>
+    <message>
+        <source>文件已存在，是否覆盖？
+%1</source>
+        <translation>File already exists. Overwrite?
+%1</translation>
     </message>
 </context>
 <context>

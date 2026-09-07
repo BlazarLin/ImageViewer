@@ -1,31 +1,25 @@
 param(
+    [ValidateSet("Debug", "Release")]
     [string]$Cfg = "Debug"
 )
 
 $ErrorActionPreference = "Stop"
-$msbuild = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe"
 $root = Split-Path -Parent $PSScriptRoot
-
-# 手动设置 MSVC / Windows SDK 头路径(避免 vswhere 缺失导致 vcvars64 失败)
-$vcRoot = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30037"
-$sdkRoot = "C:\Program Files (x86)\Windows Kits\10"
-$sdkVer = "10.0.19041.0"
-$vcInclude = "$vcRoot\include"
-$vcLib = "$vcRoot\lib\x64"
-$sdkUcrtInclude = "$sdkRoot\Include\$sdkVer\ucrt"
-$sdkUcrtLib = "$sdkRoot\Lib\$sdkVer\ucrt\x64"
-$sdkUmInclude = "$sdkRoot\Include\$sdkVer\um"
-$sdkUmLib = "$sdkRoot\Lib\$sdkVer\um\x64"
-$sdkSharedInclude = "$sdkRoot\Include\$sdkVer\shared"
-
-$env:INCLUDE = "$vcInclude;$sdkUcrtInclude;$sdkUmInclude;$sdkSharedInclude"
-$env:LIB = "$vcLib;$sdkUcrtLib;$sdkUmLib"
-$env:LIBPATH = "$vcLib"
-
-Set-Location $root
-
-Write-Host "=== Build $Cfg | x64 ===" -ForegroundColor Cyan
-& $msbuild ImageViewer.sln -t:Build -p:Configuration=$Cfg -p:Platform=x64 -m -v:minimal
-$rc = $LASTEXITCODE
-Write-Host "=== ExitCode: $rc ===" -ForegroundColor Yellow
-exit $rc
+$vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
+if (!(Test-Path -LiteralPath $vswhere)) {
+    throw "未找到 vswhere，请安装 VS2019 C++ 桌面开发工具。"
+}
+$msbuild = & $vswhere -version '[16.0,17.0)' -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+if (!$msbuild) {
+    throw "未找到 VS2019 MSBuild，请安装 v142 工具集与 Windows SDK。"
+}
+# MSBuild 根据已安装的工具集和 SDK 配置头文件、库路径，不覆盖环境变量。
+Push-Location $root
+try {
+    Write-Host "构建 $Cfg | x64" -ForegroundColor Cyan
+    & $msbuild ImageViewer.sln -t:Build -p:Configuration=$Cfg -p:Platform=x64 -m -v:minimal
+    $buildExitCode = $LASTEXITCODE
+} finally {
+    Pop-Location
+}
+exit $buildExitCode

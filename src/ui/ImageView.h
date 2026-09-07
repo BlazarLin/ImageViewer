@@ -36,18 +36,21 @@ public:
     const QImage& image() const { return current_; }
 
     double zoomFactor() const;
+    QRect selectedRegion() const { return selectedRegion_; }
 
 public slots:
     void fitToWindow();
     void fitToWidth();
     void fitToHeight();
     void actualSize();
+    void clearSelection();
 
 signals:
     void zoomChanged(double factor);
     void pixelHovered(const QPoint& position, const QColor& color, bool bValid);
     void roiSelected(const QRect& region);
     void fileDropped(const QString& path);
+    void selectionCleared();
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
@@ -56,6 +59,8 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void leaveEvent(QEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -95,6 +100,7 @@ private:
     double dComparisonSplit_ = 0.5;
     QPointF roiStart_;
     QPointF roiEnd_;
+    QRect selectedRegion_;
     bool bComparisonEnabled_ = false;
     bool bDraggingComparisonSplit_ = false;
     bool bSelectingRoi_ = false;

@@ -13,15 +13,16 @@
 
 namespace core::navigation {
 
-bool DirectoryModel::loadForFile(const QString& path)
+bool DirectoryModel::loadForFile(const QString& path, bool bRefresh)
 {
     const QFileInfo currentInfo(path);
-    if (!currentInfo.exists() || !currentInfo.isFile()) {
+    const bool bCurrentFileExists = currentInfo.exists() && currentInfo.isFile();
+    if ((!bCurrentFileExists && !bRefresh) || !QDir(currentInfo.absolutePath()).exists()) {
         return false;
     }
 
     const QString directoryPath = currentInfo.absolutePath();
-    if (directoryPath_ != directoryPath || files_.isEmpty()) {
+    if (bRefresh || directoryPath_ != directoryPath || files_.isEmpty()) {
         QSet<QString> suffixes;
         const QList<QByteArray> formats = QImageReader::supportedImageFormats();
         for (const QByteArray& format : formats) {
@@ -44,6 +45,10 @@ bool DirectoryModel::loadForFile(const QString& path)
             }
         }
 
+        // 内容可解码但扩展名未知的当前文件，也应参与导航。
+        if (bCurrentFileExists && !paths.contains(currentInfo.absoluteFilePath(), Qt::CaseInsensitive)) {
+            paths.push_back(currentInfo.absoluteFilePath());
+        }
         QCollator collator;
         collator.setNumericMode(true);
         collator.setCaseSensitivity(Qt::CaseInsensitive);
@@ -53,9 +58,16 @@ bool DirectoryModel::loadForFile(const QString& path)
 
         directoryPath_ = directoryPath;
         files_ = std::move(paths);
+        nCurrentIndex_ = -1;
     }
 
-    return setCurrentPath(currentInfo.absoluteFilePath());
+    if (!bCurrentFileExists && bRefresh) {
+        return true;
+    }
+    if (!setCurrentPath(currentInfo.absoluteFilePath())) {
+        return loadForFile(path, true);
+    }
+    return true;
 }
 
 bool DirectoryModel::setCurrentPath(const QString& path)

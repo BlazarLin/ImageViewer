@@ -10,6 +10,7 @@
 #include <QFutureWatcher>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QPixmap>
 #include <QResizeEvent>
@@ -105,6 +106,7 @@ void ImageView::setImage(const QImage& img)
 void ImageView::setImage(const QImage& img, bool bResetView)
 {
     const QRectF oldRect = scene_->sceneRect();
+    clearSelection();
     current_ = img;
     original_ = QImage();
     processed_ = QImage();
@@ -132,6 +134,7 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
     bool bEnabled)
 {
     const QRectF oldRect = scene_->sceneRect();
+    clearSelection();
     original_ = original;
     processed_ = processed;
     current_ = processed_.isNull() ? original_ : processed_;
@@ -256,7 +259,7 @@ void ImageView::resizeEvent(QResizeEvent* event)
 void ImageView::mouseDoubleClickEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && !current_.isNull()) {
-        if (viewMode_ == ViewMode::FitWindow || std::abs(zoomFactor() - 1.0) < 0.0001) {
+        if (viewMode_ == ViewMode::FitWindow) {
             actualSize();
         } else {
             fitToWindow();
@@ -271,6 +274,7 @@ void ImageView::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && !current_.isNull()) {
         if (event->modifiers().testFlag(Qt::ShiftModifier)) {
+            clearSelection();
             bSelectingRoi_ = true;
             roiStart_ = mapToScene(event->pos());
             roiEnd_ = roiStart_;
@@ -319,11 +323,13 @@ void ImageView::mouseReleaseEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton && bSelectingRoi_) {
         bSelectingRoi_ = false;
         setDragMode(QGraphicsView::ScrollHandDrag);
-        QRect region(QPoint(static_cast<int>(std::floor(std::min(roiStart_.x(), roiEnd_.x()))),
-                         static_cast<int>(std::floor(std::min(roiStart_.y(), roiEnd_.y())))),
-            QPoint(static_cast<int>(std::ceil(std::max(roiStart_.x(), roiEnd_.x()))) - 1,
-                static_cast<int>(std::ceil(std::max(roiStart_.y(), roiEnd_.y()))) - 1));
-        region = region.normalized().intersected(current_.rect());
+        roiEnd_ = mapToScene(event->pos());
+        const QPoint topLeft(static_cast<int>(std::floor(std::min(roiStart_.x(), roiEnd_.x()))),
+            static_cast<int>(std::floor(std::min(roiStart_.y(), roiEnd_.y()))));
+        const QPoint bottomRight(std::max(topLeft.x(), static_cast<int>(std::ceil(std::max(roiStart_.x(), roiEnd_.x()))) - 1),
+            std::max(topLeft.y(), static_cast<int>(std::ceil(std::max(roiStart_.y(), roiEnd_.y()))) - 1));
+        const QRect region = QRect(topLeft, bottomRight).intersected(current_.rect());
+        selectedRegion_ = region;
         viewport()->update();
         if (!region.isEmpty()) {
             emit roiSelected(region);
@@ -338,6 +344,32 @@ void ImageView::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
     QGraphicsView::mouseReleaseEvent(event);
+}
+
+void ImageView::clearSelection()
+{
+    selectedRegion_ = QRect();
+    bSelectingRoi_ = false;
+    bDraggingComparisonSplit_ = false;
+    setDragMode(QGraphicsView::ScrollHandDrag);
+    viewport()->update();
+    emit selectionCleared();
+}
+
+void ImageView::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Escape) {
+        clearSelection();
+        event->accept();
+        return;
+    }
+    QGraphicsView::keyPressEvent(event);
+}
+
+void ImageView::leaveEvent(QEvent* event)
+{
+    emit pixelHovered(QPoint(), QColor(), false);
+    QGraphicsView::leaveEvent(event);
 }
 
 void ImageView::dragEnterEvent(QDragEnterEvent* event)
@@ -476,14 +508,16 @@ void ImageView::drawForeground(QPainter* painter, const QRectF& rect)
         painter->drawLine(QPointF(dX, 0), QPointF(dX, current_.height()));
         painter->restore();
     }
-    if (bSelectingRoi_) {
+    if (bSelectingRoi_ || !selectedRegion_.isEmpty()) {
         painter->save();
         QPen roiPen(QColor(76, 190, 255));
         roiPen.setCosmetic(true);
         roiPen.setWidth(2);
         painter->setPen(roiPen);
         painter->setBrush(QColor(76, 190, 255, 35));
-        painter->drawRect(QRectF(roiStart_, roiEnd_).normalized().intersected(QRectF(current_.rect())));
+        painter->drawRect(bSelectingRoi_
+            ? QRectF(roiStart_, roiEnd_).normalized().intersected(QRectF(current_.rect()))
+            : QRectF(selectedRegion_));
         painter->restore();
     }
 }

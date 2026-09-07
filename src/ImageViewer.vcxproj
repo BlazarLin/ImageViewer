@@ -229,4 +229,16 @@
     <Copy SourceFiles="@(_OpenCVBinFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(RootDir)%(Directory)%(Filename)%(Extension)')"/>
   </Target>
 
+  <Target Name="DeployRequiredRuntime" AfterTargets="Build">
+    <PropertyGroup><_RuntimeSuffix Condition="'$(Configuration)'=='Debug'">d</_RuntimeSuffix></PropertyGroup>
+    <Error Condition="!Exists('$(OpenCVBinDir)\opencv_world455$(_RuntimeSuffix).dll')" Text="缺少 OpenCV 运行库，请配置 OPENCV_DIR（包含 include/lib/bin）或补齐 3rdpart/opencv/bin。" />
+    <Error Condition="!Exists('$(QTDIR)\plugins\platforms\qwindows$(_RuntimeSuffix).dll')" Text="缺少 Qt 平台插件，请检查 QTDIR。" />
+    <ItemGroup><_RequiredRuntime Include="$(OpenCVBinDir)\opencv_world455$(_RuntimeSuffix).dll" />
+      <_PlatformPlugins Include="$(QTDIR)\plugins\platforms\*.dll" />
+      <_ImagePlugins Include="$(QTDIR)\plugins\imageformats\*.dll" /></ItemGroup>
+    <Copy SourceFiles="@(_RequiredRuntime)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_PlatformPlugins)" DestinationFolder="$(OutDir)platforms" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_ImagePlugins)" DestinationFolder="$(OutDir)imageformats" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

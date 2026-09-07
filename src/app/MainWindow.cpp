@@ -16,6 +16,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QDateTime>
+#include <QCloseEvent>
 #include <QDebug>
 #include <QCursor>
 #include <QDockWidget>
@@ -27,7 +28,6 @@
 #include <QFileInfo>
 #include <QFutureWatcher>
 #include <QHBoxLayout>
-#include <QImageWriter>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
@@ -47,9 +47,11 @@
 #include <Windows.h>
 
 #include <vector>
+#include <algorithm>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
+    , loadWatcher_(new QFutureWatcher<core::loader::LoadResult>(this))
     , directoryModel_(std::make_unique<core::navigation::DirectoryModel>())
     , processingWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
     , analysisWatcher_(new QFutureWatcher<core::analysis::AnalysisResult>(this))
@@ -76,12 +78,20 @@ MainWindow::MainWindow(QWidget* parent)
         this, &MainWindow::onRoiAnalysisFinished);
     connect(preloadWatcher_, &QFutureWatcher<QVector<PreloadResult>>::finished,
         this, &MainWindow::onNeighborPreloadFinished);
+    connect(loadWatcher_, &QFutureWatcher<core::loader::LoadResult>::finished,
+        this, &MainWindow::onImageLoadFinished);
+    QSettings settings;
+    restoreGeometry(settings.value(QString("ui/geometry")).toByteArray());
+    restoreState(settings.value(QString("ui/windowState")).toByteArray());
     updateNavigationActions();
+    updateResultActions();
     updateImageInformation();
 }
 
 MainWindow::~MainWindow()
 {
+    ++nLoadGeneration_;
+    loadWatcher_->waitForFinished();
     ++nProcessingGeneration_;
     ++nAnalysisGeneration_;
     processingWatcher_->waitForFinished();
@@ -246,19 +256,15 @@ void MainWindow::setupUi()
         this, &MainWindow::onPreprocessParametersChanged);
     connect(preprocessPanel_, &ui::PreprocessPanel::resetRequested,
         this, &MainWindow::showOriginalImage);
+    // 面板互斥显示以保留看图空间，显隐不改变预处理开关。
     connect(preprocessDock_, &QDockWidget::visibilityChanged, this, [this](bool bVisible) {
-        if (bVisible) {
-            analysisDock_->hide();
-        } else {
-            preprocessPanel_->setProcessingEnabled(false);
-            showOriginalImage();
-        }
+        if (bVisible) { analysisDock_->hide(); }
     });
     connect(analysisDock_, &QDockWidget::visibilityChanged, this, [this](bool bVisible) {
-        if (bVisible) {
-            preprocessDock_->hide();
-        }
+        if (bVisible) { preprocessDock_->hide(); }
     });
+    connect(view_, &ui::ImageView::selectionCleared, this, &MainWindow::clearAnalysis);
+    view_->setToolTip(tr("滚轮缩放；双击切换适配 / 100%；Shift + 拖动选择 ROI；Esc 清除选区"));
 }
 
 void MainWindow::setupActions()
@@ -266,6 +272,10 @@ void MainWindow::setupActions()
     actOpen_ = new QAction(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("打开"), this);
     actOpen_->setShortcut(QKeySequence::Open);
     connect(actOpen_, &QAction::triggered, this, &MainWindow::onOpen);
+
+    actRefresh_ = new QAction(tr("刷新图像和目录"), this);
+    actRefresh_->setShortcut(QKeySequence(Qt::Key_F5));
+    connect(actRefresh_, &QAction::triggered, this, &MainWindow::onRefresh);
 
     actSaveResult_ = new QAction(tr("另存当前结果…"), this);
     actSaveResult_->setShortcut(QKeySequence(QString("Ctrl+Shift+S")));
@@ -328,6 +338,7 @@ void MainWindow::setupMenusAndToolbar()
     }
     auto* fileMenu = appMenuBar->addMenu(tr("文件(&F)"));
     fileMenu->addAction(actOpen_);
+    fileMenu->addAction(actRefresh_);
     fileMenu->addAction(actSaveResult_);
     fileMenu->addSeparator();
     fileMenu->addAction(actSavePreset_);
@@ -389,24 +400,62 @@ void MainWindow::setupStatusBar()
 
 void MainWindow::openFile(const QString& path)
 {
-    util::ElapsedLog timer(QString("MainWindow::openFile"));
-    core::loader::LoadResult result;
-    if (!imageCache_.find(path, &result.image)) {
-        result = core::loader::loadImage(path);
-        if (result.ok()) {
-            imageCache_.insert(path, result.image);
-        }
-    }
-    if (!result.ok()) {
-        QMessageBox::warning(this, tr("打开失败"), result.error);
-        qWarning().noquote() << tr("图像加载失败：") << result.error;
+    if (path.isEmpty()) {
         return;
     }
+    requestedPath_ = QFileInfo(path).absoluteFilePath();
+    ++nLoadGeneration_;
+    bLoading_ = true;
+    statusBar()->showMessage(tr("正在打开：%1").arg(QFileInfo(path).fileName()));
+    updateResultActions();
+    // 只保留最后一次请求；最多一个前台解码任务，避免快速翻图堆积。
+    if (!bLoadTaskActive_) {
+        startImageLoad();
+    }
+}
 
+void MainWindow::startImageLoad()
+{
+    bLoadTaskActive_ = true;
+    runningLoadPath_ = requestedPath_;
+    nRunningLoadGeneration_ = nLoadGeneration_;
+    const QString path = runningLoadPath_;
+    QImage cached;
+    imageCache_.find(path, &cached);
+    loadWatcher_->setFuture(QtConcurrent::run([path, cached]() {
+        if (!cached.isNull()) {
+            return core::loader::LoadResult{ cached, QString() };
+        }
+        return core::loader::loadImage(path);
+    }));
+}
+
+void MainWindow::onImageLoadFinished()
+{
+    bLoadTaskActive_ = false;
+    if (nRunningLoadGeneration_ != nLoadGeneration_) {
+        startImageLoad();
+        return;
+    }
+    bLoading_ = false;
+    const auto result = loadWatcher_->result();
+    if (!result.ok()) {
+        thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
+        statusBar()->showMessage(tr("打开失败：%1").arg(result.error), 10000);
+        updateResultActions();
+        return;
+    }
+    imageCache_.insert(runningLoadPath_, result.image);
+    statusBar()->clearMessage();
+    applyLoadedImage(runningLoadPath_, result.image);
+}
+
+void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
+{
     const QStringList oldFiles = directoryModel_->files();
     directoryModel_->loadForFile(QFileInfo(path).absoluteFilePath());
     currentPath_ = QFileInfo(path).absoluteFilePath();
-    originalImage_ = result.image;
+    originalImage_ = image;
     processedImage_ = QImage();
     displayedImage_ = originalImage_;
     ++nProcessingGeneration_;
@@ -416,7 +465,9 @@ void MainWindow::openFile(const QString& path)
     analysisPanel_->clear();
     actCompare_->setChecked(false);
     actCompare_->setEnabled(false);
-    actSaveResult_->setEnabled(true);
+    view_->setImage(originalImage_);
+    statusProcessing_->clear();
+    QSettings().setValue(QString("files/lastDirectory"), QFileInfo(path).absolutePath());
 
     if (oldFiles != directoryModel_->files()) {
         thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
@@ -425,19 +476,22 @@ void MainWindow::openFile(const QString& path)
     }
     if (processingParameters_.bEnabled) {
         bProcessingPending_ = true;
+        statusProcessing_->setText(tr("等待预处理…"));
         processingTimer_->start();
     } else {
         showOriginalImage();
     }
     updateNavigationActions();
     updateImageInformation();
+    updateResultActions();
     scheduleNeighborPreload();
 }
 
 void MainWindow::onOpen()
 {
     const QString filter = tr("图像 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp *.gif);;所有文件 (*.*)");
-    const QString path = QFileDialog::getOpenFileName(this, tr("打开图片"), QString(), filter);
+    const QString path = QFileDialog::getOpenFileName(this, tr("打开图片"),
+        QSettings().value(QString("files/lastDirectory")).toString(), filter);
     if (!path.isEmpty()) {
         openFile(path);
     }
@@ -445,26 +499,42 @@ void MainWindow::onOpen()
 
 void MainWindow::onSaveResult()
 {
-    if (displayedImage_.isNull()) {
+    if (!actSaveResult_->isEnabled() || displayedImage_.isNull()) {
         return;
     }
+    const QImage imageToSave = displayedImage_;
     const QString suggestedName = currentPath_.isEmpty()
         ? QString("result.png")
         : QFileInfo(currentPath_).completeBaseName() + QString("_result.png");
     const QString directory = currentPath_.isEmpty()
         ? QString() : QFileInfo(currentPath_).absolutePath();
-    const QString path = QFileDialog::getSaveFileName(this, tr("另存当前结果"),
+    QString selectedFilter;
+    QString path = QFileDialog::getSaveFileName(this, tr("另存当前结果"),
         QDir(directory).filePath(suggestedName),
-        tr("PNG 图像 (*.png);;JPEG 图像 (*.jpg *.jpeg);;BMP 图像 (*.bmp);;TIFF 图像 (*.tif *.tiff);;WebP 图像 (*.webp)"));
+        tr("PNG 图像 (*.png);;JPEG 图像 (*.jpg *.jpeg);;BMP 图像 (*.bmp);;TIFF 图像 (*.tif *.tiff);;WebP 图像 (*.webp)"), &selectedFilter);
     if (path.isEmpty()) {
         return;
     }
-    QImageWriter writer(path);
-    writer.setQuality(95);
-    if (!writer.write(displayedImage_)) {
-        QMessageBox::warning(this, tr("保存失败"), writer.errorString());
+    if (QFileInfo(path).suffix().isEmpty()) {
+        const int nStart = selectedFilter.indexOf(QString("*."));
+        const QString suffix = nStart >= 0
+            ? selectedFilter.mid(nStart + 2).section(' ', 0, 0).section(')', 0, 0) : QString("png");
+        path += QString(".") + suffix;
+        if (QFileInfo::exists(path) && QMessageBox::question(this, tr("确认覆盖"),
+                tr("文件已存在，是否覆盖？\n%1").arg(path)) != QMessageBox::Yes) {
+            return;
+        }
+    }
+    QString error;
+    if (!core::loader::saveImage(path, imageToSave, &error)) {
+        QMessageBox::warning(this, tr("保存失败"), error);
         return;
     }
+    imageCache_.clear();
+    directoryModel_->loadForFile(currentPath_, true);
+    thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
+    updateNavigationActions();
+    updateImageInformation();
     statusBar()->showMessage(tr("已保存：%1").arg(path), 4000);
 }
 
@@ -503,15 +573,37 @@ void MainWindow::onLoadPreset()
 
 void MainWindow::onPrevious()
 {
-    if (directoryModel_->movePrevious()) {
-        openFile(directoryModel_->currentPath());
+    const int nRequestedIndex = bLoading_ ? directoryModel_->files().indexOf(requestedPath_) : -1;
+    const int nIndex = nRequestedIndex >= 0 ? nRequestedIndex : directoryModel_->currentIndex();
+    if (nIndex > 0) {
+        openFile(directoryModel_->files().at(nIndex - 1));
     }
 }
 
 void MainWindow::onNext()
 {
-    if (directoryModel_->moveNext()) {
-        openFile(directoryModel_->currentPath());
+    const int nRequestedIndex = bLoading_ ? directoryModel_->files().indexOf(requestedPath_) : -1;
+    const int nIndex = nRequestedIndex >= 0 ? nRequestedIndex : directoryModel_->currentIndex();
+    if (nIndex >= 0 && nIndex + 1 < directoryModel_->count()) {
+        openFile(directoryModel_->files().at(nIndex + 1));
+    }
+}
+
+void MainWindow::onRefresh()
+{
+    if (currentPath_.isEmpty()) {
+        return;
+    }
+    const int nPreviousIndex = directoryModel_->currentIndex();
+    imageCache_.clear();
+    directoryModel_->loadForFile(currentPath_, true);
+    thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
+    updateNavigationActions();
+    updateImageInformation();
+    if (directoryModel_->currentIndex() < 0 && directoryModel_->count() > 0) {
+        openFile(directoryModel_->files().at(std::clamp(nPreviousIndex, 0, directoryModel_->count() - 1)));
+    } else {
+        openFile(currentPath_);
     }
 }
 
@@ -543,7 +635,13 @@ void MainWindow::onPreprocessParametersChanged(
         return;
     }
     bProcessingPending_ = true;
+    // 参数一旦变化就作废旧结果，避免把旧参数结果导出。
+    view_->clearSelection();
+    actCompare_->setChecked(false);
+    actCompare_->setEnabled(false);
+    statusProcessing_->setText(tr("等待预处理…"));
     processingTimer_->start();
+    updateResultActions();
 }
 
 void MainWindow::startPreprocess()
@@ -560,6 +658,7 @@ void MainWindow::startPreprocess()
     nRunningGeneration_ = nProcessingGeneration_;
     const QImage source = originalImage_;
     const core::processing::ProcessingParameters parameters = processingParameters_;
+    actSaveResult_->setEnabled(false);
     statusProcessing_->setText(tr("处理中…"));
     processingWatcher_->setFuture(QtConcurrent::run([source, parameters]() {
         return core::processing::ImageProcessor::process(source, parameters);
@@ -573,27 +672,33 @@ void MainWindow::onPreprocessFinished()
         if (result.ok()) {
             processedImage_ = result.image;
             displayedImage_ = processedImage_;
-            ++nAnalysisGeneration_;
-            analysisPanel_->clear();
+            clearAnalysis();
             actCompare_->setEnabled(true);
             view_->setComparisonImages(originalImage_, processedImage_, actCompare_->isChecked());
             statusProcessing_->setText(tr("预处理 %1 ms").arg(result.nElapsedMs));
         } else {
+            showOriginalImage();
             statusProcessing_->setText(tr("预处理失败"));
+            statusBar()->showMessage(result.error, 10000);
             qWarning().noquote() << result.error;
         }
     }
     if (bProcessingPending_) {
         processingTimer_->start();
     }
+    updateResultActions();
 }
 
 void MainWindow::startRoiAnalysis(const QRect& region)
 {
-    if (displayedImage_.isNull() || region.isEmpty()) {
+    if (displayedImage_.isNull() || region.isEmpty() || bLoading_
+        || bProcessingPending_ || processingTimer_->isActive()
+        || (processingParameters_.bEnabled && processingWatcher_->isRunning())) {
         return;
     }
     pendingAnalysisRegion_ = region.intersected(displayedImage_.rect());
+    if (pendingAnalysisRegion_.isEmpty()) { return; }
+    analysisDock_->show();
     ++nAnalysisGeneration_;
     analysisPanel_->setSelection(pendingAnalysisRegion_);
     analysisPanel_->setBusy(true);
@@ -634,7 +739,7 @@ void MainWindow::toggleComparison(bool bEnabled)
         }
         return;
     }
-    view_->setComparisonImages(originalImage_, processedImage_, bEnabled);
+    view_->setComparisonEnabled(bEnabled);
 }
 
 void MainWindow::scheduleNeighborPreload()
@@ -693,6 +798,7 @@ void MainWindow::onNeighborPreloadFinished()
 
 void MainWindow::showOriginalImage()
 {
+    clearAnalysis();
     if (!originalImage_.isNull()) {
         displayedImage_ = originalImage_;
         processedImage_ = QImage();
@@ -705,6 +811,36 @@ void MainWindow::showOriginalImage()
     if (statusProcessing_) {
         statusProcessing_->clear();
     }
+    updateResultActions();
+}
+
+void MainWindow::clearAnalysis()
+{
+    ++nAnalysisGeneration_;
+    bAnalysisPending_ = false;
+    pendingAnalysisRegion_ = QRect();
+    analysisPanel_->clear();
+}
+
+void MainWindow::updateResultActions()
+{
+    const bool bReady = !bLoading_ && !displayedImage_.isNull()
+        && (!processingParameters_.bEnabled || (!bProcessingPending_
+            && !processingTimer_->isActive() && !processingWatcher_->isRunning()));
+    actSaveResult_->setEnabled(bReady);
+    actCompare_->setEnabled(bReady && !processedImage_.isNull());
+    actRefresh_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
+    for (QAction* action : { actFit_, actFitWidth_, actFitHeight_, actActualSize_ }) {
+        action->setEnabled(!displayedImage_.isNull());
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    QSettings settings;
+    settings.setValue(QString("ui/geometry"), saveGeometry());
+    settings.setValue(QString("ui/windowState"), saveState());
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::updateNavigationActions()

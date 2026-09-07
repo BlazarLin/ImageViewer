@@ -25,7 +25,7 @@ QString ThumbnailCache::keyForFile(const QString& sourcePath, const QSize& targe
     const QFileInfo info(sourcePath);
     const QString canonical = info.canonicalFilePath().isEmpty()
         ? info.absoluteFilePath() : info.canonicalFilePath();
-    const QByteArray identity = QString("%1|%2|%3|%4x%5")
+    const QByteArray identity = QString("exif-v2|%1|%2|%3|%4x%5")
         .arg(canonical).arg(info.size()).arg(info.lastModified().toMSecsSinceEpoch())
         .arg(targetSize.width()).arg(targetSize.height()).toUtf8();
     return QString::fromLatin1(QCryptographicHash::hash(identity,

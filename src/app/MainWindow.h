@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/processing/ImageProcessor.h"
+#include "core/loader/ImageLoader.h"
 #include "core/analysis/ImageAnalysis.h"
 #include "core/cache/ImageCache.h"
 
@@ -43,6 +44,7 @@ public:
     void openFile(const QString& path);
 
 protected:
+    void closeEvent(QCloseEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void changeEvent(QEvent* event) override;
@@ -50,6 +52,9 @@ protected:
 
 private slots:
     void onOpen();
+    void startImageLoad();
+    void onImageLoadFinished();
+    void onRefresh();
     void onSaveResult();
     void onSavePreset();
     void onLoadPreset();
@@ -71,6 +76,9 @@ private slots:
     void setDebugConsoleVisible(bool bVisible);
 
 private:
+    void applyLoadedImage(const QString& path, const QImage& image);
+    void clearAnalysis();
+    void updateResultActions();
     void setupUi();
     void setupActions();
     void setupMenusAndToolbar();
@@ -81,6 +89,14 @@ private:
     QString formatTitleText() const;
     QString pixelFormatText(const QImage& image) const;
     QString formatFileSize(qint64 nBytes) const;
+
+    QFutureWatcher<core::loader::LoadResult>* loadWatcher_ = nullptr;
+    QString requestedPath_;
+    QString runningLoadPath_;
+    quint64 nLoadGeneration_ = 0;
+    quint64 nRunningLoadGeneration_ = 0;
+    bool bLoading_ = false;
+    bool bLoadTaskActive_ = false;
 
     ui::ImageView* view_ = nullptr;
     ui::ThumbnailBar* thumbnailBar_ = nullptr;
@@ -110,6 +126,7 @@ private:
     bool bPreloadPending_ = false;
 
     QAction* actOpen_ = nullptr;
+    QAction* actRefresh_ = nullptr;
     QAction* actSaveResult_ = nullptr;
     QAction* actSavePreset_ = nullptr;
     QAction* actLoadPreset_ = nullptr;

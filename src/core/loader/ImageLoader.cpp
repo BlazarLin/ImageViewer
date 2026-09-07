@@ -4,6 +4,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QImageWriter>
+#include <QSaveFile>
+#include <exception>
 #include <QStringList>
 
 #include <opencv2/core.hpp>
@@ -50,7 +53,7 @@ static QImage matToQImage(const cv::Mat& mat)
     return QImage(mat.data, mat.cols, mat.rows, static_cast<int>(mat.step), format).copy();
 }
 
-LoadResult loadImage(const QString& path)
+static LoadResult decodeImage(const QString& path)
 {
     util::ElapsedLog _t(QString("loadImage(%1)").arg(QFileInfo(path).fileName()));
 
@@ -106,6 +109,38 @@ LoadResult loadImage(const QString& path)
         }
         return result;
     }
+}
+
+LoadResult loadImage(const QString& path)
+{
+    try {
+        return decodeImage(path);
+    } catch (const std::exception& exception) {
+        return { QImage(), QCoreApplication::translate("ImageLoader", "图像解码失败：%1")
+            .arg(QString::fromLocal8Bit(exception.what())) };
+    }
+}
+
+bool saveImage(const QString& path, const QImage& image, QString* error)
+{
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        if (error) { *error = file.errorString(); }
+        return false;
+    }
+    QImageWriter writer(&file, QFileInfo(path).suffix().toLatin1().toLower());
+    writer.setQuality(95);
+    if (!writer.write(image)) {
+        if (error) { *error = writer.errorString(); }
+        file.cancelWriting();
+        return false;
+    }
+    if (!file.commit()) {
+        if (error) { *error = file.errorString(); }
+        return false;
+    }
+    if (error) { error->clear(); }
+    return true;
 }
 
 } // namespace core::loader

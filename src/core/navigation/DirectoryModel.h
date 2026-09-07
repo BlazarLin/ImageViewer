@@ -9,7 +9,7 @@ namespace core::navigation {
 
 class DirectoryModel {
 public:
-    bool loadForFile(const QString& path);
+    bool loadForFile(const QString& path, bool bRefresh = false);
     bool setCurrentPath(const QString& path);
     bool movePrevious();
     bool moveNext();
