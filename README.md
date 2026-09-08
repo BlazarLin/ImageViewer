@@ -1,186 +1,139 @@
 # ImageViewer
 
-本地图像查看器 EXE:办公 + 工业视觉观察混用。常见图片浏览 + 大图(4K/8K/工业相机)流畅缩放,可叠加简单 OpenCV 预处理算子用于查看效果。
+面向日常看图与工业视觉调试的 Windows 桌面图像查看器。打开本地图片，快速缩放、翻图、查看像素值，并通过 OpenCV 预处理与 ROI 分析观察图像。
 
-- 技术栈:**C++17 / Qt 5.14.2 / OpenCV 4.5.5**
-- 平台:**Windows 10/11 x64 / VS2019 (v142)**
-- 设计与计划详见 `docs/superpowers/`
+[![Windows 构建与测试](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml/badge.svg)](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## 当前进度
+**当前源码版本：2.2.0。** 项目正在准备首次开源发布；公开便携包以 [GitHub Releases](https://github.com/BlazarLin/ImageViewer/releases) 中实际上传的资产为准。CI 产物是待验收构建，不等同于正式版本。
 
-**V2 工业图像查看与分析（完成）**：
+![RGB 三通道分析界面](docs/images/260908RGB三通道与字体.png)
 
-- 打开、拖拽、命令行加载常见图像，支持中文路径。
-- 以光标为锚点的滚轮缩放，范围 `1%~6400%`；`800%` 起切换最近邻并显示像素网格。
-- 适应窗口、适应宽度、适应高度和实际大小。
-- 当前目录底部缩略图栏，支持点击、左右键和工具栏切图。
-- 无边框自定义标题栏，显示文件名、目录序号、缩放比、尺寸、大小、像素信息和修改时间。
-- 可显隐的右侧实时预处理面板，默认隐藏。
-- Qt `tr()` + `.ts/.qm` 多语言基础，内置简体中文和 English，切换后重启生效。
-- 默认隐藏的像素/ROI 分析面板：RGB、灰度、HSV、Lab、通道统计与 256 档直方图。
-- 原图/处理图单视图分割对比，分割线可拖动且共享缩放、平移坐标。
-- 当前处理结果另存，预处理参数以版本化 JSON 预设保存和载入。
-- 前后各两张邻图后台预加载，384 MiB 受限解码缓存和 256 MiB 持久化缩略图缓存。
-- 超过 2048 像素的大图后台生成有限显示金字塔，高倍率自动切回原图层。
+## 功能
 
-## 目录结构
+- PNG、JPEG、BMP、TIFF、WebP、GIF 等常见图片；支持中文路径、拖放和命令行打开。
+- 光标锚定缩放、适应窗口/宽度/高度、100% 原尺寸模式、双击切换适配与 100%；高倍率像素网格。
+- 当前目录自然排序、异步缩略图、图像两侧翻图箭头、左右方向键；F5 刷新目录。
+- 深色圆角窗口，默认 18px 界面字体，跟随 Windows 高 DPI 缩放；状态栏实时显示零起点坐标与 RGBA 值，右键可打开所在文件夹。
+- 亮度、对比度、Gamma、灰度与通道查看；平滑、锐化、阈值、边缘和形态学预处理。
+- 原图/处理图分割对比、结果另存、JSON 参数预设；隐藏面板不会撤销已经启用的处理。
+- ROI 通道最小值、最大值、均值、标准差；彩色图显示 R/G/B 三通道直方图，灰度图显示单通道。图表包含刻度，可悬停查看每档计数。
+- 前台异步解码与过期请求丢弃、邻图预加载、受限解码与缩略图缓存、大图显示金字塔。
+- 简体中文与 English；语言切换后重启生效。
 
-```
-CodeProject/
-├─ ImageViewer.sln               # VS2019 解决方案(双击打开即可)
-├─ CMakeLists.txt                # 备选 CMake 工程
-├─ cmake/
-│   └─ Config.props              # Qt / OpenCV 路径配置
-├─ src/
-│   ├─ ImageViewer.vcxproj       # VS2019 主工程
-│   ├─ ImageViewer.vcxproj.filters
-│   ├─ main.cpp
-│   ├─ app/
-│   │   ├─ Application.{h,cpp}   # 单实例 + 命令行
-│   │   ├─ MainWindow.{h,cpp}    # 主窗口
-│   │   └─ MainWindow.ui         # Qt Designer 兼容占位
-│   ├─ ui/
-│   │   ├─ ImageView.{h,cpp}     # 缩放、平移与像素网格
-│   │   ├─ ThumbnailBar.{h,cpp}  # 异步缩略图导航
-│   │   ├─ TitleBar.{h,cpp}      # 自定义标题栏
-│   │   ├─ PreprocessPanel.{h,cpp}
-│   │   └─ AnalysisPanel.{h,cpp}
-│   ├─ core/
-│   │   ├─ loader/ImageLoader.{h,cpp}
-│   │   ├─ navigation/DirectoryModel.{h,cpp}
-│   │   ├─ processing/ImageProcessor.{h,cpp}
-│   │   ├─ processing/ProcessingPreset.{h,cpp}
-│   │   ├─ analysis/ImageAnalysis.{h,cpp}
-│   │   └─ cache/                # 解码、缩略图与显示金字塔缓存
-│   └─ util/
-│       └─ ElapsedLog.h
-├─ tests/                         # 独立核心测试 EXE
-├─ translations/                  # Qt Linguist 翻译源文件
-└─ README.md
-```
+## 快速使用
 
-## VS2019 一键打开
+解压完整便携包后运行 `ImageViewer.exe`。请保留同目录 DLL、`platforms`、`imageformats` 和 `translations`；只复制 EXE 无法运行。
 
-### 前置依赖
+1. 点击“打开”或将图片拖入主图区。首次打开后，下方展示同目录缩略图。
+2. 滚轮缩放、左键拖动平移；点击图像两侧箭头或按左右方向键翻图。
+3. 鼠标移到图像上查看状态栏像素值。`Ctrl+I` 打开分析面板，`Shift + 左键拖动` 选择 ROI；切换面板内“直方图”页查看通道分布。
+4. `Ctrl+P` 打开预处理面板并启用实时预处理。`Ctrl+Shift+S` 将当前结果另存为新文件。
 
-1. **Visual Studio 2019**(v142 工具集,Windows SDK 10.0)
-2. **Qt 5.14.2 for Windows (MSVC 2017 64-bit)**
-3. **OpenCV 4.5.5**(已编译版本,需要 `build/x64/vc15/lib` 与 `build/include`)
-4. **Qt VS Tools 插件**(VS2019 扩展市场,用于处理 moc/rcc/uic)
+图像处理与统计使用当前显示的 8 位数据。RGB 图即使选到纯灰区域也保留三个通道；三个图表分别标明各自的像素数刻度。ROI 为所选矩形区域，分割对比时统计完整处理图；悬停取样按分割线所在一侧读取图像。
 
-### 配置第三方路径
+## 环境与依赖
 
-打开 `cmake/Config.props`,按本机实际路径修改默认 `QTDIR` 和 `OPENCV_DIR`,或设置同名环境变量:
+| 项目 | 说明 |
+| --- | --- |
+| 平台 | Windows 10/11 x64 |
+| 语言 | C++17 |
+| 本地已验证 | VS2019 v142、Qt 5.14.2 MSVC2017 x64、OpenCV 4.5.5 |
+| CI 配置 | Windows 2022 runner、VS2022、Qt 5.15.2 MSVC2019 x64、OpenCV 4.5.5 源码构建 |
+| CMake | 3.20 或更新版本 |
 
-```xml
-<QTDIR>C:\Qt\Qt5.14.2\msvc2017_64</QTDIR>
-<OPENCV_DIR>D:\opencv\build</OPENCV_DIR>
-```
+Qt 需要 Core、Gui、Widgets、Concurrent、Svg、LinguistTools 及图片格式插件；OpenCV 需要共享 `opencv_world` 库。**不需要 Qt VS Tools 插件。** Qt/OpenCV 旧版本用于兼容已有环境，公开发布前应评估升级，见 [安全说明](SECURITY.md)。
 
-或者(推荐)用环境变量,不污染工程文件:
+### 配置依赖
+
+在 PowerShell 中为当前会话设置安装路径（下面仅为示例）：
 
 ```powershell
-setx QTDIR "C:\Qt\Qt5.14.2\msvc2017_64"
-setx OPENCV_DIR "D:\opencv\build"
+$env:QTDIR = 'C:/SDK/Qt/5.14.2/msvc2017_64'
+$env:OPENCV_DIR = 'C:/SDK/opencv/build'
 ```
 
-### 打开与运行
+VS 工程支持两种 OpenCV 4.5.5 布局：`include/lib/bin` 平铺结构，或官方 Windows 包的 `include` 与 `x64/vc15/lib、bin`。必须同时有 Release/Debug 导入库和运行时 DLL。仓库历史上保留的 `3rdpart/opencv` 头文件与导入库**不是完整 SDK**，不包含运行时。
 
-1. 双击 `ImageViewer.sln`,VS2019 加载解决方案
-2. 配置选择 **Debug | x64**(首次需要)
-3. 右键 `ImageViewer` → **设为启动项目**
-4. 按 **F5** 开始调试
+也可使用忽略的 `cmake/Config.local.props` 设置机器级默认值；请给每个默认属性添加 `Condition="'$(QTDIR)' == ''"` 等条件，让环境变量优先。不要修改并提交公共配置中的机器路径。
 
-构建成功后,vs 会自动把 Qt/OpenCV 运行时 DLL 复制到 `bin/Debug/` 或 `bin/Release/`。
-
-### 命令行运行
-
-```
-bin\Debug\ImageViewer.exe D:\test\big_image.tif
-```
-
-命令行可传入多文件，程序打开第一张后自动载入该目录用于翻页：
-
-```
-ImageViewer.exe img1.png img2.jpg
-```
-
-### 拖拽运行
-
-直接把图片拖到 EXE 图标上,或拖入已打开的窗口。
-
-## CMake 备选路径
-
-如不熟悉 VS 工程,可用 CMake:
+### VS2019 构建与测试
 
 ```powershell
-mkdir build && cd build
-cmake .. -G "Visual Studio 16 2019" -A x64 ^
-    -DCMAKE_PREFIX_PATH=C:/Qt/Qt5.14.2/msvc2017_64 ^
-    -DOpenCV_DIR=D:/opencv/build
-cmake --build . --config Release
+.\scripts\build.ps1 -Cfg Debug
+.\bin\Tests\Debug\ImageViewerCoreTests.exe
+.\scripts\build.ps1 -Cfg Release
+.\bin\Tests\Release\ImageViewerCoreTests.exe
+.\scripts\check-bom.ps1
 ```
 
-## 实时预处理
+或打开 `ImageViewer.sln`，选择 `Debug | x64`，将 ImageViewer 设为启动项目后按 F5。构建脚本自动发现 VS2019，部署 Qt/OpenCV DLL 和图片插件。
 
-使用 `Ctrl+P` 显示或隐藏面板。面板包含：
+### CMake 构建与测试
 
-- 亮度、对比度、Gamma、灰度和 B/G/R 通道查看。
-- 均值、高斯、中值滤波和 Unsharp Mask 锐化。
-- 固定阈值、Otsu、Sobel、Laplacian 和 Canny。
-- 腐蚀、膨胀、开运算和闭运算。
+```powershell
+cmake -S . -B build -G 'Visual Studio 16 2019' -A x64 "-DCMAKE_PREFIX_PATH=$env:QTDIR"
+cmake --build build --config Debug
+ctest --test-dir build -C Debug --output-on-failure
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
 
-参数连续变化会在 80 ms 合并后交给后台线程处理，仅最新代次的结果能刷新界面。隐藏面板或复原参数会回到原图，不修改原文件。
+CMake 会读取 `OPENCV_DIR` 环境变量。使用独立 OpenCV CMake 安装/构建目录时，额外传入 `-DOpenCV_DIR=包含OpenCVConfig.cmake的目录`，该显式配置优先于仓库内依赖。VS2022 可将生成器改为 `Visual Studio 17 2022`；已有构建目录更换生成器时请使用新目录。
 
-## 像素与 ROI 分析
+### 生成便携包
 
-使用 `Ctrl+I` 显示或隐藏分析面板。鼠标在图像上移动时实时显示像素信息；按住 `Shift` 后用左键拖动选择 ROI，通道统计和直方图在后台计算。处理结果变化时旧统计会自动清空，避免将旧 ROI 数据误认为当前结果。
+```powershell
+.\scripts\package-release.ps1 -BinaryDir bin/Release -QtDir $env:QTDIR
+# CMake 输出则使用 -BinaryDir build/Release
+```
 
-启用预处理并得到有效结果后，可用 `Ctrl+D` 打开原图/处理图分割对比并拖动黄色分割线。像素取样在分割线左侧读取原图、右侧读取处理图。
+脚本创建独立运行目录、ZIP、SHA-256 校验文件与 `build-info.json`，只从当前 Release EXE 部署实际 Qt 依赖，不混入 Debug DLL。也可通过 `-DependencySourceDir` 附带依赖源码目录中的许可证和归属文件。维护者发布流程、源码和依赖许可检查见 [RELEASING](docs/RELEASING.md)。
 
 ## 快捷键
 
 | 操作 | 快捷键 |
-|---|---|
-| 打开图片 | `Ctrl+O` |
-| 上一张 / 下一张 | `Left` / `Right` |
-| 适应窗口 | `Ctrl+0` |
-| 实际大小 | `Ctrl+1` |
-| 显示/隐藏预处理 | `Ctrl+P` |
-| 显示/隐藏像素与 ROI 分析 | `Ctrl+I` |
-| 原图/处理图分割对比 | `Ctrl+D` |
-| 另存当前结果 | `Ctrl+Shift+S` |
+| --- | --- |
+| 打开图片 | Ctrl+O |
+| 上一张 / 下一张 | ← / → |
+| 刷新当前目录 | F5 |
+| 适应窗口 / 实际大小 | Ctrl+0 / Ctrl+1 |
+| 切换适配与 100% | 双击图像 |
+| 显示/隐藏预处理 | Ctrl+P |
+| 显示/隐藏分析面板 | Ctrl+I |
+| 选择 / 清除 ROI | Shift+左键拖动 / Esc |
+| 原图/处理图分割对比 | Ctrl+D |
+| 另存当前结果 | Ctrl+Shift+S |
 
-## 已知限制
+## 项目结构
 
-- 当前为已解码图像的显示金字塔，尚未实现 TIFF/BigTIFF 编码器级按瓦片局部解码；解码峰值内存仍取决于原始格式。
-- GIF/WebP 和多页 TIFF 当前只显示解码器返回的首帧。
-- 当前预处理只提供 8 位预览，高位深工业图暂未保留 10/12/16 位定量精度。
-- 单实例已限制重复启动，但第二实例的新文件参数尚未转发给第一实例。
-
-## 构建与测试
-
-VS2019 解决方案内含独立 `ImageViewerCoreTests` EXE，Debug/Release 均会构建：
-
-```powershell
-scripts\build.ps1 -Cfg Debug
-bin\Tests\Debug\ImageViewerCoreTests.exe
+```text
+src/app/           主窗口、启动与版本信息
+src/ui/            图像视图、缩略图、预处理与分析控件
+src/core/          解码、目录导航、图像处理、分析与缓存
+src/util/          平台辅助功能
+resources/         EXE 多尺寸图标资源
+translations/      Qt 中英文翻译
+tests/            独立行为回归程序
+scripts/           构建、图标生成、编码检查和打包
+.github/           CI、依赖更新、Issue/PR 模板
+licenses/          第三方许可文本与归属说明
+docs/             开发记录、截图和发布说明
 ```
 
-核心测试使用中文业务日志，当前覆盖目录过滤/自然排序、原图直通、亮度饱和、Otsu/核归一化、RGB/BGR、ROI 统计、预设校验、缓存失效和金字塔尺寸。
+## 验证与已知限制
 
-## 关键手动验收
+回归程序返回非零即失败，当前 33 项检查覆盖解码、导航失败恢复、拖放事件、处理状态、ROI、RGB 直方图、缓存失效、异步请求、坐标取样、两侧箭头及圆角状态。UI 自动回归使用 offscreen；实际桌面高 DPI、拖放和多显示器仍需人工验收。
 
-| 用例 | 期望 |
-|------|------|
-| 启动 EXE(无参数) | 空白主窗口，预处理面板默认隐藏 |
-| `ImageViewer.exe test.png` | 打开图片，标题显示文件和图像信息，底部显示目录缩略图 |
-| 拖拽 jpg/png/bmp/tif/webp 到窗口 | 正常打开 |
-| 拖拽损坏文件 | 弹错误框不崩 |
-| 滚轮与菜单缩放 | 光标锚点稳定，800% 显示像素格，四周背景为统一深灰 |
-| 打开预处理并拖动参数 | 界面不卡死，只刷新最新结果，隐藏面板后恢复原图 |
-| `Shift` + 左键框选 ROI | 面板异步显示范围、通道统计和直方图 |
-| 启用分割对比并拖动黄线 | 左侧原图、右侧处理图，缩放和平移保持一致 |
-| 另存结果并重开 | 像素内容与当前处理结果一致 |
-| 启动另一个 EXE 实例 | 第一实例继续运行,第二实例退出 |
-| 中文路径图片 | 正常打开不乱码 |
+- GIF、动画 WebP、多页 TIFF 当前只显示解码器返回的首帧/页。
+- 尚未提供 10/12/16 位原始精度取样、窗宽窗位或编码器级瓦片解码。
+- 大图解码峰值内存取决于原始图像；金字塔仅优化解码后的显示。
+- 单实例尚未转发第二实例文件参数；已有窗口运行时请从窗口内打开或拖入图片。
+- 损坏图片会在状态栏提示并保留原图/索引，不自动跳过。
+- 没有安装程序、代码签名或自动更新；目前仅准备 Windows x64 便携包。
+
+## 开源与反馈
+
+自有代码与文档采用 [MIT License](LICENSE)。Qt、OpenCV 及仓库内第三方内容保持原有许可，不因根目录 MIT 而重新授权。参见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)。
+
+欢迎通过 [Issues](https://github.com/BlazarLin/ImageViewer/issues) 反馈问题或提出建议；提交代码前阅读 [贡献指南](CONTRIBUTING.md)。版本变化见 [CHANGELOG](CHANGELOG.md)，安全问题见 [SECURITY](SECURITY.md)。

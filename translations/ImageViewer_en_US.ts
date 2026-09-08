@@ -398,6 +398,43 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
         <source>计算中…</source>
         <translation>Calculating…</translation>
     </message>
+    <message>
+        <source>直方图</source>
+        <translation>Histogram</translation>
+    </message>
+    <message>
+        <source>横轴：0–255；纵轴：像素数（各通道独立刻度）
+悬停查看每档计数</source>
+        <translation>X: 0–255; Y: pixel count (independent scales)
+Hover to inspect bin counts</translation>
+    </message>
+    <message>
+        <source>RGB 三通道直方图</source>
+        <translation>RGB channel histograms</translation>
+    </message>
+    <message>
+        <source>R · 红通道</source>
+        <translation>R · Red channel</translation>
+    </message>
+    <message>
+        <source>G · 绿通道</source>
+        <translation>G · Green channel</translation>
+    </message>
+    <message>
+        <source>B · 蓝通道</source>
+        <translation>B · Blue channel</translation>
+    </message>
+    <message>
+        <source>像素与统计</source>
+        <translation>Pixels and statistics</translation>
+    </message>
+</context>
+<context>
+    <name>ui::HistogramWidget</name>
+    <message>
+        <source>灰度档 %1：%2 像素</source>
+        <translation>Bin %1: %2 pixels</translation>
+    </message>
 </context>
 <context>
     <name>ui::ImageView</name>

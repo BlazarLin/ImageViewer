@@ -42,7 +42,7 @@ set(LOCAL_OPENCV_ROOT "$ENV{OPENCV_DIR}")
 if(NOT LOCAL_OPENCV_ROOT)
     set(LOCAL_OPENCV_ROOT "${CMAKE_SOURCE_DIR}/3rdpart/opencv")
 endif()
-if(EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
+if(NOT OpenCV_DIR AND EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
     set(OpenCV_INCLUDE_DIRS "${LOCAL_OPENCV_ROOT}/include")
     add_library(opencv_world SHARED IMPORTED)
     set_target_properties(opencv_world PROPERTIES
@@ -56,7 +56,7 @@ if(EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
         IMPORTED_LOCATION_MINSIZEREL "${LOCAL_OPENCV_ROOT}/bin/opencv_world455.dll"
     )
 else()
-    find_package(OpenCV 4.5.5 REQUIRED)
+    find_package(OpenCV 4.5.5 REQUIRED HINTS "${LOCAL_OPENCV_ROOT}")
 endif()
 
 # ---------- 可执行目标 ----------

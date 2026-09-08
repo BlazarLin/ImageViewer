@@ -23,7 +23,7 @@
 namespace {
 constexpr int kThumbnailWidth = 112;
 constexpr int kThumbnailHeight = 76;
-constexpr int kItemWidth = 154;
+constexpr int kItemWidth = 174;
 constexpr int kItemHeight = 124;
 constexpr int kCacheLimit = 256;
 constexpr int kPrefetchItems = 4;

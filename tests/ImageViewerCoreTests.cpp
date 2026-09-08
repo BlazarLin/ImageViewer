@@ -6,6 +6,7 @@
 #include <QAction>
 #include <QBuffer>
 #include <QDockWidget>
+#include <QGroupBox>
 #include <QElapsedTimer>
 #include <QMouseEvent>
 #include <QKeyEvent>
@@ -18,6 +19,7 @@
 #include <QScrollBar>
 #include <QToolBar>
 #include <QToolButton>
+#include <QTabWidget>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QUrl>
@@ -25,6 +27,7 @@
 #include <functional>
 #include "app/MainWindow.h"
 #include "ui/ImageView.h"
+#include "ui/AnalysisPanel.h"
 #include "ui/PreprocessPanel.h"
 #include "ui/ThumbnailBar.h"
 #include "core/loader/ImageLoader.h"
@@ -459,6 +462,75 @@ void testWindowWorkflow(const QString& outputRoot)
         QString("TEST-21"), QString("重新创建窗口恢复尺寸并记住最近打开目录"));
 }
 
+void testColorHistograms(const QString& outputRoot)
+{
+    QImage image(3, 2, QImage::Format_RGB888);
+    image.fill(QColor(10, 20, 30));
+    image.setPixelColor(1, 0, QColor(200, 20, 50));
+    image.setPixelColor(2, 1, QColor(255, 255, 255));
+    const auto result = core::analysis::ImageAnalysis::analyze(image, QRect(0, 0, 2, 2));
+    bool bCounts = result.ok() && result.bColor && result.nPixelCount == 4;
+    for (const auto& histogram : result.rgbHistograms) {
+        quint64 nSum = 0;
+        for (quint64 nCount : histogram) { nSum += nCount; }
+        bCounts = bCounts && histogram.size() == 256 && nSum == 4;
+    }
+    verify(bCounts && result.rgbHistograms[0][10] == 3 && result.rgbHistograms[0][200] == 1
+            && result.rgbHistograms[1][20] == 4 && result.rgbHistograms[2][30] == 3
+            && result.rgbHistograms[2][50] == 1 && result.rgbHistograms[0][255] == 0,
+        QString("TEST-30"), QString("彩色 ROI 的 RGB 各通道独立计数、总数守恒，排除 ROI 外像素且不混淆 RGB/BGR"));
+    QImage gray(2, 2, QImage::Format_Grayscale8);
+    gray.fill(42);
+    const auto grayResult = core::analysis::ImageAnalysis::analyze(gray, gray.rect());
+    verify(grayResult.ok() && !grayResult.bColor && grayResult.grayHistogram[42] == 4,
+        QString("TEST-31"), QString("灰度图继续使用单通道直方图"));
+
+    MainWindow window;
+    window.resize(1320, 1000);
+    auto* dock = window.findChild<QDockWidget*>(QString("AnalysisDock"));
+    auto* panel = window.findChild<ui::AnalysisPanel*>();
+    auto* group = panel->findChild<QGroupBox*>(QString("HistogramGroup"));
+    window.show();
+    dock->show();
+    panel->setStatistics(result);
+    auto* tabs = panel->findChild<QTabWidget*>(QString("AnalysisTabs"));
+    tabs->setCurrentIndex(1);
+    QCoreApplication::processEvents();
+    auto* third = panel->findChild<ui::HistogramWidget*>(QString("Histogram2"));
+    const bool bRgbVisible = third && third->isVisible() && group->title() == QString("RGB 三通道直方图");
+    panel->setStatistics(grayResult);
+    verify(bRgbVisible && !third->isVisible() && group->title() == QString("灰度直方图"),
+        QString("TEST-32"), QString("彩色图显示三幅独立直方图，切换灰度结果后隐藏多余通道"));
+    QImage demo(640, 360, QImage::Format_RGB888);
+    for (int nY = 0; nY < demo.height(); ++nY) {
+        for (int nX = 0; nX < demo.width(); ++nX) {
+            demo.setPixelColor(nX, nY, QColor(nX * 255 / 639, nY * 255 / 359, (nX + nY) % 256));
+        }
+    }
+    const QString demoPath = QDir(outputRoot).filePath(QString("RGB示例.png"));
+    demo.save(demoPath);
+    window.openFile(demoPath);
+    auto* view = window.findChild<ui::ImageView*>();
+    const bool bLoaded = waitUntil([&]() { return view->image().size() == demo.size(); });
+    QMetaObject::invokeMethod(&window, "startRoiAnalysis", Q_ARG(QRect, demo.rect()));
+    const bool bAnalyzed = waitUntil([&]() { return group->title() == QString("RGB 三通道直方图"); });
+    bool bPixelCount = false;
+    for (const auto* label : panel->findChildren<QLabel*>()) {
+        bPixelCount = bPixelCount || label->text() == QString("230400");
+    }
+    verify(bLoaded && bAnalyzed && bPixelCount, QString("TEST-33"),
+        QString("实际打开彩色 PNG 后，后台 ROI 分析发布 RGB 三通道结果且统计像素数正确"));
+    auto* thumbnails = window.findChild<ui::ThumbnailBar*>();
+    waitUntil([&]() {
+        for (int nIndex = 0; nIndex < thumbnails->count(); ++nIndex) {
+            if (thumbnails->item(nIndex)->icon().isNull()) { return false; }
+        }
+        return true;
+    });
+    window.grab().save(QDir(outputRoot).filePath(QString("RGB三通道界面.png")));
+    window.close();
+}
+
 void testOverlayNavigation(const QString& outputRoot)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("arrows-XXXXXX")));
@@ -526,6 +598,9 @@ int main(int argc, char* argv[])
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
     qputenv("QT_QPA_PLATFORM", "offscreen");
     qputenv("QT_QPA_FONTDIR", QDir(qEnvironmentVariable("WINDIR")).filePath(QString("Fonts")).toUtf8());
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication app(argc, argv);
     QTemporaryDir settingsDirectory;
     QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -554,6 +629,7 @@ int main(int argc, char* argv[])
     testWindowWorkflow(outputRoot);
     testExifThumbnail(outputRoot);
     testOverlayNavigation(outputRoot);
+    testColorHistograms(outputRoot);
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

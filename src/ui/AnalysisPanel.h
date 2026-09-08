@@ -8,19 +8,24 @@
 #include <QWidget>
 
 class QLabel;
+class QGroupBox;
 
 namespace ui {
 
 class HistogramWidget : public QWidget {
+    Q_OBJECT
 public:
     explicit HistogramWidget(QWidget* parent = nullptr);
-    void setHistogram(const QVector<quint64>& histogram);
+    void setHistogram(const QVector<quint64>& histogram, const QColor& color = QColor(180, 190, 200));
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void leaveEvent(QEvent* event) override;
 
 private:
     QVector<quint64> histogram_;
+    QColor color_;
 };
 
 class AnalysisPanel : public QWidget {
@@ -46,7 +51,9 @@ private:
     QLabel* greenStatistics_ = nullptr;
     QLabel* blueStatistics_ = nullptr;
     QLabel* stateValue_ = nullptr;
-    HistogramWidget* histogram_ = nullptr;
+    QGroupBox* histogramGroup_ = nullptr;
+    std::array<HistogramWidget*, 3> histograms_ = { nullptr, nullptr, nullptr };
+    std::array<QLabel*, 3> histogramLabels_ = { nullptr, nullptr, nullptr };
 };
 
 } // namespace ui

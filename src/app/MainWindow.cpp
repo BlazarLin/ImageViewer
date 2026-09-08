@@ -40,6 +40,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QSettings>
+#include <QScreen>
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QStyle>
@@ -65,7 +66,8 @@ MainWindow::MainWindow(QWidget* parent)
 {
     setWindowTitle(QString("ImageViewer"));
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
-    resize(1320, 860);
+    const QScreen* screen = QGuiApplication::primaryScreen();
+    resize(screen ? QSize(1320, 860).boundedTo(screen->availableGeometry().size()) : QSize(1320, 860));
     setMinimumSize(720, 500);
     setAcceptDrops(true);
 
@@ -175,9 +177,9 @@ void MainWindow::setupUi()
 
     setStyleSheet(QString(
         "QMainWindow { background:#2d3035; color:#e5e9ef; }"
-        "QWidget { font-family:'Microsoft YaHei UI'; font-size:16px; }"
+        "QWidget { font-family:'Microsoft YaHei UI'; font-size:18px; }"
         "QWidget#CustomTitleBar { background:#1d1f22; border-bottom:1px solid #30343a; }"
-        "QLabel#TitleInfo { color:#dce1e7; font-size:15px; }"
+        "QLabel#TitleInfo { color:#dce1e7; font-size:18px; }"
         "QLabel#AppIcon { background:#1479ad; color:white; border-radius:5px; font-weight:600; }"
         "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:18px; }"
         "QWidget#CustomTitleBar QToolButton:hover { background:#33373d; }"
@@ -211,6 +213,9 @@ void MainWindow::setupUi()
         "QToolButton#DockCloseButton { color:#c9cfd6; background:transparent; border:0; border-radius:4px; font-size:18px; }"
         "QToolButton#DockCloseButton:hover { color:white; background:#c42b1c; }"
         "QWidget#PreprocessPanel,QWidget#AnalysisPanel,QWidget#AnalysisContent { background:#25282d; color:#e1e5ea; }"
+        "QTabWidget::pane { border:0; background:#25282d; }"
+        "QTabBar::tab { background:#30343a; color:#dfe3e8; padding:10px 16px; }"
+        "QTabBar::tab:selected { background:#176b98; color:white; }"
         "QFrame#ProcessingSwitchCard { background:#2b3b46; border:1px solid #31586f; border-radius:7px; }"
         "QCheckBox#ProcessingSwitch { color:#edf4f8; font-weight:600; spacing:9px; }"
         "QWidget#PreprocessParameters { background:transparent; }"

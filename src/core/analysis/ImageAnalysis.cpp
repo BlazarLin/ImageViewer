@@ -27,6 +27,11 @@ AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requeste
     const QImage rgbImage = image.convertToFormat(QImage::Format_RGB888);
     result.nPixelCount = static_cast<qint64>(result.region.width()) * result.region.height();
     result.grayHistogram.fill(0, 256);
+    for (auto& histogram : result.rgbHistograms) {
+        histogram.fill(0, 256);
+    }
+    // 按图像类型选择展示方式，RGB 编码的灰度图允许三条相同通道。
+    result.bColor = !image.isGrayscale();
 
     std::array<double, 3> sums = { 0.0, 0.0, 0.0 };
     std::array<double, 3> squareSums = { 0.0, 0.0, 0.0 };
@@ -47,6 +52,7 @@ AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requeste
                 ChannelStatistics& statistics = result.rgb[nChannel];
                 statistics.dMinimum = std::min(statistics.dMinimum, dValue);
                 statistics.dMaximum = std::max(statistics.dMaximum, dValue);
+                ++result.rgbHistograms[nChannel][values[nChannel]];
                 sums[nChannel] += dValue;
                 squareSums[nChannel] += dValue * dValue;
             }

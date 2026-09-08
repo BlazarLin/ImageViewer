@@ -24,6 +24,8 @@ struct AnalysisResult {
     qint64 nPixelCount = 0;
     std::array<ChannelStatistics, 3> rgb;
     QVector<quint64> grayHistogram;
+    std::array<QVector<quint64>, 3> rgbHistograms;
+    bool bColor = false;
     QString error;
 
     bool ok() const { return error.isEmpty() && nPixelCount > 0 && grayHistogram.size() == 256; }

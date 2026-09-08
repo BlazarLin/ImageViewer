@@ -2,6 +2,9 @@
 /bin/
 /obj/
 /build/
+/dist/
+/_deps/
+CMakeUserPresets.json
 /.vs/
 msbuild.log
 msbuild.binlog

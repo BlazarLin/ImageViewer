@@ -9,6 +9,9 @@
 #include <QLabel>
 #include <QPainter>
 #include <QScrollArea>
+#include <QMouseEvent>
+#include <QToolTip>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -32,12 +35,15 @@ namespace ui {
 HistogramWidget::HistogramWidget(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumHeight(130);
+    setMinimumHeight(150);
+    setMouseTracking(true);
 }
 
-void HistogramWidget::setHistogram(const QVector<quint64>& histogram)
+void HistogramWidget::setHistogram(const QVector<quint64>& histogram, const QColor& color)
 {
     histogram_ = histogram;
+    color_ = color;
+    QToolTip::hideText();
     update();
 }
 
@@ -46,44 +52,72 @@ void HistogramWidget::paintEvent(QPaintEvent* event)
     Q_UNUSED(event)
     QPainter painter(this);
     painter.fillRect(rect(), QColor(31, 33, 36));
-    painter.setPen(QColor(72, 75, 80));
-    painter.drawRect(rect().adjusted(0, 0, -1, -1));
     if (histogram_.size() != 256) {
         return;
     }
-    quint64 nMaximum = 0;
-    for (quint64 nValue : histogram_) {
-        nMaximum = std::max(nMaximum, nValue);
-    }
-    if (nMaximum == 0) {
-        return;
-    }
-    painter.setPen(QColor(104, 180, 225));
-    const double dWidth = static_cast<double>(width() - 2) / 256.0;
-    const int nBottom = height() - 2;
+    const quint64 nMaximum = *std::max_element(histogram_.begin(), histogram_.end());
+    const int nLeft = std::max(48, fontMetrics().horizontalAdvance(QString::number(nMaximum)) + 8);
+    const QRect plot(nLeft, 10, width() - nLeft - 12, height() - 40);
+    if (nMaximum == 0 || plot.width() < 2 || plot.height() < 2) { return; }
+    painter.setPen(QColor(72, 75, 80));
+    painter.drawRect(plot);
+    painter.setPen(QColor(185, 193, 202));
+    painter.drawText(QRect(0, plot.top(), nLeft - 6, fontMetrics().height()),
+        Qt::AlignRight | Qt::AlignTop, QString::number(nMaximum));
+    painter.drawText(QRect(0, plot.bottom() - fontMetrics().height(), nLeft - 6, fontMetrics().height()),
+        Qt::AlignRight | Qt::AlignBottom, QString("0"));
+    painter.drawText(QRect(plot.left(), plot.bottom() + 3, plot.width(), 30),
+        Qt::AlignLeft | Qt::AlignTop, QString("0"));
+    painter.drawText(QRect(plot.left(), plot.bottom() + 3, plot.width(), 30),
+        Qt::AlignRight | Qt::AlignTop, QString("255"));
+    painter.setPen(QPen(color_, std::max(1.0, plot.width() / 256.0)));
     for (int nBin = 0; nBin < 256; ++nBin) {
         const double dRatio = static_cast<double>(histogram_[nBin]) / nMaximum;
-        const int nX = 1 + static_cast<int>(std::floor(nBin * dWidth));
-        const int nHeight = static_cast<int>(std::round(dRatio * (height() - 4)));
-        painter.drawLine(nX, nBottom, nX, nBottom - nHeight);
+        const int nX = plot.left() + qRound(nBin * (plot.width() - 1) / 255.0);
+        const int nHeight = qRound(dRatio * (plot.height() - 1));
+        painter.drawLine(nX, plot.bottom(), nX, plot.bottom() - nHeight);
     }
+}
+
+void HistogramWidget::mouseMoveEvent(QMouseEvent* event)
+{
+    if (histogram_.size() != 256) { return; }
+    const quint64 nMaximum = *std::max_element(histogram_.begin(), histogram_.end());
+    const int nLeft = std::max(48, fontMetrics().horizontalAdvance(QString::number(nMaximum)) + 8);
+    const int nPlotWidth = width() - nLeft - 12;
+    if (nPlotWidth < 2 || event->x() < nLeft || event->x() >= nLeft + nPlotWidth) {
+        QToolTip::hideText();
+        return;
+    }
+    const int nBin = std::clamp(qRound((event->x() - nLeft) * 255.0 / (nPlotWidth - 1)), 0, 255);
+    QToolTip::showText(event->globalPos(), tr("灰度档 %1：%2 像素").arg(nBin).arg(histogram_[nBin]), this);
+}
+
+void HistogramWidget::leaveEvent(QEvent* event)
+{
+    QToolTip::hideText();
+    QWidget::leaveEvent(event);
 }
 
 AnalysisPanel::AnalysisPanel(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName(QString("AnalysisPanel"));
-    setMinimumWidth(400);
+    setMinimumWidth(460);
 
     auto* outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(0, 0, 0, 0);
-    auto* scroll = new QScrollArea(this);
+    auto* tabs = new QTabWidget(this);
+    tabs->setObjectName(QString("AnalysisTabs"));
+    outerLayout->addWidget(tabs);
+    auto* scroll = new QScrollArea(tabs);
     scroll->setFrameShape(QFrame::NoFrame);
+    scroll->viewport()->setObjectName(QString("AnalysisContent"));
     scroll->setWidgetResizable(true);
     auto* content = new QWidget(scroll);
     content->setObjectName(QString("AnalysisContent"));
     scroll->setWidget(content);
-    outerLayout->addWidget(scroll);
+    tabs->addTab(scroll, tr("像素与统计"));
     auto* rootLayout = new QVBoxLayout(content);
     rootLayout->setContentsMargins(12, 12, 12, 12);
     rootLayout->setSpacing(12);
@@ -124,12 +158,33 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     roiLayout->addRow(tr("状态"), stateValue_);
     rootLayout->addWidget(roiGroup);
 
-    auto* histogramGroup = new QGroupBox(tr("灰度直方图"), content);
-    auto* histogramLayout = new QVBoxLayout(histogramGroup);
+    auto* histogramScroll = new QScrollArea(tabs);
+    histogramScroll->setFrameShape(QFrame::NoFrame);
+    histogramScroll->viewport()->setObjectName(QString("AnalysisContent"));
+    histogramScroll->setWidgetResizable(true);
+    auto* histogramContent = new QWidget(histogramScroll);
+    histogramContent->setObjectName(QString("AnalysisContent"));
+    histogramScroll->setWidget(histogramContent);
+    auto* histogramRoot = new QVBoxLayout(histogramContent);
+    histogramRoot->setContentsMargins(8, 8, 8, 8);
+    histogramGroup_ = new QGroupBox(tr("直方图"), histogramContent);
+    histogramRoot->addWidget(histogramGroup_);
+    tabs->addTab(histogramScroll, tr("直方图"));
+    histogramGroup_->setObjectName(QString("HistogramGroup"));
+    auto* histogramLayout = new QVBoxLayout(histogramGroup_);
     histogramLayout->setContentsMargins(12, 16, 12, 12);
-    histogram_ = new HistogramWidget(histogramGroup);
-    histogramLayout->addWidget(histogram_);
-    rootLayout->addWidget(histogramGroup);
+    auto* histogramHint = new QLabel(tr("横轴：0–255；纵轴：像素数（各通道独立刻度）\n悬停查看每档计数"), histogramGroup_);
+    histogramHint->setWordWrap(true);
+    histogramLayout->addWidget(histogramHint);
+    for (int nChannel = 0; nChannel < 3; ++nChannel) {
+        histogramLabels_[nChannel] = new QLabel(histogramGroup_);
+        histograms_[nChannel] = new HistogramWidget(histogramGroup_);
+        histograms_[nChannel]->setObjectName(QString("Histogram%1").arg(nChannel));
+        histogramLayout->addWidget(histogramLabels_[nChannel]);
+        histogramLayout->addWidget(histograms_[nChannel]);
+    }
+    histogramLayout->addStretch(1);
+    clear();
     rootLayout->addStretch(1);
 }
 
@@ -186,12 +241,29 @@ void AnalysisPanel::setStatistics(const core::analysis::AnalysisResult& result)
     redStatistics_->setText(formatStatistics(result.rgb[0]));
     greenStatistics_->setText(formatStatistics(result.rgb[1]));
     blueStatistics_->setText(formatStatistics(result.rgb[2]));
-    histogram_->setHistogram(result.grayHistogram);
+    histogramGroup_->setTitle(result.bColor ? tr("RGB 三通道直方图") : tr("灰度直方图"));
+    const std::array<QColor, 3> colors = { QColor(255, 100, 100), QColor(90, 215, 130), QColor(100, 165, 255) };
+    const std::array<QString, 3> names = { tr("R · 红通道"), tr("G · 绿通道"), tr("B · 蓝通道") };
+    for (int nChannel = 0; nChannel < 3; ++nChannel) {
+        const bool bVisible = result.bColor || nChannel == 0;
+        histogramLabels_[nChannel]->setVisible(bVisible);
+        histograms_[nChannel]->setVisible(bVisible);
+        histogramLabels_[nChannel]->setText(result.bColor ? names[nChannel] : tr("灰度"));
+        histograms_[nChannel]->setHistogram(result.bColor ? result.rgbHistograms[nChannel] : result.grayHistogram,
+            result.bColor ? colors[nChannel] : QColor(180, 190, 200));
+    }
     stateValue_->setText(tr("完成"));
 }
 
 void AnalysisPanel::setBusy(bool bBusy)
 {
+    if (bBusy) {
+        redStatistics_->setText(QString("-"));
+        greenStatistics_->setText(QString("-"));
+        blueStatistics_->setText(QString("-"));
+        countValue_->setText(QString("-"));
+        for (auto* histogram : histograms_) { histogram->setHistogram({}); }
+    }
     stateValue_->setText(bBusy ? tr("计算中…") : QString());
 }
 
@@ -204,7 +276,13 @@ void AnalysisPanel::clear()
     greenStatistics_->setText(QString("-"));
     blueStatistics_->setText(QString("-"));
     stateValue_->clear();
-    histogram_->setHistogram(QVector<quint64>());
+    histogramGroup_->setTitle(tr("直方图"));
+    for (int nChannel = 0; nChannel < 3; ++nChannel) {
+        histogramLabels_[nChannel]->clear();
+        histogramLabels_[nChannel]->hide();
+        histograms_[nChannel]->setHistogram({});
+        histograms_[nChannel]->setVisible(nChannel == 0);
+    }
 }
 
 } // namespace ui

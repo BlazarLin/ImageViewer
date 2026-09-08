@@ -1,0 +1,74 @@
+name: Windows build and test
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '5.15.2'
+          arch: win64_msvc2019_64
+          cache: true
+      - name: 获取固定版本 OpenCV 源码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: opencv/opencv
+          ref: e65f46f9b5cc05d29645aecbf77f5837a2851ad4 # 4.5.5
+          path: _deps/opencv
+          persist-credentials: false
+      - name: 编译 OpenCV
+        run: |
+          cmake -S _deps/opencv -B _deps/opencv-build -A x64 -DBUILD_LIST=core,imgproc,imgcodecs -DBUILD_opencv_world=ON -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_JAVA=OFF -DWITH_IPP=OFF -DWITH_FFMPEG=OFF -DWITH_MSMF=OFF -DWITH_OPENEXR=OFF -DWITH_OPENCL=OFF
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($cfg in @('Debug', 'Release')) {
+            cmake --build _deps/opencv-build --config $cfg --parallel 4
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: 配置工程
+        run: |
+          cmake -S . -B build -A x64 "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR" "-DOpenCV_DIR=$pwd/_deps/opencv-build"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Debug 与 Release 回归
+        run: |
+          foreach ($cfg in @('Debug', 'Release')) {
+            cmake --build build --config $cfg --parallel 4
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            ctest --test-dir build -C $cfg --output-on-failure
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          ./scripts/check-bom.ps1
+      - name: 验证标签并生成便携包
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $text = Get-Content src/app/AppVersion.h -Raw
+            if ($text -notmatch 'QString\("(\d+\.\d+\.\d+)"\)' -or $env:GITHUB_REF_NAME -ne "v$($Matches[1])") {
+              throw '标签与 AppVersion.h 版本不一致。'
+            }
+          }
+          ./scripts/package-release.ps1 -BinaryDir build/Release -QtDir $env:QT_ROOT_DIR -DependencySourceDir _deps/opencv
+      - name: 上传待验收产物
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ImageViewer-windows-x64
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14

@@ -28,6 +28,9 @@ int main(int argc, char* argv[])
     SetConsoleCP(CP_UTF8);
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
 
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QString("ImageViewer"));
     QCoreApplication::setApplicationName(QString("ImageViewer"));

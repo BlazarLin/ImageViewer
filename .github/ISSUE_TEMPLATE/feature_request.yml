@@ -1,0 +1,15 @@
+name: 功能建议
+description: 提出使用场景和改进建议
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 希望解决什么问题？
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 期望行为与验收标准
+    validations:
+      required: true
