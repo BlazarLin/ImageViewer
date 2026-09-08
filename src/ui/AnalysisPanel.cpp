@@ -4,6 +4,8 @@
 #include "AnalysisPanel.h"
 
 #include <QColor>
+#include <QComboBox>
+#include <QSettings>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
@@ -49,7 +51,56 @@ void HistogramWidget::setResult(const core::analysis::AnalysisResult& result)
     for (int nChannel = 0; nChannel < (bColor_ ? 3 : 1); ++nChannel) {
         for (quint64 nCount : histograms_[nChannel]) { nMaximum_ = std::max(nMaximum_, nCount); }
     }
+    rebuildCurves();
     QToolTip::hideText();
+    update();
+}
+
+// 2026-09-08：仅平滑显示曲线，原始档位计数继续用于悬停与统计。
+QVector<double> HistogramWidget::smoothCounts(const QVector<quint64>& counts, double dSigma)
+{
+    if (counts.size() != 256) { return {}; }
+    dSigma = std::isfinite(dSigma) ? std::clamp(dSigma, 0.0, 4.0) : 0.0;
+    QVector<double> values(256);
+    if (dSigma <= 0.0) {
+        for (int nBin = 0; nBin < 256; ++nBin) { values[nBin] = static_cast<double>(counts[nBin]); }
+        return values;
+    }
+    const int nRadius = static_cast<int>(std::ceil(3.0 * dSigma));
+    QVector<double> kernel(2 * nRadius + 1);
+    double dWeightSum = 0.0;
+    for (int nOffset = -nRadius; nOffset <= nRadius; ++nOffset) {
+        const double dWeight = std::exp(-0.5 * nOffset * nOffset / (dSigma * dSigma));
+        kernel[nOffset + nRadius] = dWeight;
+        dWeightSum += dWeight;
+    }
+    for (int nBin = 0; nBin < 256; ++nBin) {
+        double dValue = 0.0;
+        for (int nOffset = -nRadius; nOffset <= nRadius; ++nOffset) {
+            // 在 0/255 两端对称延拓，避免边缘档位被零填充压低。
+            int nIndex = nBin + nOffset;
+            if (nIndex < 0) { nIndex = -nIndex - 1; }
+            if (nIndex >= 256) { nIndex = 511 - nIndex; }
+            dValue += static_cast<double>(counts[nIndex]) * kernel[nOffset + nRadius];
+        }
+        values[nBin] = dValue / dWeightSum;
+    }
+    return values;
+}
+
+void HistogramWidget::rebuildCurves()
+{
+    for (int nChannel = 0; nChannel < 3; ++nChannel) {
+        curves_[nChannel] = smoothCounts(histograms_[nChannel], dSmoothingSigma_);
+    }
+}
+
+void HistogramWidget::setSmoothingSigma(double dSigma)
+{
+    dSigma = std::isfinite(dSigma) ? std::clamp(dSigma, 0.0, 4.0) : 0.0;
+    if (dSmoothingSigma_ == dSigma) { return; }
+    dSmoothingSigma_ = dSigma;
+    rebuildCurves();
     update();
 }
 
@@ -73,14 +124,36 @@ void HistogramWidget::paintEvent(QPaintEvent* event)
         Qt::AlignLeft | Qt::AlignTop, QString("0"));
     painter.drawText(QRect(plot.left(), plot.bottom() + 3, plot.width(), 30),
         Qt::AlignRight | Qt::AlignTop, QString("255"));
+    // 补充中间刻度；小计数时避免重复的整数标签。
+    if (nMaximum_ >= 4) {
+        for (int nStep = 1; nStep < 4; ++nStep) {
+            const quint64 nCount = nMaximum_ * nStep / 4;
+            const int nY = plot.bottom() - qRound(static_cast<double>(nCount) / nMaximum_ * (plot.height() - 1));
+            painter.setPen(QPen(QColor(55, 59, 64), 1, Qt::DotLine));
+            painter.drawLine(plot.left(), nY, plot.right(), nY);
+            painter.setPen(QColor(185, 193, 202));
+            painter.drawText(QRect(0, nY - fontMetrics().height() / 2, nLeft - 6, fontMetrics().height()),
+                Qt::AlignRight | Qt::AlignVCenter, QString::number(nCount));
+        }
+    }
+    if (plot.width() >= 240) {
+        for (int nBin : { 64, 128, 192 }) {
+            const int nX = plot.left() + qRound(nBin * (plot.width() - 1) / 255.0);
+            painter.setPen(QPen(QColor(55, 59, 64), 1, Qt::DotLine));
+            painter.drawLine(nX, plot.top(), nX, plot.bottom());
+            painter.setPen(QColor(185, 193, 202));
+            painter.drawText(QRect(nX - 24, plot.bottom() + 3, 48, 30),
+                Qt::AlignHCenter | Qt::AlignTop, QString::number(nBin));
+        }
+    }
     const std::array<QColor, 3> colors = { QColor(255, 100, 100), QColor(90, 215, 130), QColor(100, 165, 255) };
     painter.setRenderHint(QPainter::Antialiasing);
     for (int nChannel = 0; nChannel < (bColor_ ? 3 : 1); ++nChannel) {
-        if (histograms_[nChannel].size() != 256) { continue; }
+        if (curves_[nChannel].size() != 256) { continue; }
         QPainterPath curve;
         for (int nBin = 0; nBin < 256; ++nBin) {
             const QPointF point(plot.left() + nBin * (plot.width() - 1) / 255.0,
-                plot.bottom() - static_cast<double>(histograms_[nChannel][nBin]) / nMaximum_ * (plot.height() - 1));
+                plot.bottom() - curves_[nChannel][nBin] / nMaximum_ * (plot.height() - 1));
             if (nBin == 0) { curve.moveTo(point); } else { curve.lineTo(point); }
         }
         // 共用纵轴保证可比性；线型让完全重合的通道也能辨认。
@@ -181,11 +254,29 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     histogramLayout->addWidget(analyzeButton);
     histogramLegend_ = new QLabel(histogramGroup_);
     histogramLegend_->setWordWrap(true);
+    auto* smoothing = new QComboBox(histogramGroup_);
+    smoothing->setObjectName(QString("HistogramSmoothing"));
+    smoothing->addItem(tr("关闭（原始曲线）"), 0.0);
+    smoothing->addItem(tr("轻度（σ=1）"), 1.0);
+    smoothing->addItem(tr("适中（σ=2）"), 2.0);
+    smoothing->addItem(tr("较强（σ=4）"), 4.0);
+    smoothing->setToolTip(tr("高斯滤波系数 σ，单位为灰度档；仅平滑曲线，悬停计数和 ROI 统计保留原始值"));
+    auto* smoothingLayout = new QFormLayout;
+    smoothingLayout->addRow(tr("曲线平滑"), smoothing);
+    histogramLayout->addLayout(smoothingLayout);
     histogramLayout->addWidget(histogramLegend_);
     histogram_ = new HistogramWidget(histogramGroup_);
     histogram_->setObjectName(QString("Histogram"));
     histogramLayout->addWidget(histogram_);
-    auto* histogramHint = new QLabel(tr("横轴：0–255；纵轴：像素数（共用刻度）\n悬停查看每档计数；Shift + 拖动分析局部"), histogramGroup_);
+    const int nSavedIndex = smoothing->findData(QSettings().value(QString("analysis/histogramSigma"), 1.0).toDouble());
+    smoothing->setCurrentIndex(nSavedIndex >= 0 ? nSavedIndex : 1);
+    histogram_->setSmoothingSigma(smoothing->currentData().toDouble());
+    connect(smoothing, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, smoothing]() {
+        const double dSigma = smoothing->currentData().toDouble();
+        histogram_->setSmoothingSigma(dSigma);
+        QSettings().setValue(QString("analysis/histogramSigma"), dSigma);
+    });
+    auto* histogramHint = new QLabel(tr("横轴：0–255；纵轴：像素数（共用刻度）\n悬停显示原始计数；平滑仅影响曲线"), histogramGroup_);
     histogramHint->setWordWrap(true);
     histogramLayout->addWidget(histogramHint);
     rootLayout->insertWidget(1, histogramGroup_);

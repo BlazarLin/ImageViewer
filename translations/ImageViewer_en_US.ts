@@ -443,7 +443,7 @@ Hover to inspect bin counts</translation>
     <message>
         <source>横轴：0–255；纵轴：像素数（共用刻度）
 悬停查看每档计数；Shift + 拖动分析局部</source>
-        <translation>X: 0–255; Y: pixel count (shared scale)
+        <translation type="vanished">X: 0–255; Y: pixel count (shared scale)
 Hover for bin counts; Shift + drag to analyze a region</translation>
     </message>
     <message>
@@ -453,6 +453,36 @@ Hover for bin counts; Shift + drag to analyze a region</translation>
     <message>
         <source>无色相</source>
         <translation>Achromatic</translation>
+    </message>
+    <message>
+        <source>关闭（原始曲线）</source>
+        <translation>Off (raw curve)</translation>
+    </message>
+    <message>
+        <source>轻度（σ=1）</source>
+        <translation>Light (σ=1)</translation>
+    </message>
+    <message>
+        <source>适中（σ=2）</source>
+        <translation>Medium (σ=2)</translation>
+    </message>
+    <message>
+        <source>较强（σ=4）</source>
+        <translation>Strong (σ=4)</translation>
+    </message>
+    <message>
+        <source>高斯滤波系数 σ，单位为灰度档；仅平滑曲线，悬停计数和 ROI 统计保留原始值</source>
+        <translation>Gaussian sigma in intensity bins; smooths the curve only. Hover counts and ROI statistics retain raw values.</translation>
+    </message>
+    <message>
+        <source>曲线平滑</source>
+        <translation>Curve smoothing</translation>
+    </message>
+    <message>
+        <source>横轴：0–255；纵轴：像素数（共用刻度）
+悬停显示原始计数；平滑仅影响曲线</source>
+        <translation>X: 0–255; Y: pixel count (shared scale)
+Hover shows raw counts; smoothing affects curves only</translation>
     </message>
 </context>
 <context>

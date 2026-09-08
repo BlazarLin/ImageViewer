@@ -21,6 +21,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QTabWidget>
+#include <QComboBox>
 #include <QTextDocument>
 #include <QToolTip>
 #include <QPushButton>
@@ -473,6 +474,29 @@ void testWindowWorkflow(const QString& outputRoot)
         QString("TEST-21"), QString("重新创建窗口恢复尺寸并记住最近打开目录"));
 }
 
+void testHistogramSmoothing()
+{
+    QVector<quint64> counts(256, 0);
+    counts[0] = 1200;
+    counts[128] = 1000;
+    counts[255] = 700;
+    const auto raw = ui::HistogramWidget::smoothCounts(counts, 0.0);
+    const auto mild = ui::HistogramWidget::smoothCounts(counts, 1.0);
+    const auto strong = ui::HistogramWidget::smoothCounts(counts, 4.0);
+    const auto flat = ui::HistogramWidget::smoothCounts(QVector<quint64>(256, 50), 4.0);
+    double dSum = 0.0;
+    bool bValid = true;
+    for (int nBin = 0; nBin < 256; ++nBin) {
+        dSum += strong[nBin];
+        bValid = bValid && raw[nBin] == static_cast<double>(counts[nBin])
+            && strong[nBin] >= 0.0 && std::abs(flat[nBin] - 50.0) < 1e-9;
+    }
+    verify(bValid && std::abs(dSum - 2900.0) < 1e-8
+            && mild[128] < raw[128] && strong[128] < mild[128]
+            && ui::HistogramWidget::smoothCounts({}, 1.0).isEmpty(),
+        QString("TEST-38"), QString("高斯平滑降低尖峰，关闭还原原始计数，边缘总量守恒且平坦分布保持不变"));
+}
+
 void testColorHistograms(const QString& outputRoot)
 {
     QImage image(3, 2, QImage::Format_RGB888);
@@ -515,6 +539,18 @@ void testColorHistograms(const QString& outputRoot)
     QMouseEvent hover(QEvent::MouseMove, QPoint(nHoverX, 40), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
     QCoreApplication::sendEvent(histogram, &hover);
     const bool bTooltip = QToolTip::text() == QString("灰度档 20：R 0 / G 4 / B 0 像素");
+    auto* smoothing = panel->findChild<QComboBox*>(QString("HistogramSmoothing"));
+    bool bSmoothing = smoothing && smoothing->currentData().toDouble() == 1.0;
+    for (int nIndex = 0; nIndex < smoothing->count(); ++nIndex) {
+        smoothing->setCurrentIndex(nIndex);
+        QCoreApplication::sendEvent(histogram, &hover);
+        bSmoothing = bSmoothing && QToolTip::text() == QString("灰度档 20：R 0 / G 4 / B 0 像素");
+    }
+    ui::AnalysisPanel restored;
+    bSmoothing = bSmoothing
+        && restored.findChild<QComboBox*>(QString("HistogramSmoothing"))->currentData().toDouble() == 4.0;
+    smoothing->setCurrentIndex(1);
+    verify(bSmoothing, QString("TEST-39"), QString("四档平滑不改变悬停原始计数，默认轻度且保存用户选择"));
     panel->setStatistics(grayResult);
     verify(bRgbVisible && bTooltip && histogram->isVisible() && group->title() == QString("灰度直方图"),
         QString("TEST-32"), QString("单图叠加 RGB、悬停显示同一档三通道计数，切换灰度清除旧通道，无独立页签"));
@@ -696,6 +732,7 @@ int main(int argc, char* argv[])
     testWindowWorkflow(outputRoot);
     testExifThumbnail(outputRoot);
     testOverlayNavigation(outputRoot);
+    testHistogramSmoothing();
     testColorHistograms(outputRoot);
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);

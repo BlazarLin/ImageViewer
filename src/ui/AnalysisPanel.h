@@ -17,6 +17,8 @@ class HistogramWidget : public QWidget {
 public:
     explicit HistogramWidget(QWidget* parent = nullptr);
     void setResult(const core::analysis::AnalysisResult& result);
+    void setSmoothingSigma(double dSigma);
+    static QVector<double> smoothCounts(const QVector<quint64>& counts, double dSigma);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -24,7 +26,10 @@ protected:
     void leaveEvent(QEvent* event) override;
 
 private:
+    void rebuildCurves();
     std::array<QVector<quint64>, 3> histograms_;
+    std::array<QVector<double>, 3> curves_;
+    double dSmoothingSigma_ = 1.0;
     bool bColor_ = false;
     quint64 nMaximum_ = 0;
 };
