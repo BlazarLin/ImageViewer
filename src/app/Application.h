@@ -4,10 +4,9 @@
 #include <QStringList>
 
 class QApplication;
+class QLocalServer;
 
-// 单实例 + 命令行参数。
-// M0 阶段:用 Windows CreateMutex 实现单实例(MFC/SDK 风格,免去引入 QtNetwork 模块)。
-// V1 可换回 QLocalServer / QSharedMemory。
+// 2026-09-08：按用户/会话建立单实例本地管道，可靠转发文件并等待接收确认。
 class Application : public QObject {
     Q_OBJECT
 public:
@@ -19,6 +18,10 @@ public:
 
     // 应用启动入口。返回 true 表示应继续运行, false 应退出(已有实例接管)。
     bool startup();
+    QString startupError() const { return startupError_; }
+
+signals:
+    void filesRequested(const QStringList& paths);
 
 private:
     void parseArgs();
@@ -26,6 +29,8 @@ private:
     QApplication* app_ = nullptr;
     QStringList pendingFiles_;
 
-    // 单实例互斥(M0:CreateMutex)
+    QLocalServer* server_ = nullptr;
+    QString startupError_;
+    // 互斥避免 Windows 允许同名管道多服务端的启动竞争。
     void* hMutex_ = nullptr; // HANDLE
 };

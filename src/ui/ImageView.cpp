@@ -361,7 +361,7 @@ void ImageView::mouseDoubleClickEvent(QMouseEvent* event)
 void ImageView::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && !current_.isNull()) {
-        if (event->modifiers().testFlag(Qt::ShiftModifier)) {
+        if (bSelectionEnabled_ && event->modifiers().testFlag(Qt::ShiftModifier)) {
             clearSelection();
             bSelectingRoi_ = true;
             roiStart_ = mapToScene(event->pos());
@@ -553,6 +553,12 @@ void ImageView::drawBackground(QPainter* painter, const QRectF& rect)
     painter->restore();
 }
 
+bool ImageView::pixelUsesOriginal(const QPoint& position) const
+{
+    return processed_.isNull() || (bComparisonEnabled_
+        && position.x() < current_.width() * dComparisonSplit_);
+}
+
 void ImageView::updateHoverPixel(const QPoint& viewportPosition)
 {
     if (current_.isNull() || !viewport()->rect().contains(viewportPosition)) {
@@ -563,8 +569,7 @@ void ImageView::updateHoverPixel(const QPoint& viewportPosition)
     const QPoint pixelPosition(static_cast<int>(std::floor(scenePosition.x())),
         static_cast<int>(std::floor(scenePosition.y())));
     const bool bValid = current_.rect().contains(pixelPosition);
-    const QImage& sampledImage = bComparisonEnabled_
-        && pixelPosition.x() < current_.width() * dComparisonSplit_ ? original_ : current_;
+    const QImage& sampledImage = pixelUsesOriginal(pixelPosition) && !original_.isNull() ? original_ : current_;
     emit pixelHovered(pixelPosition,
         bValid ? sampledImage.pixelColor(pixelPosition) : QColor(), bValid);
 }

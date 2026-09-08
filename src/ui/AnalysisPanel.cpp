@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QSettings>
+#include <QToolButton>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
@@ -188,6 +189,36 @@ void HistogramWidget::leaveEvent(QEvent* event)
     QWidget::leaveEvent(event);
 }
 
+namespace {
+QWidget* collapsibleGroup(QGroupBox* group, const QString& key)
+{
+    auto* wrapper = new QWidget(group->parentWidget());
+    auto* layout = new QVBoxLayout(wrapper);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    auto* toggle = new QToolButton(wrapper);
+    toggle->setObjectName(key);
+    toggle->setText(group->title());
+    toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toggle->setCheckable(true);
+    const bool bExpanded = QSettings().value(key, true).toBool();
+    toggle->setChecked(bExpanded);
+    toggle->setArrowType(bExpanded ? Qt::DownArrow : Qt::RightArrow);
+    toggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    toggle->setMinimumHeight(36);
+    group->setTitle(QString());
+    group->setVisible(bExpanded);
+    layout->addWidget(toggle);
+    layout->addWidget(group);
+    QObject::connect(toggle, &QToolButton::toggled, group, [group, toggle, key](bool bOpen) {
+        group->setVisible(bOpen);
+        toggle->setArrowType(bOpen ? Qt::DownArrow : Qt::RightArrow);
+        QSettings().setValue(key, bOpen);
+    });
+    return wrapper;
+}
+}
+
 AnalysisPanel::AnalysisPanel(QWidget* parent)
     : QWidget(parent)
 {
@@ -207,6 +238,20 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     auto* rootLayout = new QVBoxLayout(content);
     rootLayout->setContentsMargins(12, 12, 12, 12);
     rootLayout->setSpacing(12);
+    auto* sourceLayout = new QFormLayout;
+    sourceCombo_ = new QComboBox(content);
+    sourceCombo_->setObjectName(QString("AnalysisSource"));
+    sourceCombo_->addItems({ tr("当前结果"), tr("原图") });
+    sourceValue_ = new QLabel(content);
+    sourceValue_->setObjectName(QString("AnalysisDataSource"));
+    sourceValue_->setWordWrap(true);
+    sourceLayout->addRow(tr("分析对象"), sourceCombo_);
+    sourceLayout->addRow(tr("数据来源"), sourceValue_);
+    rootLayout->addLayout(sourceLayout);
+    connect(sourceCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+        setImageState(analyzeButton_->isEnabled(), bHasProcessed_);
+        emit analysisSourceChanged();
+    });
     auto* pixelGroup = new QGroupBox(tr("光标像素"), content);
     auto* pixelLayout = new QFormLayout(pixelGroup);
     pixelLayout->setContentsMargins(14, 16, 14, 14);
@@ -217,12 +262,15 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     grayValue_ = new QLabel(QString("-"), pixelGroup);
     hsvValue_ = new QLabel(QString("-"), pixelGroup);
     labValue_ = new QLabel(QString("-"), pixelGroup);
+    pixelSourceValue_ = new QLabel(QString("-"), pixelGroup);
+    pixelSourceValue_->setObjectName(QString("PixelSource"));
+    pixelLayout->addRow(tr("取样来源"), pixelSourceValue_);
     pixelLayout->addRow(tr("坐标"), coordinateValue_);
     pixelLayout->addRow(QString("RGB"), rgbValue_);
     pixelLayout->addRow(tr("灰度"), grayValue_);
     pixelLayout->addRow(QString("HSV"), hsvValue_);
     pixelLayout->addRow(QString("Lab"), labValue_);
-    rootLayout->addWidget(pixelGroup);
+    rootLayout->addWidget(collapsibleGroup(pixelGroup, QString("analysis/pixelExpanded")));
 
     auto* roiGroup = new QGroupBox(tr("ROI 统计"), content);
     auto* roiLayout = new QFormLayout(roiGroup);
@@ -242,13 +290,13 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     roiLayout->addRow(QString("G"), greenStatistics_);
     roiLayout->addRow(QString("B"), blueStatistics_);
     roiLayout->addRow(tr("状态"), stateValue_);
-    rootLayout->addWidget(roiGroup);
+    rootLayout->addWidget(collapsibleGroup(roiGroup, QString("analysis/statisticsExpanded")));
 
     histogramGroup_ = new QGroupBox(tr("直方图"), content);
     histogramGroup_->setObjectName(QString("HistogramGroup"));
     auto* histogramLayout = new QVBoxLayout(histogramGroup_);
     histogramLayout->setContentsMargins(12, 16, 12, 12);
-    auto* analyzeButton = new QPushButton(tr("分析整张图"), histogramGroup_);
+    auto* analyzeButton = analyzeButton_ = new QPushButton(tr("分析整张图"), histogramGroup_);
     analyzeButton->setObjectName(QString("AnalyzeFullImage"));
     connect(analyzeButton, &QPushButton::clicked, this, &AnalysisPanel::analyzeFullImageRequested);
     histogramLayout->addWidget(analyzeButton);
@@ -267,7 +315,7 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     histogramLayout->addWidget(histogramLegend_);
     histogram_ = new HistogramWidget(histogramGroup_);
     histogram_->setObjectName(QString("Histogram"));
-    histogramLayout->addWidget(histogram_);
+    histogramLayout->addWidget(histogram_, 1);
     const int nSavedIndex = smoothing->findData(QSettings().value(QString("analysis/histogramSigma"), 1.0).toDouble());
     smoothing->setCurrentIndex(nSavedIndex >= 0 ? nSavedIndex : 1);
     histogram_->setSmoothingSigma(smoothing->currentData().toDouble());
@@ -279,13 +327,15 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     auto* histogramHint = new QLabel(tr("横轴：0–255；纵轴：像素数（共用刻度）\n悬停显示原始计数；平滑仅影响曲线"), histogramGroup_);
     histogramHint->setWordWrap(true);
     histogramLayout->addWidget(histogramHint);
-    rootLayout->insertWidget(1, histogramGroup_);
+    rootLayout->insertWidget(2, histogramGroup_, 1);
+    setImageState(false, false);
     clear();
-    rootLayout->addStretch(1);
+    rootLayout->setStretch(2, 1);
 }
 
-void AnalysisPanel::setPixel(const QPoint& position, const QColor& color, bool bValid)
+void AnalysisPanel::setPixel(const QPoint& position, const QColor& color, bool bValid, const QString& source)
 {
+    pixelSourceValue_->setText(bValid ? source : QString("-"));
     if (!bValid) {
         coordinateValue_->setText(QString("-"));
         rgbValue_->setText(QString("-"));
@@ -323,6 +373,19 @@ void AnalysisPanel::setPixel(const QPoint& position, const QColor& color, bool b
         .arg(QString::number(116.0 * dFy - 16.0, 'f', 1))
         .arg(QString::number(500.0 * (dFx - dFy), 'f', 1))
         .arg(QString::number(200.0 * (dFy - dFz), 'f', 1)));
+}
+
+bool AnalysisPanel::usesOriginal() const
+{
+    return sourceCombo_->currentIndex() == 1 || !bHasProcessed_;
+}
+
+void AnalysisPanel::setImageState(bool bReady, bool bHasProcessed)
+{
+    bHasProcessed_ = bHasProcessed;
+    sourceValue_->setText(usesOriginal() ? tr("原图（ROI 与直方图）") : tr("处理结果（ROI 与直方图）"));
+    analyzeButton_->setEnabled(bReady);
+    sourceCombo_->setEnabled(bReady);
 }
 
 void AnalysisPanel::setSelection(const QRect& region)
@@ -369,7 +432,8 @@ void AnalysisPanel::clear()
     redStatistics_->setText(QString("-"));
     greenStatistics_->setText(QString("-"));
     blueStatistics_->setText(QString("-"));
-    stateValue_->clear();
+    stateValue_->setText(tr("点击分析整张图，或 Shift + 拖动选择 ROI"));
+    stateValue_->setWordWrap(true);
     histogramGroup_->setTitle(tr("直方图"));
     histogramLegend_->clear();
     histogram_->setResult({});

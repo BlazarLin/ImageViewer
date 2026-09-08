@@ -9,9 +9,11 @@
 
 namespace core::analysis {
 
-AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requestedRegion)
+AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requestedRegion,
+    const std::shared_ptr<std::atomic_bool>& canceled)
 {
     AnalysisResult result;
+    if (canceled && canceled->load(std::memory_order_relaxed)) { return result; }
     if (image.isNull()) {
         result.error = QString("图像为空");
         return result;
@@ -24,7 +26,6 @@ AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requeste
         return result;
     }
 
-    const QImage rgbImage = image.convertToFormat(QImage::Format_RGB888);
     result.nPixelCount = static_cast<qint64>(result.region.width()) * result.region.height();
     result.grayHistogram.fill(0, 256);
     for (auto& histogram : result.rgbHistograms) {
@@ -40,12 +41,20 @@ AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requeste
         statistics.dMaximum = 0.0;
     }
 
+    const bool bRgb888 = image.format() == QImage::Format_RGB888;
+    const bool bRgb32 = image.format() == QImage::Format_RGB32 || image.format() == QImage::Format_ARGB32;
     for (int nY = result.region.top(); nY <= result.region.bottom(); ++nY) {
-        const uchar* line = rgbImage.constScanLine(nY) + result.region.left() * 3;
+        if (canceled && canceled->load(std::memory_order_relaxed)) { return {}; }
+        // 常用格式直接读取行数据；其他格式仅转换 ROI 的一行，避免整图副本。
+        const QImage converted = bRgb888 || bRgb32 ? QImage()
+            : image.copy(result.region.left(), nY, result.region.width(), 1).convertToFormat(QImage::Format_RGB888);
+        const uchar* line = bRgb888 ? image.constScanLine(nY) + result.region.left() * 3
+            : (bRgb32 ? nullptr : converted.constScanLine(0));
+        const QRgb* pixels = bRgb32 ? reinterpret_cast<const QRgb*>(image.constScanLine(nY)) + result.region.left() : nullptr;
         for (int nX = 0; nX < result.region.width(); ++nX) {
-            const int nRed = line[nX * 3];
-            const int nGreen = line[nX * 3 + 1];
-            const int nBlue = line[nX * 3 + 2];
+            const int nRed = bRgb32 ? qRed(pixels[nX]) : line[nX * 3 + 0];
+            const int nGreen = bRgb32 ? qGreen(pixels[nX]) : line[nX * 3 + 1];
+            const int nBlue = bRgb32 ? qBlue(pixels[nX]) : line[nX * 3 + 2];
             const std::array<int, 3> values = { nRed, nGreen, nBlue };
             for (int nChannel = 0; nChannel < 3; ++nChannel) {
                 const double dValue = values[nChannel];

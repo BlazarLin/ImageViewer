@@ -35,6 +35,8 @@
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
+#include <QLineEdit>
+#include <QComboBox>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -92,6 +94,8 @@ MainWindow::MainWindow(QWidget* parent)
     QSettings settings;
     restoreGeometry(settings.value(QString("ui/geometry")).toByteArray());
     restoreState(settings.value(QString("ui/windowState")).toByteArray());
+    analysisDock_->hide();
+    view_->setSelectionEnabled(false);
     updateNavigationActions();
     updateResultActions();
     updateImageInformation();
@@ -100,6 +104,7 @@ MainWindow::MainWindow(QWidget* parent)
 MainWindow::~MainWindow()
 {
     ++nLoadGeneration_;
+    if (analysisCanceled_) { analysisCanceled_->store(true); }
     loadWatcher_->waitForFinished();
     ++nProcessingGeneration_;
     ++nAnalysisGeneration_;
@@ -132,7 +137,56 @@ void MainWindow::setupUi()
     view_ = new ui::ImageView(central);
     thumbnailBar_ = new ui::ThumbnailBar(central);
     centralLayout->addWidget(view_, 1);
-    centralLayout->addWidget(thumbnailBar_);
+    thumbnailContainer_ = new QWidget(central);
+    thumbnailContainer_->setObjectName(QString("ThumbnailContainer"));
+    auto* thumbnailLayout = new QVBoxLayout(thumbnailContainer_);
+    thumbnailLayout->setContentsMargins(0, 0, 0, 0);
+    thumbnailLayout->setSpacing(0);
+    auto* tools = new QHBoxLayout;
+    tools->setContentsMargins(10, 4, 10, 4);
+    thumbnailSearch_ = new QLineEdit(thumbnailContainer_);
+    thumbnailSearch_->setObjectName(QString("ThumbnailSearch"));
+    thumbnailSearch_->setPlaceholderText(tr("搜索文件名（Ctrl+F）"));
+    thumbnailSearch_->setClearButtonEnabled(true);
+    auto* count = new QLabel(thumbnailContainer_);
+    count->setObjectName(QString("ThumbnailMatches"));
+    connect(thumbnailSearch_, &QLineEdit::textChanged, thumbnailBar_, &ui::ThumbnailBar::setNameFilter);
+    connect(thumbnailBar_, &ui::ThumbnailBar::visibleFilesChanged, this, [this, count](int nCount) {
+        count->setText(thumbnailSearch_->text().isEmpty() ? QString() : tr("%1 项").arg(nCount));
+    });
+    auto* leaveSearch = new QAction(thumbnailSearch_);
+    leaveSearch->setShortcut(QKeySequence(Qt::Key_Escape));
+    leaveSearch->setShortcutContext(Qt::WidgetShortcut);
+    thumbnailSearch_->addAction(leaveSearch);
+    connect(leaveSearch, &QAction::triggered, this, [this]() {
+        thumbnailSearch_->clear();
+        view_->setFocus();
+    });
+    auto* locate = new QToolButton(thumbnailContainer_);
+    locate->setObjectName(QString("LocateThumbnail"));
+    locate->setText(tr("定位当前"));
+    connect(locate, &QToolButton::clicked, this, [this]() {
+        thumbnailSearch_->clear();
+        thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
+        view_->setFocus();
+    });
+    auto* sizes = new QComboBox(thumbnailContainer_);
+    sizes->setObjectName(QString("ThumbnailSize"));
+    sizes->addItems({ tr("小缩略图"), tr("中缩略图"), tr("大缩略图") });
+    const int nSizeLevel = std::clamp(QSettings().value(QString("ui/thumbnailSize"), 1).toInt(), 0, 2);
+    sizes->setCurrentIndex(nSizeLevel);
+    thumbnailBar_->setSizeLevel(nSizeLevel);
+    connect(sizes, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int nLevel) {
+        thumbnailBar_->setSizeLevel(nLevel);
+        QSettings().setValue(QString("ui/thumbnailSize"), nLevel);
+    });
+    tools->addWidget(thumbnailSearch_, 1);
+    tools->addWidget(count);
+    tools->addWidget(locate);
+    tools->addWidget(sizes);
+    thumbnailLayout->addLayout(tools);
+    thumbnailLayout->addWidget(thumbnailBar_);
+    centralLayout->addWidget(thumbnailContainer_);
     setCentralWidget(central);
 
     const auto installDockTitleBar = [this](QDockWidget* dock, const QString& title) {
@@ -196,6 +250,8 @@ void MainWindow::setupUi()
         "QMenu::item:disabled { color:#747a83; }"
         "QMenu::separator { height:1px; background:#41464d; margin:5px 8px; }"
         "QToolBar { background:#222428; border:0; border-bottom:1px solid #34383e; spacing:3px; padding:6px 8px; }"
+        "QToolButton { color:#dfe3e8; background:#30353b; border:1px solid #50565f; border-radius:4px; padding:4px 6px; }"
+        "QToolButton:hover { background:#3c454e; }"
         "QToolBar QToolButton { color:#dfe3e8; background:transparent; border:1px solid transparent; border-radius:5px; min-height:34px; padding:5px 12px; }"
         "QToolBar QToolButton:hover { background:#343941; border-color:#454b54; color:white; }"
         "QToolBar QToolButton:pressed { background:#1c5e82; }"
@@ -226,9 +282,9 @@ void MainWindow::setupUi()
         "QWidget#PreprocessPanel QGroupBox::title,QWidget#AnalysisPanel QGroupBox::title { subcontrol-origin:margin; left:12px; padding:0 6px; color:#cfd5dc; background:#2b2e33; }"
         "QWidget#PreprocessPanel QLabel,QWidget#AnalysisPanel QLabel { color:#cbd1d8; font-weight:400; }"
         "QWidget#PreprocessPanel QLabel#ValueBadge { color:#dceaf2; background:#202328; border:1px solid #444a52; border-radius:4px; padding:3px 4px; }"
-        "QComboBox,QSpinBox { color:#e4e8ed; background:#34383e; border:1px solid #50565f; border-radius:4px; padding:4px 8px; selection-background-color:#176b98; }"
-        "QComboBox:hover,QSpinBox:hover { border-color:#6b747f; }"
-        "QComboBox:focus,QSpinBox:focus { border-color:#2d9bd3; }"
+        "QLineEdit,QComboBox,QSpinBox { color:#e4e8ed; background:#34383e; border:1px solid #50565f; border-radius:4px; padding:4px 8px; selection-background-color:#176b98; }"
+        "QLineEdit:hover,QComboBox:hover,QSpinBox:hover { border-color:#6b747f; }"
+        "QLineEdit:focus,QComboBox:focus,QSpinBox:focus { border-color:#2d9bd3; }"
         "QComboBox:disabled,QSpinBox:disabled { color:#6f757d; background:#2b2e33; border-color:#3d4147; }"
         "QComboBox QAbstractItemView { background:#2b2e33; color:#e4e8ed; border:1px solid #50565f; selection-background-color:#176b98; outline:0; }"
         "QSlider::groove:horizontal { height:4px; background:#474c54; border-radius:2px; }"
@@ -261,7 +317,8 @@ void MainWindow::setupUi()
         [this](const QPoint& position, const QColor& color, bool bValid) {
             updatePixelStatus(position, color, bValid);
             if (analysisDock_->isVisible()) {
-                analysisPanel_->setPixel(position, color, bValid);
+                analysisPanel_->setPixel(position, color, bValid,
+                    view_->pixelUsesOriginal(position) ? tr("原图") : tr("处理结果"));
             }
         });
     connect(view_, &ui::ImageView::roiSelected, this, &MainWindow::startRoiAnalysis);
@@ -269,7 +326,8 @@ void MainWindow::setupUi()
         view_->clearSelection();
         startRoiAnalysis(displayedImage_.rect());
     });
-    connect(view_, &ui::ImageView::fileDropped, this, &MainWindow::openFile);
+    connect(analysisPanel_, &ui::AnalysisPanel::analysisSourceChanged, this, &MainWindow::clearAnalysis);
+    connect(view_, &ui::ImageView::fileDropped, this, [this](const QString& path) { openFiles({ path }); });
     connect(thumbnailBar_, &ui::ThumbnailBar::fileActivated, this, &MainWindow::openFile);
     connect(preprocessPanel_, &ui::PreprocessPanel::parametersChanged,
         this, &MainWindow::onPreprocessParametersChanged);
@@ -280,10 +338,12 @@ void MainWindow::setupUi()
         if (bVisible) { analysisDock_->hide(); }
     });
     connect(analysisDock_, &QDockWidget::visibilityChanged, this, [this](bool bVisible) {
+        view_->setSelectionEnabled(bVisible);
         if (bVisible) { preprocessDock_->hide(); }
+        else { view_->clearSelection(); clearAnalysis(); }
     });
     connect(view_, &ui::ImageView::selectionCleared, this, &MainWindow::clearAnalysis);
-    view_->setToolTip(tr("滚轮缩放；双击切换适配 / 100%；Shift + 拖动选择 ROI；Esc 清除选区"));
+    view_->setToolTip(tr("滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区"));
 }
 
 void MainWindow::setupActions()
@@ -348,6 +408,26 @@ void MainWindow::setupActions()
     actToggleAnalysis_ = analysisDock_->toggleViewAction();
     actToggleAnalysis_->setText(tr("像素与 ROI 分析"));
     actToggleAnalysis_->setShortcut(QKeySequence(QString("Ctrl+I")));
+    actToggleThumbnails_ = new QAction(tr("显示缩略图"), this);
+    actToggleThumbnails_->setObjectName(QString("ToggleThumbnails"));
+    actToggleThumbnails_->setCheckable(true);
+    actToggleThumbnails_->setShortcut(QKeySequence(QString("Ctrl+T")));
+    connect(actToggleThumbnails_, &QAction::toggled, this, [this](bool bVisible) {
+        thumbnailContainer_->setVisible(bVisible);
+        QSettings().setValue(QString("ui/thumbnailsVisible"), bVisible);
+        if (!bVisible) { view_->setFocus(); }
+    });
+    const bool bThumbnails = QSettings().value(QString("ui/thumbnailsVisible"), true).toBool();
+    actToggleThumbnails_->setChecked(bThumbnails);
+    thumbnailContainer_->setVisible(bThumbnails);
+    actFindThumbnail_ = new QAction(tr("搜索缩略图"), this);
+    actFindThumbnail_->setShortcut(QKeySequence::Find);
+    connect(actFindThumbnail_, &QAction::triggered, this, [this]() {
+        actToggleThumbnails_->setChecked(true);
+        thumbnailSearch_->setFocus();
+        thumbnailSearch_->selectAll();
+    });
+
     actCompare_ = new QAction(tr("原图 / 处理图对比"), this);
     actCompare_->setCheckable(true);
     actCompare_->setEnabled(false);
@@ -389,6 +469,9 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addAction(actTogglePreprocess_);
     viewMenu->addAction(actToggleAnalysis_);
     viewMenu->addAction(actCompare_);
+    viewMenu->addSeparator();
+    viewMenu->addAction(actToggleThumbnails_);
+    viewMenu->addAction(actFindThumbnail_);
     auto* languageMenu = appMenuBar->addMenu(tr("语言(&L)"));
     QAction* chineseAction = languageMenu->addAction(tr("简体中文"));
     QAction* englishAction = languageMenu->addAction(QString("English"));
@@ -488,11 +571,26 @@ void MainWindow::updateWindowShape()
     setMask(QRegion(outline.toFillPolygon().toPolygon()));
 }
 
+void MainWindow::openFiles(const QStringList& paths)
+{
+    QStringList files;
+    for (const QString& path : paths) {
+        const QFileInfo info(path);
+        const QString absolute = info.absoluteFilePath();
+        if (info.isFile() && !files.contains(absolute, Qt::CaseInsensitive)) { files.append(absolute); }
+    }
+    if (files.isEmpty()) { return; }
+    openFile(files.first());
+    pendingFileList_ = files;
+}
+
 void MainWindow::openFile(const QString& path)
 {
     if (path.isEmpty()) {
         return;
     }
+    pendingFileList_.clear();
+    clearAnalysis();
     requestedPath_ = QFileInfo(path).absoluteFilePath();
     ++nLoadGeneration_;
     bLoading_ = true;
@@ -543,7 +641,12 @@ void MainWindow::onImageLoadFinished()
 void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
 {
     const QStringList oldFiles = directoryModel_->files();
-    directoryModel_->loadForFile(QFileInfo(path).absoluteFilePath());
+    if (!pendingFileList_.isEmpty()) {
+        directoryModel_->setFileList(pendingFileList_, path);
+        pendingFileList_.clear();
+    } else {
+        directoryModel_->loadForFile(QFileInfo(path).absoluteFilePath());
+    }
     currentPath_ = QFileInfo(path).absoluteFilePath();
     originalImage_ = image;
     processedImage_ = QImage();
@@ -556,10 +659,12 @@ void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
     actCompare_->setChecked(false);
     actCompare_->setEnabled(false);
     view_->setImage(originalImage_);
+    view_->setFocus();
     statusProcessing_->clear();
     QSettings().setValue(QString("files/lastDirectory"), QFileInfo(path).absolutePath());
 
     if (oldFiles != directoryModel_->files()) {
+        thumbnailSearch_->clear();
         thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
     } else {
         thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
@@ -583,7 +688,7 @@ void MainWindow::onOpen()
     const QString path = QFileDialog::getOpenFileName(this, tr("打开图片"),
         QSettings().value(QString("files/lastDirectory")).toString(), filter);
     if (!path.isEmpty()) {
-        openFile(path);
+        openFiles({ path });
     }
 }
 
@@ -595,7 +700,7 @@ void MainWindow::onSaveResult()
     const QImage imageToSave = displayedImage_;
     const QString suggestedName = currentPath_.isEmpty()
         ? QString("result.png")
-        : QFileInfo(currentPath_).completeBaseName() + QString("_result.png");
+        : QFileInfo(currentPath_).completeBaseName() + (processedImage_.isNull() ? QString("_original.png") : QString("_processed.png"));
     const QString directory = currentPath_.isEmpty()
         ? QString() : QFileInfo(currentPath_).absolutePath();
     QString selectedFilter;
@@ -750,7 +855,7 @@ void MainWindow::onPreprocessParametersChanged(
     bProcessingPending_ = true;
     // 参数一旦变化就作废旧结果，避免把旧参数结果导出。
     view_->clearSelection();
-    actCompare_->setChecked(false);
+    clearAnalysis();
     actCompare_->setEnabled(false);
     statusProcessing_->setText(tr("等待预处理…"));
     processingTimer_->start();
@@ -804,14 +909,14 @@ void MainWindow::onPreprocessFinished()
 
 void MainWindow::startRoiAnalysis(const QRect& region)
 {
-    if (displayedImage_.isNull() || region.isEmpty() || bLoading_
+    if (!analysisDock_->isVisible() || displayedImage_.isNull() || region.isEmpty() || bLoading_
         || bProcessingPending_ || processingTimer_->isActive()
         || (processingParameters_.bEnabled && processingWatcher_->isRunning())) {
         return;
     }
     pendingAnalysisRegion_ = region.intersected(displayedImage_.rect());
     if (pendingAnalysisRegion_.isEmpty()) { return; }
-    analysisDock_->show();
+    if (analysisCanceled_) { analysisCanceled_->store(true); }
     ++nAnalysisGeneration_;
     analysisPanel_->setSelection(pendingAnalysisRegion_);
     analysisPanel_->setBusy(true);
@@ -821,10 +926,12 @@ void MainWindow::startRoiAnalysis(const QRect& region)
     }
     bAnalysisPending_ = false;
     nRunningAnalysisGeneration_ = nAnalysisGeneration_;
-    const QImage image = displayedImage_;
+    const QImage image = analysisPanel_->usesOriginal() ? originalImage_ : displayedImage_;
     const QRect requestedRegion = pendingAnalysisRegion_;
-    analysisWatcher_->setFuture(QtConcurrent::run([image, requestedRegion]() {
-        return core::analysis::ImageAnalysis::analyze(image, requestedRegion);
+    analysisCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = analysisCanceled_;
+    analysisWatcher_->setFuture(QtConcurrent::run([image, requestedRegion, canceled]() {
+        return core::analysis::ImageAnalysis::analyze(image, requestedRegion, canceled);
     }));
 }
 
@@ -930,6 +1037,7 @@ void MainWindow::showOriginalImage()
 void MainWindow::clearAnalysis()
 {
     ++nAnalysisGeneration_;
+    if (analysisCanceled_) { analysisCanceled_->store(true); }
     bAnalysisPending_ = false;
     pendingAnalysisRegion_ = QRect();
     analysisPanel_->clear();
@@ -940,6 +1048,7 @@ void MainWindow::updateResultActions()
     const bool bReady = !bLoading_ && !displayedImage_.isNull()
         && (!processingParameters_.bEnabled || (!bProcessingPending_
             && !processingTimer_->isActive() && !processingWatcher_->isRunning()));
+    analysisPanel_->setImageState(bReady, !processedImage_.isNull());
     actSaveResult_->setEnabled(bReady);
     actCompare_->setEnabled(bReady && !processedImage_.isNull());
     actRefresh_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
@@ -1063,7 +1172,7 @@ void MainWindow::dropEvent(QDropEvent* event)
     for (const QUrl& url : event->mimeData()->urls()) {
         const QString path = url.toLocalFile();
         if (QFileInfo(path).isFile()) {
-            openFile(path);
+            openFiles({ path });
             event->acceptProposedAction();
             return;
         }

@@ -19,6 +19,7 @@ struct PreloadResult {
 class QAction;
 class QDockWidget;
 class QLabel;
+class QLineEdit;
 class QTimer;
 template <typename T>
 class QFutureWatcher;
@@ -42,6 +43,7 @@ public:
     ~MainWindow() override;
 
     void openFile(const QString& path);
+    void openFiles(const QStringList& paths);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -104,6 +106,9 @@ private:
 
     ui::ImageView* view_ = nullptr;
     ui::ThumbnailBar* thumbnailBar_ = nullptr;
+    QWidget* thumbnailContainer_ = nullptr;
+    QLineEdit* thumbnailSearch_ = nullptr;
+    QStringList pendingFileList_;
     ui::TitleBar* titleBar_ = nullptr;
     ui::PreprocessPanel* preprocessPanel_ = nullptr;
     ui::AnalysisPanel* analysisPanel_ = nullptr;
@@ -126,6 +131,7 @@ private:
     quint64 nRunningAnalysisGeneration_ = 0;
     QRect pendingAnalysisRegion_;
     bool bAnalysisPending_ = false;
+    std::shared_ptr<std::atomic_bool> analysisCanceled_;
     core::cache::ImageCache imageCache_;
     bool bPreloadPending_ = false;
 
@@ -143,6 +149,8 @@ private:
     QAction* actActualSize_ = nullptr;
     QAction* actTogglePreprocess_ = nullptr;
     QAction* actToggleAnalysis_ = nullptr;
+    QAction* actToggleThumbnails_ = nullptr;
+    QAction* actFindThumbnail_ = nullptr;
     QAction* actCompare_ = nullptr;
     QAction* actShowConsole_ = nullptr;
     QAction* actAbout_ = nullptr;

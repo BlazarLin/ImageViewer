@@ -14,11 +14,13 @@
 #include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
+#include <QToolButton>
+#include <QStyle>
 #include <QVBoxLayout>
 
 namespace {
 
-QWidget* makeSliderRow(QSlider*& slider, QLabel*& valueLabel,
+QWidget* makeSliderRow(QSlider*& slider, QSpinBox*& valueLabel,
     int nMinimum, int nMaximum, int nValue, QWidget* parent)
 {
     auto* row = new QWidget(parent);
@@ -27,13 +29,22 @@ QWidget* makeSliderRow(QSlider*& slider, QLabel*& valueLabel,
     slider = new QSlider(Qt::Horizontal, row);
     slider->setRange(nMinimum, nMaximum);
     slider->setValue(nValue);
-    valueLabel = new QLabel(QString::number(nValue), row);
-    valueLabel->setObjectName(QString("ValueBadge"));
-    valueLabel->setFixedWidth(64);
-    valueLabel->setAlignment(Qt::AlignCenter);
-    layout->setSpacing(10);
+    valueLabel = new QSpinBox(row);
+    valueLabel->setRange(nMinimum, nMaximum);
+    valueLabel->setValue(nValue);
+    valueLabel->setMinimumWidth(90);
+    valueLabel->setKeyboardTracking(false);
+    auto* reset = new QToolButton(row);
+    reset->setObjectName(QString("ResetParameter"));
+    reset->setIcon(row->style()->standardIcon(QStyle::SP_BrowserReload));
+    reset->setToolTip(QObject::tr("复原此参数"));
+    QObject::connect(reset, &QToolButton::clicked, slider, [slider, nValue]() { slider->setValue(nValue); });
+    QObject::connect(slider, &QSlider::valueChanged, valueLabel, &QSpinBox::setValue);
+    QObject::connect(valueLabel, QOverload<int>::of(&QSpinBox::valueChanged), slider, &QSlider::setValue);
+    layout->setSpacing(6);
     layout->addWidget(slider, 1);
     layout->addWidget(valueLabel);
+    layout->addWidget(reset);
     return row;
 }
 
@@ -88,13 +99,13 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
     channelCombo_->addItems({ tr("原始通道"), tr("灰度"), tr("蓝通道"), tr("绿通道"), tr("红通道") });
     toneLayout->addRow(tr("通道"), channelCombo_);
 
-    QLabel* brightnessValue = nullptr;
+    QSpinBox* brightnessValue = nullptr;
     toneLayout->addRow(tr("亮度"), makeSliderRow(
         brightnessSlider_, brightnessValue, -255, 255, 0, toneGroup));
-    QLabel* contrastValue = nullptr;
+    QSpinBox* contrastValue = nullptr;
     toneLayout->addRow(tr("对比度 %"), makeSliderRow(
         contrastSlider_, contrastValue, 10, 300, 100, toneGroup));
-    QLabel* gammaValue = nullptr;
+    QSpinBox* gammaValue = nullptr;
     toneLayout->addRow(tr("Gamma %"), makeSliderRow(
         gammaSlider_, gammaValue, 10, 500, 100, toneGroup));
     contentLayout->addWidget(toneGroup);
@@ -110,7 +121,7 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
     smoothKernelSpin_->setSingleStep(2);
     smoothKernelSpin_->setValue(3);
     filterLayout->addRow(tr("平滑核"), smoothKernelSpin_);
-    QLabel* sharpenValue = nullptr;
+    QSpinBox* sharpenValue = nullptr;
     filterLayout->addRow(tr("锐化 %"), makeSliderRow(
         sharpenSlider_, sharpenValue, 0, 300, 0, filterGroup));
     contentLayout->addWidget(filterGroup);
@@ -179,14 +190,10 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
     for (QSlider* slider : sliders) {
         connect(slider, &QSlider::valueChanged, this, &PreprocessPanel::emitParametersChanged);
     }
-    connect(brightnessSlider_, &QSlider::valueChanged, brightnessValue,
-        [brightnessValue](int nValue) { brightnessValue->setText(QString::number(nValue)); });
-    connect(contrastSlider_, &QSlider::valueChanged, contrastValue,
-        [contrastValue](int nValue) { contrastValue->setText(QString::number(nValue)); });
-    connect(gammaSlider_, &QSlider::valueChanged, gammaValue,
-        [gammaValue](int nValue) { gammaValue->setText(QString::number(nValue)); });
-    connect(sharpenSlider_, &QSlider::valueChanged, sharpenValue,
-        [sharpenValue](int nValue) { sharpenValue->setText(QString::number(nValue)); });
+    brightnessValue->setObjectName(QString("BrightnessValue"));
+    contrastValue->setObjectName(QString("ContrastValue"));
+    gammaValue->setObjectName(QString("GammaValue"));
+    sharpenValue->setObjectName(QString("SharpenValue"));
 
     const QList<QComboBox*> combos = { channelCombo_, smoothCombo_, thresholdCombo_, edgeCombo_, morphologyCombo_ };
     for (QComboBox* combo : combos) {

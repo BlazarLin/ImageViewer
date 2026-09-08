@@ -36,9 +36,9 @@ public:
     {
     }
 
-    QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex&) const override
     {
-        return QSize(kItemWidth, kItemHeight);
+        return QSize(option.decorationSize.width() + 62, option.decorationSize.height() + 48);
     }
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option,
@@ -48,7 +48,7 @@ public:
         const bool bHovered = option.state.testFlag(QStyle::State_MouseOver);
         const QRect cardRect = option.rect.adjusted(3, 3, -3, -3);
         const QRect imageRect(cardRect.left() + 7, cardRect.top() + 5,
-            cardRect.width() - 14, kThumbnailHeight + 4);
+            cardRect.width() - 14, option.decorationSize.height() + 4);
         const QRect textRect(cardRect.left() + 7, imageRect.bottom() + 4,
             cardRect.width() - 14, 28);
 
@@ -65,7 +65,7 @@ public:
 
         const QIcon icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
         if (!icon.isNull()) {
-            const QSize pixmapSize = icon.actualSize(QSize(kThumbnailWidth, kThumbnailHeight));
+            const QSize pixmapSize = icon.actualSize(option.decorationSize);
             const QPixmap pixmap = icon.pixmap(pixmapSize, QIcon::Normal, QIcon::Off);
             const QPoint pixmapTopLeft(
                 imageRect.center().x() - pixmap.width() / 2,
@@ -147,6 +147,7 @@ void ThumbnailBar::setFiles(const QStringList& files, int nCurrentIndex)
         item->setToolTip(path);
         addItem(item);
     }
+    setNameFilter(filter_);
     setCurrentFileIndex(nCurrentIndex);
     scheduleVisibleThumbnails();
 }
@@ -158,7 +159,39 @@ void ThumbnailBar::setCurrentFileIndex(int nIndex)
         return;
     }
     setCurrentRow(nIndex);
-    scrollToItem(item(nIndex), QAbstractItemView::PositionAtCenter);
+    if (!item(nIndex)->isHidden()) { scrollToItem(item(nIndex), QAbstractItemView::PositionAtCenter); }
+    scheduleVisibleThumbnails();
+}
+
+void ThumbnailBar::setNameFilter(const QString& text)
+{
+    filter_ = text;
+    visibleRows_.clear();
+    for (int nIndex = 0; nIndex < count(); ++nIndex) {
+        const bool bMatch = item(nIndex)->text().contains(text, Qt::CaseInsensitive);
+        item(nIndex)->setHidden(!bMatch);
+        if (bMatch) { visibleRows_.push_back(nIndex); }
+    }
+    emit visibleFilesChanged(visibleRows_.size());
+    horizontalScrollBar()->setValue(0);
+    scheduleVisibleThumbnails();
+}
+
+void ThumbnailBar::setSizeLevel(int nLevel)
+{
+    const QSize sizes[] = { QSize(80, 54), QSize(112, 76), QSize(160, 110) };
+    const QSize size = sizes[std::clamp(nLevel, 0, 2)];
+    if (iconSize() == size) { return; }
+    setIconSize(size);
+    setGridSize(QSize(size.width() + 62, size.height() + 48));
+    setFixedHeight(gridSize().height() + 24);
+    const QStringList files = files_;
+    setFiles(files, currentRow());
+}
+
+void ThumbnailBar::showEvent(QShowEvent* event)
+{
+    QListWidget::showEvent(event);
     scheduleVisibleThumbnails();
 }
 
@@ -176,7 +209,7 @@ void ThumbnailBar::scheduleVisibleThumbnails()
 
 void ThumbnailBar::startPendingLoad()
 {
-    if (!bReloadPending_ || files_.isEmpty()) {
+    if (!isVisible() || !bReloadPending_ || visibleRows_.isEmpty()) {
         return;
     }
     if (watcher_->isRunning()) {
@@ -187,19 +220,21 @@ void ThumbnailBar::startPendingLoad()
     const int nVisibleFirst = std::max(0,
         horizontalScrollBar()->value() / std::max(1, gridSize().width()));
     const int nVisibleCount = viewport()->width() / std::max(1, gridSize().width()) + 2;
-    const int nVisibleLast = std::min(files_.size() - 1, nVisibleFirst + nVisibleCount);
+    const int nVisibleLast = std::min(visibleRows_.size() - 1, nVisibleFirst + nVisibleCount);
     const int nFirstLoad = std::max(0, nVisibleFirst - kPrefetchItems);
-    const int nLastLoad = std::min(files_.size() - 1, nVisibleLast + kPrefetchItems);
+    const int nLastLoad = std::min(visibleRows_.size() - 1, nVisibleLast + kPrefetchItems);
 
     QVector<int> candidateIndices;
-    candidateIndices.reserve(nLastLoad - nFirstLoad + 1);
+    candidateIndices.reserve(std::max(0, nLastLoad - nFirstLoad + 1));
     const auto appendCandidate = [this, &candidateIndices, nFirstLoad, nLastLoad](int nIndex) {
-        if (nIndex >= nFirstLoad && nIndex <= nLastLoad
-            && !iconCache_.contains(nIndex) && !candidateIndices.contains(nIndex)) {
-            candidateIndices.push_back(nIndex);
+        if (nIndex >= nFirstLoad && nIndex <= nLastLoad && nIndex < visibleRows_.size()) {
+            const int nRow = visibleRows_.at(nIndex);
+            if (!iconCache_.contains(nRow) && !candidateIndices.contains(nRow)) {
+                candidateIndices.push_back(nRow);
+            }
         }
     };
-    appendCandidate(currentRow());
+    appendCandidate(visibleRows_.indexOf(currentRow()));
     for (int nIndex = nVisibleFirst; nIndex <= nVisibleLast; ++nIndex) {
         appendCandidate(nIndex);
     }
@@ -222,13 +257,13 @@ void ThumbnailBar::startPendingLoad()
     }
 
     nRunningGeneration_ = nGeneration_;
-    watcher_->setFuture(QtConcurrent::run([requests]() {
+    const QSize targetSize = iconSize();
+    watcher_->setFuture(QtConcurrent::run([requests, targetSize]() {
         static std::once_flag pruneFlag;
         std::call_once(pruneFlag, []() { core::cache::ThumbnailCache::prune(); });
         QVector<ThumbnailResult> results;
         results.reserve(requests.size());
         for (const auto& request : requests) {
-            const QSize targetSize(kThumbnailWidth, kThumbnailHeight);
             QImage thumbnail = core::cache::ThumbnailCache::load(request.second, targetSize);
             QImageReader reader(request.second);
             reader.setAutoTransform(true);

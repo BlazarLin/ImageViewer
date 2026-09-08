@@ -13,8 +13,35 @@
 
 namespace core::navigation {
 
+void DirectoryModel::setFileList(const QStringList& paths, const QString& currentPath)
+{
+    bExplicitFiles_ = paths.size() > 1;
+    directoryPath_.clear();
+    files_.clear();
+    nCurrentIndex_ = -1;
+    if (!bExplicitFiles_) { loadForFile(currentPath); return; }
+    for (const QString& path : paths) {
+        const QString absolute = QFileInfo(path).absoluteFilePath();
+        if (QFileInfo(absolute).isFile() && !files_.contains(absolute, Qt::CaseInsensitive)) {
+            files_.append(absolute);
+        }
+    }
+    setCurrentPath(currentPath);
+}
+
 bool DirectoryModel::loadForFile(const QString& path, bool bRefresh)
 {
+    if (bExplicitFiles_ && (bRefresh || files_.contains(QFileInfo(path).absoluteFilePath(), Qt::CaseInsensitive))) {
+        if (bRefresh) {
+            files_.erase(std::remove_if(files_.begin(), files_.end(), [](const QString& entry) {
+                return !QFileInfo(entry).isFile();
+            }), files_.end());
+        }
+        nCurrentIndex_ = -1;
+        setCurrentPath(path);
+        return true;
+    }
+    bExplicitFiles_ = false;
     const QFileInfo currentInfo(path);
     const bool bCurrentFileExists = currentInfo.exists() && currentInfo.isFile();
     if ((!bCurrentFileExists && !bRefresh) || !QDir(currentInfo.absolutePath()).exists()) {

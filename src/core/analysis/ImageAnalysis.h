@@ -9,6 +9,8 @@
 #include <QVector>
 
 #include <array>
+#include <atomic>
+#include <memory>
 
 namespace core::analysis {
 
@@ -33,7 +35,8 @@ struct AnalysisResult {
 
 class ImageAnalysis {
 public:
-    static AnalysisResult analyze(const QImage& image, const QRect& requestedRegion);
+    static AnalysisResult analyze(const QImage& image, const QRect& requestedRegion,
+        const std::shared_ptr<std::atomic_bool>& canceled = {});
 };
 
 } // namespace core::analysis

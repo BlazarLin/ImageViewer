@@ -33,6 +33,7 @@ find_package(Qt5 5.14 REQUIRED COMPONENTS
     Gui
     Widgets
     Concurrent
+    Network
     Svg
     LinguistTools
 )
@@ -144,6 +145,7 @@ target_link_libraries(ImageViewer PRIVATE
     Qt5::Gui
     Qt5::Widgets
     Qt5::Concurrent
+    Qt5::Network
     Qt5::Svg
     opencv_world
 )
@@ -155,7 +157,7 @@ add_custom_command(TARGET ImageViewer POST_BUILD
         ${APP_TRANSLATIONS} "$<TARGET_FILE_DIR:ImageViewer>/translations"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
-        $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent>
+        $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
         $<TARGET_FILE:Qt5::Svg> $<TARGET_FILE:opencv_world>
         "$<TARGET_FILE_DIR:ImageViewer>"
 )
@@ -170,6 +172,7 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(ImageViewerCoreTests
         tests/ImageViewerCoreTests.cpp
+        src/app/Application.cpp
         src/app/MainWindow.cpp
         src/ui/ImageView.cpp
         src/ui/ThumbnailBar.cpp
@@ -198,11 +201,11 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${OpenCV_INCLUDE_DIRS}
     )
-    target_link_libraries(ImageViewerCoreTests PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Concurrent opencv_world)
+    target_link_libraries(ImageViewerCoreTests PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Concurrent Qt5::Network opencv_world)
     add_custom_command(TARGET ImageViewerCoreTests POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
-            $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent>
+            $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
             $<TARGET_FILE:opencv_world>
             "$<TARGET_FILE_DIR:ImageViewerCoreTests>"
     )

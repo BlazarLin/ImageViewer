@@ -18,6 +18,10 @@
 #include <QStatusBar>
 #include <QScrollBar>
 #include <QSlider>
+#include <QSpinBox>
+#include <QLineEdit>
+#include <QProcess>
+#include "app/Application.h"
 #include <QToolBar>
 #include <QToolButton>
 #include <QTabWidget>
@@ -690,6 +694,206 @@ void testOverlayNavigation(const QString& outputRoot)
     window.close();
 }
 
+void testFeedbackWorkflow(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("反馈验收-XXXXXX")));
+    QImage first(640, 360, QImage::Format_RGB32);
+    first.fill(QColor(20, 30, 40));
+    QImage second(first.size(), first.format());
+    second.fill(QColor(80, 90, 100));
+    const QString firstPath = directory.filePath(QString("原图 1.png"));
+    const QString secondPath = directory.filePath(QString("原图 2.png"));
+    first.save(firstPath); second.save(secondPath);
+    MainWindow window;
+    window.show();
+    auto* view = window.findChild<ui::ImageView*>();
+    auto* panel = window.findChild<ui::AnalysisPanel*>();
+    auto* analysisDock = window.findChild<QDockWidget*>(QString("AnalysisDock"));
+    auto* histogramGroup = panel->findChild<QGroupBox*>(QString("HistogramGroup"));
+    auto* preprocess = window.findChild<ui::PreprocessPanel*>();
+    const auto bHasStatistics = [&]() { return histogramGroup->title() != QString("直方图"); };
+    const auto settle = []() {
+        QElapsedTimer timer; timer.start();
+        waitUntil([&]() { return timer.elapsed() > 160; });
+    };
+    window.openFile(firstPath);
+    waitUntil([&]() { return view->image() == first; });
+    bool bManual = !analysisDock->isVisible() && view->hasFocus();
+    QMetaObject::invokeMethod(&window, "startRoiAnalysis", Q_ARG(QRect, first.rect()));
+    settle();
+    bManual = bManual && !bHasStatistics() && !analysisDock->isVisible();
+    analysisDock->show();
+    settle();
+    bManual = bManual && !bHasStatistics();
+    panel->findChild<QPushButton*>(QString("AnalyzeFullImage"))->click();
+    bManual = waitUntil(bHasStatistics) && bManual;
+    window.openFile(secondPath);
+    waitUntil([&]() { return view->image() == second; });
+    settle();
+    bManual = bManual && !bHasStatistics();
+    QMetaObject::invokeMethod(&window, "startRoiAnalysis", Q_ARG(QRect, first.rect()));
+    analysisDock->hide();
+    settle();
+    bManual = bManual && !bHasStatistics();
+    verify(bManual, QString("TEST-40"), QString("分析默认隐藏，显示和换图不自动计算，隐藏时拒绝请求并作废在途结果"));
+
+    core::processing::ProcessingParameters parameters;
+    parameters.bEnabled = true;
+    parameters.nBrightness = 10;
+    preprocess->setParameters(parameters);
+    waitUntil([&]() { return view->image().pixelColor(0, 0).red() == 90; });
+    QAction* compare = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->shortcut() == QKeySequence(QString("Ctrl+D"))) { compare = action; }
+    }
+    compare->setChecked(true);
+    const QPoint from = view->mapFromScene(QPointF(320, 180));
+    const QPoint to = view->mapFromScene(QPointF(210, 180));
+    QMouseEvent press(QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent drag(QEvent::MouseMove, to, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(view->viewport(), &press);
+    QCoreApplication::sendEvent(view->viewport(), &drag);
+    QCoreApplication::sendEvent(view->viewport(), &release);
+    const double dSplit = view->comparisonSplit();
+    parameters.nBrightness = 25;
+    preprocess->setParameters(parameters);
+    bool bCompare = compare->isChecked() && !compare->isEnabled() && dSplit < 0.4;
+    bCompare = waitUntil([&]() { return view->image().pixelColor(0, 0).red() == 105; }) && bCompare;
+    verify(bCompare && compare->isChecked() && compare->isEnabled() && view->comparisonEnabled()
+            && std::abs(view->comparisonSplit() - dSplit) < 0.001,
+        QString("TEST-41"), QString("修改参数时保留对比开关，结果完成后保持原分割位置"));
+
+    analysisDock->show();
+    auto* source = panel->findChild<QComboBox*>(QString("AnalysisSource"));
+    auto* sourceLabel = panel->findChild<QLabel*>(QString("AnalysisDataSource"));
+    QMetaObject::invokeMethod(&window, "startRoiAnalysis", Q_ARG(QRect, QRect(0, 0, 10, 10)));
+    waitUntil(bHasStatistics);
+    const auto containsLabel = [&](const QString& text) {
+        for (auto* label : panel->findChildren<QLabel*>()) { if (label->text() == text) { return true; } }
+        return false;
+    };
+    bool bSource = containsLabel(QString("105 / 105 / 105.00 / 0.00"))
+        && sourceLabel->text().contains(QString("处理结果"));
+    source->setCurrentIndex(1);
+    bSource = !bHasStatistics() && bSource;
+    QMetaObject::invokeMethod(&window, "startRoiAnalysis", Q_ARG(QRect, QRect(0, 0, 10, 10)));
+    waitUntil(bHasStatistics);
+    bSource = bSource && containsLabel(QString("80 / 80 / 80.00 / 0.00"));
+    for (const QPoint& position : { QPoint(40, 50), QPoint(600, 50) }) {
+        QMouseEvent hover(QEvent::MouseMove, view->mapFromScene(position), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(view->viewport(), &hover);
+        bSource = bSource && panel->findChild<QLabel*>(QString("PixelSource"))->text()
+            == (position.x() == 40 ? QString("原图") : QString("处理结果"));
+    }
+    verify(bSource, QString("TEST-42"), QString("ROI 单独选择原图或处理结果，切换清空旧数据，对比两侧取样标注实际来源"));
+
+    auto* brightness = preprocess->findChild<QSpinBox*>(QString("BrightnessValue"));
+    auto* slider = preprocess->findChild<QSlider*>();
+    brightness->setValue(-7);
+    bool bInputs = slider->value() == -7 && preprocess->parameters().nBrightness == -7;
+    slider->setValue(43);
+    bInputs = bInputs && brightness->value() == 43;
+    brightness->parentWidget()->findChild<QToolButton*>(QString("ResetParameter"))->click();
+    bInputs = bInputs && brightness->value() == 0 && slider->value() == 0;
+    auto* gamma = preprocess->findChild<QSpinBox*>(QString("GammaValue"));
+    gamma->setValue(5000);
+    verify(bInputs && gamma->value() == 500 && preprocess->parameters().dGamma == 5.0,
+        QString("TEST-43"), QString("数值输入与滑块双向同步，单项复原保持其他参数，越界值限制在有效范围"));
+    preprocess->setProcessingEnabled(false);
+
+    panel->findChild<QToolButton*>(QString("analysis/pixelExpanded"))->setChecked(false);
+    panel->findChild<QToolButton*>(QString("analysis/statisticsExpanded"))->setChecked(false);
+    ui::AnalysisPanel restored;
+    verify(!restored.findChild<QToolButton*>(QString("analysis/pixelExpanded"))->isChecked()
+            && !restored.findChild<QToolButton*>(QString("analysis/statisticsExpanded"))->isChecked(),
+        QString("TEST-44"), QString("像素和统计组可独立折叠，重新创建面板保留展开状态"));
+
+    auto* thumbnails = window.findChild<ui::ThumbnailBar*>();
+    auto* search = window.findChild<QLineEdit*>(QString("ThumbnailSearch"));
+    search->setText(QString("原图 1"));
+    bool bThumbs = thumbnails->visibleFileCount() == 1 && thumbnails->item(1)->isHidden();
+    bThumbs = waitUntil([&]() { return !thumbnails->item(0)->icon().isNull(); }) && bThumbs;
+    search->setText(QString("不存在"));
+    bThumbs = bThumbs && thumbnails->visibleFileCount() == 0;
+    window.findChild<QToolButton*>(QString("LocateThumbnail"))->click();
+    bThumbs = bThumbs && search->text().isEmpty() && thumbnails->currentRow() == 1;
+    auto* sizes = window.findChild<QComboBox*>(QString("ThumbnailSize"));
+    sizes->setCurrentIndex(2);
+    bThumbs = bThumbs && thumbnails->iconSize() == QSize(160, 110);
+    window.findChild<QAction*>(QString("ToggleThumbnails"))->setChecked(false);
+    QKeyEvent previous(QEvent::KeyPress, Qt::Key_Left, Qt::NoModifier);
+    QCoreApplication::sendEvent(view, &previous);
+    bThumbs = waitUntil([&]() { return view->image() == first; }) && bThumbs;
+    verify(bThumbs && !thumbnails->isVisible(), QString("TEST-45"),
+        QString("缩略图搜索含中文空格、无匹配、定位当前与大小切换正确，隐藏时方向键仍可翻图"));
+    // 留下可复用的合成图界面证据，不包含用户图像。
+    window.findChild<QAction*>(QString("ToggleThumbnails"))->setChecked(true);
+    sizes->setCurrentIndex(0);
+    analysisDock->show();
+    panel->findChild<QPushButton*>(QString("AnalyzeFullImage"))->click();
+    waitUntil(bHasStatistics);
+    window.resize(1380, 950);
+    QCoreApplication::processEvents();
+    window.grab().save(QDir(outputRoot).filePath(QString("反馈优化界面.png")));
+    window.close();
+    MainWindow reopened;
+    reopened.show();
+    verify(!reopened.findChild<QDockWidget*>(QString("AnalysisDock"))->isVisible(),
+        QString("TEST-46"), QString("即使上次退出时分析可见，重新启动仍默认隐藏"));
+    reopened.close();
+    QSettings().setValue(QString("ui/thumbnailSize"), 1);
+    QSettings().setValue(QString("analysis/pixelExpanded"), true);
+    QSettings().setValue(QString("analysis/statisticsExpanded"), true);
+}
+
+void testForwardedFiles(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("多文件-XXXXXX")));
+    QTemporaryDir other(QDir(outputRoot).filePath(QString("其他目录-XXXXXX")));
+    QImage image(16, 16, QImage::Format_RGB32); image.fill(Qt::red);
+    const QString first = directory.filePath(QString("中文 空格 1.png"));
+    const QString second = other.filePath(QString("中文 空格 2.png"));
+    image.save(first); image.save(second);
+    auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    const QString oldName = QCoreApplication::applicationName();
+    const QString name = oldName + QString::number(QCoreApplication::applicationPid());
+    QCoreApplication::setApplicationName(name);
+    qputenv("IMAGEVIEWER_TEST_INSTANCE", name.toUtf8());
+    Application instance(app);
+    const bool bPrimary = instance.startup();
+    QStringList received;
+    int nRequests = 0;
+    QObject::connect(&instance, &Application::filesRequested, &instance, [&](const QStringList& paths) {
+        received = paths; ++nRequests;
+    });
+    QProcess child;
+    child.start(QCoreApplication::applicationFilePath(), { QString("--ipc-client"), first, second, first });
+    const bool bFinished = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
+    const bool bFiles = bPrimary && bFinished && child.exitCode() == 0 && received == QStringList({ first, second });
+    child.start(QCoreApplication::applicationFilePath(), { QString("--ipc-client") });
+    const bool bActivated = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
+    verify(bFiles && bActivated && child.exitCode() == 0 && nRequests == 2 && received.isEmpty(),
+        QString("TEST-47"), QString("真实子进程转发中文空格及多文件参数并确认接收，重复路径去重，无参数请求也通知激活"));
+    QCoreApplication::setApplicationName(oldName);
+    qunsetenv("IMAGEVIEWER_TEST_INSTANCE");
+    core::navigation::DirectoryModel model;
+    model.setFileList({ first, second }, first);
+    bool bBatch = model.count() == 2 && model.moveNext() && model.currentPath() == second;
+    model.loadForFile(second);
+    bBatch = bBatch && model.count() == 2 && model.currentIndex() == 1;
+    QFile::remove(first);
+    model.loadForFile(second, true);
+    bBatch = bBatch && model.count() == 1 && model.currentPath() == second;
+    model.setFileList({ second }, second);
+    verify(bBatch && model.count() == 1, QString("TEST-48"),
+        QString("跨目录多文件按传入顺序浏览，刷新剔除删除项，单文件打开恢复目录模式"));
+    const auto canceled = std::make_shared<std::atomic_bool>(true);
+    const auto result = core::analysis::ImageAnalysis::analyze(image, image.rect(), canceled);
+    verify(!result.ok() && result.nPixelCount == 0 && result.grayHistogram.isEmpty(),
+        QString("TEST-49"), QString("已取消的分析不分配直方图、不发布部分统计"));
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -705,6 +909,11 @@ int main(int argc, char* argv[])
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication app(argc, argv);
+    if (app.arguments().contains(QString("--ipc-client"))) {
+        QCoreApplication::setApplicationName(qEnvironmentVariable("IMAGEVIEWER_TEST_INSTANCE"));
+        Application client(&app);
+        return client.startup() ? 23 : (client.startupError().isEmpty() ? 0 : 24);
+    }
     QTemporaryDir settingsDirectory;
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
@@ -734,6 +943,8 @@ int main(int argc, char* argv[])
     testOverlayNavigation(outputRoot);
     testHistogramSmoothing();
     testColorHistograms(outputRoot);
+    testFeedbackWorkflow(outputRoot);
+    testForwardedFiles(outputRoot);
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

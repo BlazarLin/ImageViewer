@@ -32,6 +32,9 @@ public:
     void setComparisonImages(const QImage& original, const QImage& processed,
         bool bEnabled);
     void setComparisonEnabled(bool bEnabled);
+    bool pixelUsesOriginal(const QPoint& position) const;
+    void setSelectionEnabled(bool bEnabled) { bSelectionEnabled_ = bEnabled; }
+    double comparisonSplit() const { return dComparisonSplit_; }
     bool comparisonEnabled() const { return bComparisonEnabled_; }
 
     // 当前图像引用。
@@ -111,6 +114,7 @@ private:
     bool bComparisonEnabled_ = false;
     bool bDraggingComparisonSplit_ = false;
     bool bSelectingRoi_ = false;
+    bool bSelectionEnabled_ = true;
     quint64 nPyramidGeneration_ = 0;
     quint64 nRunningPyramidGeneration_ = 0;
     int nDisplayedPyramidLevel_ = -1;

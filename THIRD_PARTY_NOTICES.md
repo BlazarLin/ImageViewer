@@ -4,7 +4,7 @@ ImageViewer 自有代码使用根目录 MIT 许可。`3rdpart/` 中的代码、�
 
 | 组件 | 使用方式 | 许可与来源 |
 | --- | --- | --- |
-| Qt Core/Gui/Widgets/Concurrent/Svg、平台与图片插件 | 动态链接；本地 5.14.2，CI 配置 5.15.2 | 开源 LGPLv3/GPL 许可选项及各子组件许可，见 [Qt 说明](https://www.qt.io/development/open-source-lgpl-obligations)；随附 `licenses/qt/LICENSE.LGPL3`、`LICENSE.GPL3` |
+| Qt Core/Gui/Widgets/Concurrent/Network/Svg、平台与图片插件 | 动态链接；本地 5.14.2，CI 配置 5.15.2 | 开源 LGPLv3/GPL 许可选项及各子组件许可，见 [Qt 说明](https://www.qt.io/development/open-source-lgpl-obligations)；随附 `licenses/qt/LICENSE.LGPL3`、`LICENSE.GPL3` |
 | OpenCV 4.5.5 | 动态链接 opencv_world；图像处理与分析 | [Apache-2.0](https://opencv.org/license/)，原文见 `licenses/OpenCV-4.5.5.txt` |
 | Qt/OpenCV 内含的图像编解码及基础库 | 取决于具体依赖构建选项 | 以对应版本源码中的 LICENSE、COPYING、NOTICE 和 Qt attribution 文件为准 |
 | Microsoft Visual C++ Runtime | windeployqt 按需部署 | Microsoft 运行库再分发条款，不能按 MIT 重新授权 |

@@ -5,6 +5,7 @@
 
 #include <Windows.h>
 #include <QApplication>
+#include <QMessageBox>
 #include <QDir>
 #include <QDebug>
 #include <QLocale>
@@ -58,17 +59,28 @@ int main(int argc, char* argv[])
 
     Application appl(&app);
     if (!appl.startup()) {
-        // 已有实例接管,本进程退出
+        if (!appl.startupError().isEmpty()) {
+            QMessageBox::warning(nullptr, QString("ImageViewer"), appl.startupError());
+            return 1;
+        }
+        // 已有实例确认接管,本进程退出
         return 0;
     }
 
     MainWindow w;
+    QObject::connect(&appl, &Application::filesRequested, &w, [&w](const QStringList& paths) {
+        if (w.isMinimized()) { w.setWindowState(w.windowState() & ~Qt::WindowMinimized); }
+        w.show();
+        w.raise();
+        w.activateWindow();
+        w.openFiles(paths);
+    });
     w.show();
 
     // 命令行传入的文件
     const QStringList files = appl.pendingFiles();
     if (!files.isEmpty()) {
-        w.openFile(files.first());
+        w.openFiles(files);
     }
 
     return app.exec();

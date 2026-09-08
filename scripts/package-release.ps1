@@ -77,7 +77,7 @@ $dirty = [bool](git -C $root status --porcelain)
     opencvRuntime = $opencv[0].Name
     builtAtUtc = [DateTime]::UtcNow.ToString("o")
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $package "build-info.json") -Encoding UTF8
-foreach ($required in @("Qt5Core.dll", "Qt5Gui.dll", "Qt5Widgets.dll", "vcruntime140.dll", "msvcp140.dll", "platforms/qwindows.dll", "imageformats/qjpeg.dll", "translations/ImageViewer_en_US.qm")) {
+foreach ($required in @("Qt5Core.dll", "Qt5Gui.dll", "Qt5Widgets.dll", "Qt5Network.dll", "Qt5Concurrent.dll", "vcruntime140.dll", "msvcp140.dll", "platforms/qwindows.dll", "imageformats/qjpeg.dll", "translations/ImageViewer_en_US.qm")) {
     if (!(Test-Path -LiteralPath (Join-Path $package $required))) { throw "发布包缺失：$required" }
 }
 $archive = Join-Path $dist "$name.zip"

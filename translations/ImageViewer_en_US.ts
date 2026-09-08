@@ -1,6 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
+<context>
+    <name>Application</name>
+    <message>
+        <source>无法建立单实例锁，请稍后重试。</source>
+        <translation>Unable to create the single-instance lock. Please try again later.</translation>
+    </message>
+    <message>
+        <source>已有窗口未确认接收文件，请等待其响应后重试。</source>
+        <translation>The existing window did not confirm receipt. Wait for it to respond and try again.</translation>
+    </message>
+    <message>
+        <source>无法建立文件转发通道：%1</source>
+        <translation>Unable to create the file forwarding channel: %1</translation>
+    </message>
+</context>
 <context>
     <name>ImageLoader</name>
     <message>
@@ -299,7 +314,7 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
     <message>
         <source>滚轮缩放；双击切换适配 / 100%；Shift + 拖动选择 ROI；Esc 清除选区</source>
-        <translation>Wheel: zoom; double-click: fit / 100%; Shift + drag: select ROI; Esc: clear selection</translation>
+        <translation type="vanished">Wheel: zoom; double-click: fit / 100%; Shift + drag: select ROI; Esc: clear selection</translation>
     </message>
     <message>
         <source>刷新图像和目录</source>
@@ -350,6 +365,57 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     <message>
         <source>&lt;h2&gt;ImageViewer v%1&lt;/h2&gt;&lt;p&gt;轻量图像查看与分析工具&lt;/p&gt;&lt;p&gt;作者：Blazar&lt;br&gt;邮箱：&lt;a style=&quot;color:#70c8ff&quot; href=&quot;mailto:blazarlin@gmail.com&quot;&gt;blazarlin@gmail.com&lt;/a&gt;&lt;/p&gt;&lt;p&gt;源代码采用 MIT 许可证；第三方组件遵循各自许可证。&lt;/p&gt;</source>
         <translation>&lt;h2&gt;ImageViewer v%1&lt;/h2&gt;&lt;p&gt;Lightweight image viewing and analysis&lt;/p&gt;&lt;p&gt;Author: Blazar&lt;br&gt;Email: &lt;a style=&quot;color:#70c8ff&quot; href=&quot;mailto:blazarlin@gmail.com&quot;&gt;blazarlin@gmail.com&lt;/a&gt;&lt;/p&gt;&lt;p&gt;Source code: MIT License. Third-party components retain their respective licenses.&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>搜索文件名（Ctrl+F）</source>
+        <translation>Search file names (Ctrl+F)</translation>
+    </message>
+    <message>
+        <source>%1 项</source>
+        <translation>%1 matches</translation>
+    </message>
+    <message>
+        <source>定位当前</source>
+        <translation>Locate current</translation>
+    </message>
+    <message>
+        <source>小缩略图</source>
+        <translation>Small thumbnails</translation>
+    </message>
+    <message>
+        <source>中缩略图</source>
+        <translation>Medium thumbnails</translation>
+    </message>
+    <message>
+        <source>大缩略图</source>
+        <translation>Large thumbnails</translation>
+    </message>
+    <message>
+        <source>原图</source>
+        <translation>Original</translation>
+    </message>
+    <message>
+        <source>处理结果</source>
+        <translation>Processed</translation>
+    </message>
+    <message>
+        <source>滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区</source>
+        <translation>Wheel to zoom; double-click for fit / 100%; show Analysis then Shift-drag for ROI; Esc to clear</translation>
+    </message>
+    <message>
+        <source>显示缩略图</source>
+        <translation>Show thumbnails</translation>
+    </message>
+    <message>
+        <source>搜索缩略图</source>
+        <translation>Search thumbnails</translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>复原此参数</source>
+        <translation>Reset this parameter</translation>
     </message>
 </context>
 <context>
@@ -483,6 +549,38 @@ Hover for bin counts; Shift + drag to analyze a region</translation>
 悬停显示原始计数；平滑仅影响曲线</source>
         <translation>X: 0–255; Y: pixel count (shared scale)
 Hover shows raw counts; smoothing affects curves only</translation>
+    </message>
+    <message>
+        <source>当前结果</source>
+        <translation>Current result</translation>
+    </message>
+    <message>
+        <source>原图</source>
+        <translation>Original</translation>
+    </message>
+    <message>
+        <source>分析对象</source>
+        <translation>Analyze</translation>
+    </message>
+    <message>
+        <source>数据来源</source>
+        <translation>Data source</translation>
+    </message>
+    <message>
+        <source>取样来源</source>
+        <translation>Pixel source</translation>
+    </message>
+    <message>
+        <source>原图（ROI 与直方图）</source>
+        <translation>Original (ROI and histogram)</translation>
+    </message>
+    <message>
+        <source>处理结果（ROI 与直方图）</source>
+        <translation>Processed (ROI and histogram)</translation>
+    </message>
+    <message>
+        <source>点击分析整张图，或 Shift + 拖动选择 ROI</source>
+        <translation>Click Analyze full image or Shift-drag to select an ROI</translation>
     </message>
 </context>
 <context>

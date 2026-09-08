@@ -9,6 +9,7 @@ namespace core::navigation {
 
 class DirectoryModel {
 public:
+    void setFileList(const QStringList& paths, const QString& currentPath);
     bool loadForFile(const QString& path, bool bRefresh = false);
     bool setCurrentPath(const QString& path);
     bool movePrevious();
@@ -20,6 +21,7 @@ public:
     int count() const { return files_.size(); }
 
 private:
+    bool bExplicitFiles_ = false;
     QString directoryPath_;
     QStringList files_;
     int nCurrentIndex_ = -1;

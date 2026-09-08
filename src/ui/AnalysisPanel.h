@@ -8,6 +8,8 @@
 #include <QWidget>
 
 class QLabel;
+class QComboBox;
+class QPushButton;
 class QGroupBox;
 
 namespace ui {
@@ -39,7 +41,9 @@ class AnalysisPanel : public QWidget {
 public:
     explicit AnalysisPanel(QWidget* parent = nullptr);
 
-    void setPixel(const QPoint& position, const QColor& color, bool bValid);
+    void setPixel(const QPoint& position, const QColor& color, bool bValid, const QString& source = QString());
+    bool usesOriginal() const;
+    void setImageState(bool bReady, bool bHasProcessed);
     void setSelection(const QRect& region);
     void setStatistics(const core::analysis::AnalysisResult& result);
     void setBusy(bool bBusy);
@@ -47,8 +51,14 @@ public:
 
 signals:
     void analyzeFullImageRequested();
+    void analysisSourceChanged();
 
 private:
+    QComboBox* sourceCombo_ = nullptr;
+    QLabel* sourceValue_ = nullptr;
+    QLabel* pixelSourceValue_ = nullptr;
+    QPushButton* analyzeButton_ = nullptr;
+    bool bHasProcessed_ = false;
     QLabel* coordinateValue_ = nullptr;
     QLabel* rgbValue_ = nullptr;
     QLabel* grayValue_ = nullptr;
