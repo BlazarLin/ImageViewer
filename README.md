@@ -5,15 +5,15 @@
 [![Windows 构建与测试](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml/badge.svg)](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**当前源码版本：2.2.0。** 项目正在准备首次开源发布；公开便携包以 [GitHub Releases](https://github.com/BlazarLin/ImageViewer/releases) 中实际上传的资产为准。CI 产物是待验收构建，不等同于正式版本。
+**首个公开版本：v2.2.0。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.2.0/ImageViewer-2.2.0-windows-x64.zip) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.2.0)。解压后即可运行，无需安装 Qt/OpenCV。
 
-![RGB 三通道分析界面](docs/images/260908直方图平滑.png)
+![小缩略图与统一分析面板](docs/images/260908首版界面.png)
 
 ## 功能
 
 - PNG、JPEG、BMP、TIFF、WebP、GIF 等常见图片；支持中文路径、拖放和命令行打开。
 - 光标锚定缩放、适应窗口/宽度/高度、100% 原尺寸模式、双击切换适配与 100%；高倍率像素网格。
-- 当前目录自然排序、异步缩略图、图像两侧翻图箭头、左右方向键；F5 刷新目录。缩略图支持 Ctrl+T 显隐、三档大小、文件名搜索和定位当前项。
+- 当前目录自然排序、异步缩略图、图像两侧翻图箭头、左右方向键；F5 刷新目录。缩略图固定为小尺寸，左上角显示序号/总数；支持 Ctrl+T 显隐、滚轮横向浏览和当前项自动定位，界面不显示滚动条。
 - 深色圆角窗口，默认 18px 界面字体，跟随 Windows 高 DPI 缩放；状态栏实时显示零起点坐标与 RGBA 值，右键可打开所在文件夹。
 - 亮度、对比度、Gamma、灰度与通道查看；平滑、锐化、阈值、边缘和形态学预处理。
 - 原图/处理图分割对比、结果另存、JSON 参数预设；隐藏面板不会撤销已经启用的处理。
@@ -34,7 +34,7 @@
 
 亮度、对比度、Gamma 和锐化支持直接输入，按 Enter 或移出输入框生效；右侧复原图标只复原该参数。对比模式下修改参数保留开关和分割比例，结果就绪后更新。建议保存名使用 _original / _processed 标明实际来源，分析对象选择不改变保存对象。
 
-再次启动时文件会转发至同一用户会话的现有窗口并激活。单文件扫描所在目录；多个文件按参数顺序建立浏览列表，显示第一张，不预先解码全部图片。单文件重新打开可恢复目录模式。缩略图搜索仅过滤名称显示，不改变方向键浏览列表；Ctrl+F 进入搜索，Esc 清空并返回图像区，或点击“定位当前”。
+再次启动时文件会转发至同一用户会话的现有窗口并激活。单文件扫描所在目录；多个文件按参数顺序建立浏览列表，显示第一张，不预先解码全部图片。单文件重新打开可恢复目录模式。缩略图保持原始浏览顺序，点击缩略图或按左右键切图；序号从 1 开始。
 
 ## 环境与依赖
 
@@ -46,7 +46,7 @@
 | CI 配置 | Windows 2022 runner、VS2022、Qt 5.15.2 MSVC2019 x64、OpenCV 4.5.5 源码构建 |
 | CMake | 3.20 或更新版本 |
 
-Qt 需要 Core、Gui、Widgets、Concurrent、Svg、LinguistTools 及图片格式插件；OpenCV 需要共享 `opencv_world` 库。**不需要 Qt VS Tools 插件。** Qt/OpenCV 旧版本用于兼容已有环境，公开发布前应评估升级，见 [安全说明](SECURITY.md)。
+Qt 需要 Core、Gui、Widgets、Concurrent、Network、Svg、LinguistTools 及图片格式插件；OpenCV 需要共享 `opencv_world` 库。**不需要 Qt VS Tools 插件。** Qt/OpenCV 旧版本用于兼容已有环境，公开发布前应评估升级，见 [安全说明](SECURITY.md)。
 
 ### 配置依赖
 
@@ -106,7 +106,7 @@ CMake 会读取 `OPENCV_DIR` 环境变量。使用独立 OpenCV CMake 安装/构
 | 显示/隐藏预处理 | Ctrl+P |
 | 显示/隐藏分析面板 | Ctrl+I |
 | 选择 / 清除 ROI | 显示分析后 Shift+左键拖动 / Esc |
-| 显隐缩略图 / 搜索名称 | Ctrl+T / Ctrl+F |
+| 显示/隐藏缩略图 | Ctrl+T |
 | 原图/处理图分割对比 | Ctrl+D |
 | 另存当前结果 | Ctrl+Shift+S |
 
@@ -128,14 +128,14 @@ docs/             开发记录、截图和发布说明
 
 ## 验证与已知限制
 
-回归程序返回非零即失败，当前 49 项检查覆盖解码、导航失败恢复、拖放事件、处理状态、ROI、RGB 直方图、缓存失效、异步请求、坐标取样、两侧箭头、方向键焦点隔离、关于信息、灰度色相及圆角状态。本轮按集中回复执行 7 项改进，见 [反馈执行与验收](docs/260908反馈执行与验收.md)。UI 自动回归使用 offscreen；实际桌面高 DPI、拖放和多显示器仍需人工验收。
+回归程序返回非零即失败，当前 50 项检查覆盖解码、导航失败恢复、拖放事件、处理状态、ROI、RGB 直方图、缓存失效、异步请求、坐标取样、两侧箭头、方向键焦点隔离、关于信息、灰度色相及圆角状态。本轮按集中回复执行 7 项改进，见 [反馈执行与验收](docs/260908反馈执行与验收.md)。UI 自动回归使用 offscreen；实际桌面高 DPI、拖放和多显示器仍需人工验收。
 
 - GIF、动画 WebP、多页 TIFF 当前只显示解码器返回的首帧/页。
 - 尚未提供 10/12/16 位原始精度取样、窗宽窗位或编码器级瓦片解码。
 - 大图解码峰值内存取决于原始图像；金字塔仅优化解码后的显示。
 - 文件转发仅在同一用户会话内进行；目标窗口无响应时显示超时提示。首次升级到支持转发的版本需退出旧版窗口。
 - 损坏图片会在状态栏提示并保留原图/索引，不自动跳过。
-- 没有安装程序、代码签名或自动更新；目前仅准备 Windows x64 便携包。
+- 没有安装程序、代码签名或自动更新；提供 Windows x64 便携 ZIP 包。
 
 ## 作者
 

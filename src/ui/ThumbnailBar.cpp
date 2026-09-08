@@ -15,16 +15,17 @@
 #include <QStyledItemDelegate>
 #include <QStyleOptionViewItem>
 #include <QTimer>
+#include <QWheelEvent>
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
 #include <mutex>
 
 namespace {
-constexpr int kThumbnailWidth = 112;
-constexpr int kThumbnailHeight = 76;
-constexpr int kItemWidth = 174;
-constexpr int kItemHeight = 124;
+constexpr int kThumbnailWidth = 80;
+constexpr int kThumbnailHeight = 54;
+constexpr int kItemWidth = 142;
+constexpr int kItemHeight = 102;
 constexpr int kCacheLimit = 256;
 constexpr int kPrefetchItems = 4;
 constexpr int kLoadBatchSize = 6;
@@ -73,6 +74,17 @@ public:
             painter->drawPixmap(pixmapTopLeft, pixmap);
         }
 
+        const QString position = index.data(Qt::UserRole).toString();
+        const int nBadgeWidth = QFontMetrics(option.font).horizontalAdvance(position) + 8;
+        const QRect badge(imageRect.left(), imageRect.top(), nBadgeWidth,
+            QFontMetrics(option.font).height() + 2);
+        painter->setFont(option.font);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(bSelected ? QColor(23, 107, 152, 235) : QColor(20, 23, 28, 215));
+        painter->drawRoundedRect(badge, 3, 3);
+        painter->setPen(Qt::white);
+        painter->drawText(badge, Qt::AlignCenter, position);
+
         QFont textFont = option.font;
         painter->setFont(textFont);
         painter->setPen(bSelected ? QColor(255, 255, 255) : QColor(205, 211, 218));
@@ -101,9 +113,10 @@ ThumbnailBar::ThumbnailBar(QWidget* parent)
     setMouseTracking(true);
     setIconSize(QSize(kThumbnailWidth, kThumbnailHeight));
     setGridSize(QSize(kItemWidth, kItemHeight));
-    setFixedHeight(148);
+    setFixedHeight(kItemHeight + 8);
     setItemDelegate(new ThumbnailItemDelegate(this));
     setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setSpacing(4);
 
@@ -145,9 +158,9 @@ void ThumbnailBar::setFiles(const QStringList& files, int nCurrentIndex)
     for (const QString& path : files_) {
         auto* item = new QListWidgetItem(QFileInfo(path).fileName());
         item->setToolTip(path);
+        item->setData(Qt::UserRole, tr("%1/%2").arg(count() + 1).arg(files_.size()));
         addItem(item);
     }
-    setNameFilter(filter_);
     setCurrentFileIndex(nCurrentIndex);
     scheduleVisibleThumbnails();
 }
@@ -163,30 +176,14 @@ void ThumbnailBar::setCurrentFileIndex(int nIndex)
     scheduleVisibleThumbnails();
 }
 
-void ThumbnailBar::setNameFilter(const QString& text)
+void ThumbnailBar::wheelEvent(QWheelEvent* event)
 {
-    filter_ = text;
-    visibleRows_.clear();
-    for (int nIndex = 0; nIndex < count(); ++nIndex) {
-        const bool bMatch = item(nIndex)->text().contains(text, Qt::CaseInsensitive);
-        item(nIndex)->setHidden(!bMatch);
-        if (bMatch) { visibleRows_.push_back(nIndex); }
-    }
-    emit visibleFilesChanged(visibleRows_.size());
-    horizontalScrollBar()->setValue(0);
-    scheduleVisibleThumbnails();
-}
-
-void ThumbnailBar::setSizeLevel(int nLevel)
-{
-    const QSize sizes[] = { QSize(80, 54), QSize(112, 76), QSize(160, 110) };
-    const QSize size = sizes[std::clamp(nLevel, 0, 2)];
-    if (iconSize() == size) { return; }
-    setIconSize(size);
-    setGridSize(QSize(size.width() + 62, size.height() + 48));
-    setFixedHeight(gridSize().height() + 24);
-    const QStringList files = files_;
-    setFiles(files, currentRow());
+    const QPoint pixels = event->pixelDelta();
+    const QPoint angles = event->angleDelta();
+    const int nDelta = !pixels.isNull() ? (pixels.x() != 0 ? pixels.x() : pixels.y())
+        : (angles.x() != 0 ? angles.x() : angles.y());
+    horizontalScrollBar()->setValue(horizontalScrollBar()->value() - nDelta);
+    event->accept();
 }
 
 void ThumbnailBar::showEvent(QShowEvent* event)
@@ -209,7 +206,7 @@ void ThumbnailBar::scheduleVisibleThumbnails()
 
 void ThumbnailBar::startPendingLoad()
 {
-    if (!isVisible() || !bReloadPending_ || visibleRows_.isEmpty()) {
+    if (!isVisible() || !bReloadPending_ || files_.isEmpty()) {
         return;
     }
     if (watcher_->isRunning()) {
@@ -220,21 +217,21 @@ void ThumbnailBar::startPendingLoad()
     const int nVisibleFirst = std::max(0,
         horizontalScrollBar()->value() / std::max(1, gridSize().width()));
     const int nVisibleCount = viewport()->width() / std::max(1, gridSize().width()) + 2;
-    const int nVisibleLast = std::min(visibleRows_.size() - 1, nVisibleFirst + nVisibleCount);
+    const int nVisibleLast = std::min(files_.size() - 1, nVisibleFirst + nVisibleCount);
     const int nFirstLoad = std::max(0, nVisibleFirst - kPrefetchItems);
-    const int nLastLoad = std::min(visibleRows_.size() - 1, nVisibleLast + kPrefetchItems);
+    const int nLastLoad = std::min(files_.size() - 1, nVisibleLast + kPrefetchItems);
 
     QVector<int> candidateIndices;
     candidateIndices.reserve(std::max(0, nLastLoad - nFirstLoad + 1));
     const auto appendCandidate = [this, &candidateIndices, nFirstLoad, nLastLoad](int nIndex) {
-        if (nIndex >= nFirstLoad && nIndex <= nLastLoad && nIndex < visibleRows_.size()) {
-            const int nRow = visibleRows_.at(nIndex);
+        if (nIndex >= nFirstLoad && nIndex <= nLastLoad && nIndex < files_.size()) {
+            const int nRow = nIndex;
             if (!iconCache_.contains(nRow) && !candidateIndices.contains(nRow)) {
                 candidateIndices.push_back(nRow);
             }
         }
     };
-    appendCandidate(visibleRows_.indexOf(currentRow()));
+    appendCandidate(currentRow());
     for (int nIndex = nVisibleFirst; nIndex <= nVisibleLast; ++nIndex) {
         appendCandidate(nIndex);
     }

@@ -35,8 +35,6 @@
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
-#include <QLineEdit>
-#include <QComboBox>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -142,49 +140,6 @@ void MainWindow::setupUi()
     auto* thumbnailLayout = new QVBoxLayout(thumbnailContainer_);
     thumbnailLayout->setContentsMargins(0, 0, 0, 0);
     thumbnailLayout->setSpacing(0);
-    auto* tools = new QHBoxLayout;
-    tools->setContentsMargins(10, 4, 10, 4);
-    thumbnailSearch_ = new QLineEdit(thumbnailContainer_);
-    thumbnailSearch_->setObjectName(QString("ThumbnailSearch"));
-    thumbnailSearch_->setPlaceholderText(tr("搜索文件名（Ctrl+F）"));
-    thumbnailSearch_->setClearButtonEnabled(true);
-    auto* count = new QLabel(thumbnailContainer_);
-    count->setObjectName(QString("ThumbnailMatches"));
-    connect(thumbnailSearch_, &QLineEdit::textChanged, thumbnailBar_, &ui::ThumbnailBar::setNameFilter);
-    connect(thumbnailBar_, &ui::ThumbnailBar::visibleFilesChanged, this, [this, count](int nCount) {
-        count->setText(thumbnailSearch_->text().isEmpty() ? QString() : tr("%1 项").arg(nCount));
-    });
-    auto* leaveSearch = new QAction(thumbnailSearch_);
-    leaveSearch->setShortcut(QKeySequence(Qt::Key_Escape));
-    leaveSearch->setShortcutContext(Qt::WidgetShortcut);
-    thumbnailSearch_->addAction(leaveSearch);
-    connect(leaveSearch, &QAction::triggered, this, [this]() {
-        thumbnailSearch_->clear();
-        view_->setFocus();
-    });
-    auto* locate = new QToolButton(thumbnailContainer_);
-    locate->setObjectName(QString("LocateThumbnail"));
-    locate->setText(tr("定位当前"));
-    connect(locate, &QToolButton::clicked, this, [this]() {
-        thumbnailSearch_->clear();
-        thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
-        view_->setFocus();
-    });
-    auto* sizes = new QComboBox(thumbnailContainer_);
-    sizes->setObjectName(QString("ThumbnailSize"));
-    sizes->addItems({ tr("小缩略图"), tr("中缩略图"), tr("大缩略图") });
-    const int nSizeLevel = std::clamp(QSettings().value(QString("ui/thumbnailSize"), 1).toInt(), 0, 2);
-    sizes->setCurrentIndex(nSizeLevel);
-    thumbnailBar_->setSizeLevel(nSizeLevel);
-    connect(sizes, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int nLevel) {
-        thumbnailBar_->setSizeLevel(nLevel);
-        QSettings().setValue(QString("ui/thumbnailSize"), nLevel);
-    });
-    tools->addWidget(thumbnailSearch_, 1);
-    tools->addWidget(count);
-    tools->addWidget(locate);
-    tools->addWidget(sizes);
-    thumbnailLayout->addLayout(tools);
     thumbnailLayout->addWidget(thumbnailBar_);
     centralLayout->addWidget(thumbnailContainer_);
     setCentralWidget(central);
@@ -415,19 +370,11 @@ void MainWindow::setupActions()
     connect(actToggleThumbnails_, &QAction::toggled, this, [this](bool bVisible) {
         thumbnailContainer_->setVisible(bVisible);
         QSettings().setValue(QString("ui/thumbnailsVisible"), bVisible);
-        if (!bVisible) { view_->setFocus(); }
+        view_->setFocus();
     });
     const bool bThumbnails = QSettings().value(QString("ui/thumbnailsVisible"), true).toBool();
     actToggleThumbnails_->setChecked(bThumbnails);
     thumbnailContainer_->setVisible(bThumbnails);
-    actFindThumbnail_ = new QAction(tr("搜索缩略图"), this);
-    actFindThumbnail_->setShortcut(QKeySequence::Find);
-    connect(actFindThumbnail_, &QAction::triggered, this, [this]() {
-        actToggleThumbnails_->setChecked(true);
-        thumbnailSearch_->setFocus();
-        thumbnailSearch_->selectAll();
-    });
-
     actCompare_ = new QAction(tr("原图 / 处理图对比"), this);
     actCompare_->setCheckable(true);
     actCompare_->setEnabled(false);
@@ -471,7 +418,6 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addAction(actCompare_);
     viewMenu->addSeparator();
     viewMenu->addAction(actToggleThumbnails_);
-    viewMenu->addAction(actFindThumbnail_);
     auto* languageMenu = appMenuBar->addMenu(tr("语言(&L)"));
     QAction* chineseAction = languageMenu->addAction(tr("简体中文"));
     QAction* englishAction = languageMenu->addAction(QString("English"));
@@ -664,7 +610,6 @@ void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
     QSettings().setValue(QString("files/lastDirectory"), QFileInfo(path).absolutePath());
 
     if (oldFiles != directoryModel_->files()) {
-        thumbnailSearch_->clear();
         thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
     } else {
         thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());

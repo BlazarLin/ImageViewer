@@ -810,26 +810,38 @@ void testFeedbackWorkflow(const QString& outputRoot)
         QString("TEST-44"), QString("像素和统计组可独立折叠，重新创建面板保留展开状态"));
 
     auto* thumbnails = window.findChild<ui::ThumbnailBar*>();
-    auto* search = window.findChild<QLineEdit*>(QString("ThumbnailSearch"));
-    search->setText(QString("原图 1"));
-    bool bThumbs = thumbnails->visibleFileCount() == 1 && thumbnails->item(1)->isHidden();
-    bThumbs = waitUntil([&]() { return !thumbnails->item(0)->icon().isNull(); }) && bThumbs;
-    search->setText(QString("不存在"));
-    bThumbs = bThumbs && thumbnails->visibleFileCount() == 0;
-    window.findChild<QToolButton*>(QString("LocateThumbnail"))->click();
-    bThumbs = bThumbs && search->text().isEmpty() && thumbnails->currentRow() == 1;
-    auto* sizes = window.findChild<QComboBox*>(QString("ThumbnailSize"));
-    sizes->setCurrentIndex(2);
-    bThumbs = bThumbs && thumbnails->iconSize() == QSize(160, 110);
+    bool bThumbs = thumbnails->iconSize() == QSize(80, 54)
+        && thumbnails->horizontalScrollBarPolicy() == Qt::ScrollBarAlwaysOff
+        && !window.findChild<QLineEdit*>(QString("ThumbnailSearch"))
+        && !window.findChild<QComboBox*>(QString("ThumbnailSize"))
+        && thumbnails->item(0)->data(Qt::UserRole).toString() == QString("1/2")
+        && thumbnails->item(1)->data(Qt::UserRole).toString() == QString("2/2");
     window.findChild<QAction*>(QString("ToggleThumbnails"))->setChecked(false);
     QKeyEvent previous(QEvent::KeyPress, Qt::Key_Left, Qt::NoModifier);
     QCoreApplication::sendEvent(view, &previous);
     bThumbs = waitUntil([&]() { return view->image() == first; }) && bThumbs;
     verify(bThumbs && !thumbnails->isVisible(), QString("TEST-45"),
-        QString("缩略图搜索含中文空格、无匹配、定位当前与大小切换正确，隐藏时方向键仍可翻图"));
+        QString("缩略图固定小尺寸、无搜索和大小选择、无滚动条，每张显示序号/总数，隐藏仍可翻图"));
+    ui::ThumbnailBar strip;
+    strip.resize(320, strip.height());
+    strip.show();
+    QStringList many;
+    for (int nIndex = 0; nIndex < 30; ++nIndex) { many.append(firstPath); }
+    strip.setFiles(many, 29);
+    QCoreApplication::processEvents();
+    strip.setCurrentFileIndex(29);
+    bool bScroll = strip.viewport()->rect().intersects(strip.visualItemRect(strip.item(29)));
+    strip.horizontalScrollBar()->setValue(0);
+    QWheelEvent wheel(QPointF(100, 40), strip.mapToGlobal(QPoint(100, 40)), QPoint(), QPoint(0, -120),
+        Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(strip.viewport(), &wheel);
+    verify(bScroll && strip.horizontalScrollBar()->value() > 0
+            && !strip.horizontalScrollBar()->isVisible()
+            && strip.item(29)->data(Qt::UserRole).toString() == QString("30/30"),
+        QString("TEST-50"), QString("隐藏缩略图滚动条后，滚轮仍横向浏览，末项自动定位且序号准确"));
+    strip.close();
     // 留下可复用的合成图界面证据，不包含用户图像。
     window.findChild<QAction*>(QString("ToggleThumbnails"))->setChecked(true);
-    sizes->setCurrentIndex(0);
     analysisDock->show();
     panel->findChild<QPushButton*>(QString("AnalyzeFullImage"))->click();
     waitUntil(bHasStatistics);

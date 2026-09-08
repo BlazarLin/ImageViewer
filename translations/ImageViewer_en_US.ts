@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
@@ -368,27 +368,27 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
     <message>
         <source>搜索文件名（Ctrl+F）</source>
-        <translation>Search file names (Ctrl+F)</translation>
+        <translation type="vanished">Search file names (Ctrl+F)</translation>
     </message>
     <message>
         <source>%1 项</source>
-        <translation>%1 matches</translation>
+        <translation type="vanished">%1 matches</translation>
     </message>
     <message>
         <source>定位当前</source>
-        <translation>Locate current</translation>
+        <translation type="vanished">Locate current</translation>
     </message>
     <message>
         <source>小缩略图</source>
-        <translation>Small thumbnails</translation>
+        <translation type="vanished">Small thumbnails</translation>
     </message>
     <message>
         <source>中缩略图</source>
-        <translation>Medium thumbnails</translation>
+        <translation type="vanished">Medium thumbnails</translation>
     </message>
     <message>
         <source>大缩略图</source>
-        <translation>Large thumbnails</translation>
+        <translation type="vanished">Large thumbnails</translation>
     </message>
     <message>
         <source>原图</source>
@@ -408,7 +408,7 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
     <message>
         <source>搜索缩略图</source>
-        <translation>Search thumbnails</translation>
+        <translation type="vanished">Search thumbnails</translation>
     </message>
 </context>
 <context>
@@ -762,6 +762,13 @@ Hover shows raw counts; smoothing affects curves only</translation>
     <message>
         <source>复原全部参数</source>
         <translation>Reset all parameters</translation>
+    </message>
+</context>
+<context>
+    <name>ui::ThumbnailBar</name>
+    <message>
+        <source>%1/%2</source>
+        <translation>%1/%2</translation>
     </message>
 </context>
 <context>

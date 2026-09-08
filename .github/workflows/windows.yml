@@ -62,7 +62,17 @@ jobs:
               throw '标签与 AppVersion.h 版本不一致。'
             }
           }
-          ./scripts/package-release.ps1 -BinaryDir build/Release -QtDir $env:QT_ROOT_DIR -DependencySourceDir _deps/opencv
+          $sources = @{
+            qtbase = '40143c189b7c1bf3c2058b77d00ea5c4e3be8b28'
+            qtimageformats = '74a5bc4a45195b876454e596e76cb23aeb365410'
+            qtsvg = '52d3788c7b0116ea3db232dccca5f1e3f1e229ac'
+          }
+          foreach ($module in $sources.Keys) {
+            $sha = $sources[$module]
+            Invoke-WebRequest "https://github.com/qt/$module/archive/$sha.zip" -OutFile "_deps/$module-source.zip"
+            Expand-Archive "_deps/$module-source.zip" -DestinationPath _deps/qt-sources
+          }
+          ./scripts/package-release.ps1 -BinaryDir build/Release -QtDir $env:QT_ROOT_DIR -DependencySourceDir @('_deps/opencv', '_deps/qt-sources')
       - name: 上传待验收产物
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

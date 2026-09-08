@@ -1,7 +1,7 @@
 ﻿param(
     [string]$BinaryDir = "bin/Release",
     [string]$QtDir = $env:QTDIR,
-    [string]$DependencySourceDir = "",
+    [string[]]$DependencySourceDir = @(),
     [string]$VCRedistDir = ""
 )
 
@@ -59,12 +59,12 @@ foreach ($file in @("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG
 }
 Copy-Item -LiteralPath (Join-Path $root "licenses") -Destination $package -Recurse
 Copy-Item -LiteralPath (Join-Path $root "docs") -Destination $package -Recurse
-if ($DependencySourceDir) {
-    $sourceRoot = (Resolve-Path -LiteralPath $DependencySourceDir).Path
+foreach ($sourceDirectory in $DependencySourceDir) {
+    $sourceRoot = (Resolve-Path -LiteralPath $sourceDirectory).Path
     foreach ($file in Get-ChildItem -LiteralPath $sourceRoot -Recurse -File |
         Where-Object { $_.Name -match '^(LICENSE|COPYING|NOTICE)|^qt_attribution\.json$' }) {
         $relative = $file.FullName.Substring($sourceRoot.Length).TrimStart('\', '/')
-        $target = Join-Path (Join-Path $package "licenses/dependency-sources") $relative
+        $target = Join-Path (Join-Path $package ("licenses/dependency-sources/" + (Split-Path -Leaf $sourceRoot))) $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
         Copy-Item -LiteralPath $file.FullName -Destination $target
     }
