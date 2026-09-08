@@ -182,6 +182,13 @@
     </ClCompile>
   </ItemGroup>
 
+  <ItemGroup>
+    <ResourceCompile Include="..\resources\ImageViewer.rc">
+      <AdditionalIncludeDirectories>$(ProjectDir)..\resources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <None Include="..\resources\ImageViewer.ico" />
+  </ItemGroup>
+
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 
   <Target Name="QtTranslations" BeforeTargets="PrepareForBuild">

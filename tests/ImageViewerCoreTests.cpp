@@ -15,6 +15,9 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStatusBar>
+#include <QScrollBar>
+#include <QToolBar>
+#include <QToolButton>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QUrl>
@@ -456,6 +459,62 @@ void testWindowWorkflow(const QString& outputRoot)
         QString("TEST-21"), QString("重新创建窗口恢复尺寸并记住最近打开目录"));
 }
 
+void testOverlayNavigation(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("arrows-XXXXXX")));
+    QImage first(1200, 900, QImage::Format_RGB32);
+    first.fill(Qt::red);
+    QImage second(first.size(), first.format());
+    second.fill(Qt::blue);
+    const QString firstPath = directory.filePath(QString("图1.png"));
+    const QString secondPath = directory.filePath(QString("图2.png"));
+    first.save(firstPath);
+    second.save(secondPath);
+    MainWindow window;
+    window.show();
+    auto* view = window.findChild<ui::ImageView*>();
+    auto* previous = view->findChild<QToolButton*>(QString("PreviousImageButton"));
+    auto* next = view->findChild<QToolButton*>(QString("NextImageButton"));
+    const bool bEmptyHidden = previous && next && !previous->isVisible() && !next->isVisible();
+    window.openFile(firstPath);
+    const bool bFirst = waitUntil([&]() { return view->image() == first; });
+    bool bNavigation = bEmptyHidden && bFirst && previous->isVisible() && next->isVisible()
+        && !previous->isEnabled() && next->isEnabled()
+        && previous->toolButtonStyle() == Qt::ToolButtonIconOnly && !previous->icon().isNull();
+    next->click();
+    bNavigation = waitUntil([&]() { return view->image() == second; }) && bNavigation
+        && previous->isEnabled() && !next->isEnabled();
+    previous->click();
+    bNavigation = waitUntil([&]() { return view->image() == first; }) && bNavigation;
+    for (QToolBar* toolbar : window.findChildren<QToolBar*>()) {
+        bNavigation = bNavigation && !toolbar->actions().contains(previous->defaultAction())
+            && !toolbar->actions().contains(next->defaultAction());
+    }
+    verify(bNavigation, QString("TEST-28"),
+        QString("两侧图标点击可往返翻图、首尾禁用、空图隐藏，工具栏不再显示翻图文字按钮"));
+
+    const auto anchored = [&]() {
+        return previous->parentWidget() == view->viewport()
+            && previous->x() == 12
+            && next->x() == view->viewport()->width() - next->width() - 12
+            && previous->y() == (view->viewport()->height() - previous->height()) / 2
+            && next->y() == previous->y();
+    };
+    window.resize(1200, 800);
+    view->actualSize();
+    QCoreApplication::processEvents();
+    bool bAnchored = anchored();
+    view->horizontalScrollBar()->setValue(view->horizontalScrollBar()->maximum());
+    view->verticalScrollBar()->setValue(view->verticalScrollBar()->maximum());
+    QCoreApplication::processEvents();
+    bAnchored = bAnchored && anchored();
+    window.resize(1000, 700);
+    QCoreApplication::processEvents();
+    verify(bAnchored && anchored(), QString("TEST-29"),
+        QString("图像原尺寸滚动和窗口缩放后，翻图箭头始终固定在图像视口左右两侧居中"));
+    window.close();
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -494,6 +553,7 @@ int main(int argc, char* argv[])
     testViewInteractions();
     testWindowWorkflow(outputRoot);
     testExifThumbnail(outputRoot);
+    testOverlayNavigation(outputRoot);
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

@@ -5,6 +5,8 @@
 #include <QImage>
 #include <vector>
 
+class QAction;
+class QToolButton;
 class QGraphicsPixmapItem;
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -35,6 +37,7 @@ public:
     // 当前图像引用。
     const QImage& image() const { return current_; }
 
+    void setNavigationActions(QAction* previous, QAction* next);
     double zoomFactor() const;
     QRect selectedRegion() const { return selectedRegion_; }
 
@@ -54,6 +57,7 @@ signals:
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
+    void scrollContentsBy(int nDx, int nDy) override;
     void resizeEvent(QResizeEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
@@ -77,6 +81,7 @@ private:
     };
 
     void setupScene();
+    void updateNavigationButtons();
     void rebuildPixmapItems();
     void updateHoverPixel(const QPoint& viewportPosition);
     void applyViewMode();
@@ -87,6 +92,8 @@ private:
     void onPyramidFinished();
     void applyPyramidLevel();
 
+    QToolButton* previousButton_ = nullptr;
+    QToolButton* nextButton_ = nullptr;
     QGraphicsScene* scene_ = nullptr;
     QGraphicsPixmapItem* pixmapItem_ = nullptr;
     QGraphicsPixmapItem* comparisonItem_ = nullptr;

@@ -134,7 +134,7 @@ void MainWindow::setupUi()
     const auto installDockTitleBar = [this](QDockWidget* dock, const QString& title) {
         auto* titleBar = new QWidget(dock);
         titleBar->setObjectName(QString("DockTitleBar"));
-        titleBar->setFixedHeight(38);
+        titleBar->setFixedHeight(44);
         auto* layout = new QHBoxLayout(titleBar);
         layout->setContentsMargins(12, 0, 4, 0);
         layout->setSpacing(6);
@@ -175,9 +175,9 @@ void MainWindow::setupUi()
 
     setStyleSheet(QString(
         "QMainWindow { background:#2d3035; color:#e5e9ef; }"
-        "QWidget { font-family:'Microsoft YaHei UI'; font-size:13px; }"
+        "QWidget { font-family:'Microsoft YaHei UI'; font-size:16px; }"
         "QWidget#CustomTitleBar { background:#1d1f22; border-bottom:1px solid #30343a; }"
-        "QLabel#TitleInfo { color:#dce1e7; font-size:12px; }"
+        "QLabel#TitleInfo { color:#dce1e7; font-size:15px; }"
         "QLabel#AppIcon { background:#1479ad; color:white; border-radius:5px; font-weight:600; }"
         "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:18px; }"
         "QWidget#CustomTitleBar QToolButton:hover { background:#33373d; }"
@@ -192,13 +192,13 @@ void MainWindow::setupUi()
         "QMenu::item:disabled { color:#747a83; }"
         "QMenu::separator { height:1px; background:#41464d; margin:5px 8px; }"
         "QToolBar { background:#222428; border:0; border-bottom:1px solid #34383e; spacing:3px; padding:6px 8px; }"
-        "QToolBar QToolButton { color:#dfe3e8; background:transparent; border:1px solid transparent; border-radius:5px; min-height:28px; padding:3px 10px; }"
+        "QToolBar QToolButton { color:#dfe3e8; background:transparent; border:1px solid transparent; border-radius:5px; min-height:34px; padding:5px 12px; }"
         "QToolBar QToolButton:hover { background:#343941; border-color:#454b54; color:white; }"
         "QToolBar QToolButton:pressed { background:#1c5e82; }"
         "QToolBar QToolButton:checked { background:#176b98; border-color:#268bc0; color:white; }"
         "QToolBar QToolButton:disabled { color:#666c74; background:transparent; }"
         "QToolBar::separator { width:1px; background:#434850; margin:5px 6px; }"
-        "QStatusBar { background:#222428; color:#b9c0c8; border:0; min-height:28px; }"
+        "QStatusBar { background:#222428; color:#b9c0c8; border:0; min-height:34px; }"
         "QStatusBar::item { border:0; background:transparent; }"
         "QStatusBar QLabel { color:#b9c0c8; padding:0 8px; border:0; background:transparent; }"
         "QStatusBar QLabel#StatusPixel { color:#d5e3ed; }"
@@ -210,7 +210,7 @@ void MainWindow::setupUi()
         "QLabel#DockTitleLabel { color:#e5e9ef; font-weight:600; }"
         "QToolButton#DockCloseButton { color:#c9cfd6; background:transparent; border:0; border-radius:4px; font-size:18px; }"
         "QToolButton#DockCloseButton:hover { color:white; background:#c42b1c; }"
-        "QWidget#PreprocessPanel,QWidget#AnalysisPanel { background:#25282d; color:#e1e5ea; }"
+        "QWidget#PreprocessPanel,QWidget#AnalysisPanel,QWidget#AnalysisContent { background:#25282d; color:#e1e5ea; }"
         "QFrame#ProcessingSwitchCard { background:#2b3b46; border:1px solid #31586f; border-radius:7px; }"
         "QCheckBox#ProcessingSwitch { color:#edf4f8; font-weight:600; spacing:9px; }"
         "QWidget#PreprocessParameters { background:transparent; }"
@@ -313,6 +313,7 @@ void MainWindow::setupActions()
     actNext_->setShortcut(QKeySequence(Qt::Key_Right));
     connect(actNext_, &QAction::triggered, this, &MainWindow::onNext);
     addAction(actNext_);
+    view_->setNavigationActions(actPrevious_, actNext_);
 
     actFit_ = new QAction(tr("适应窗口"), this);
     actFit_->setShortcut(QKeySequence(QString("Ctrl+0")));
@@ -389,9 +390,6 @@ void MainWindow::setupMenusAndToolbar()
     toolbar->addAction(actOpen_);
     toolbar->addAction(actSaveResult_);
     toolbar->addSeparator();
-    toolbar->addAction(actPrevious_);
-    toolbar->addAction(actNext_);
-    toolbar->addSeparator();
     toolbar->addAction(actFit_);
     toolbar->addAction(actActualSize_);
     toolbar->addSeparator();
@@ -408,6 +406,7 @@ void MainWindow::setupStatusBar()
     statusFile_->setMinimumWidth(0);
     statusPixel_ = new QLabel(this);
     statusPixel_->setObjectName(QString("StatusPixel"));
+    statusPixel_->ensurePolished();
     statusPixel_->setMinimumWidth(statusPixel_->fontMetrics().horizontalAdvance(
         QString("X: 00000  Y: 00000   RGBA: 255, 255, 255, 255")) + 16);
     statusPixel_->setToolTip(tr("图像坐标从 0 开始；显示光标所在图像的 RGBA 值（0–255）"));

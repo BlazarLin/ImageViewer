@@ -78,4 +78,8 @@
   <ItemGroup>
     <None Include="..\translations\ImageViewer_en_US.ts" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\resources\ImageViewer.rc" />
+    <None Include="..\resources\ImageViewer.ico" />
+  </ItemGroup>
 </Project>

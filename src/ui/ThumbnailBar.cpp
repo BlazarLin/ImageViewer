@@ -23,8 +23,8 @@
 namespace {
 constexpr int kThumbnailWidth = 112;
 constexpr int kThumbnailHeight = 76;
-constexpr int kItemWidth = 142;
-constexpr int kItemHeight = 112;
+constexpr int kItemWidth = 154;
+constexpr int kItemHeight = 124;
 constexpr int kCacheLimit = 256;
 constexpr int kPrefetchItems = 4;
 constexpr int kLoadBatchSize = 6;
@@ -50,7 +50,7 @@ public:
         const QRect imageRect(cardRect.left() + 7, cardRect.top() + 5,
             cardRect.width() - 14, kThumbnailHeight + 4);
         const QRect textRect(cardRect.left() + 7, imageRect.bottom() + 4,
-            cardRect.width() - 14, 20);
+            cardRect.width() - 14, 28);
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, true);
@@ -74,7 +74,6 @@ public:
         }
 
         QFont textFont = option.font;
-        textFont.setPointSize(9);
         painter->setFont(textFont);
         painter->setPen(bSelected ? QColor(255, 255, 255) : QColor(205, 211, 218));
         const QString fileName = index.data(Qt::DisplayRole).toString();
@@ -102,7 +101,7 @@ ThumbnailBar::ThumbnailBar(QWidget* parent)
     setMouseTracking(true);
     setIconSize(QSize(kThumbnailWidth, kThumbnailHeight));
     setGridSize(QSize(kItemWidth, kItemHeight));
-    setFixedHeight(132);
+    setFixedHeight(148);
     setItemDelegate(new ThumbnailItemDelegate(this));
     setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);

@@ -112,6 +112,21 @@ add_executable(ImageViewer WIN32
     ${APP_UI}
 )
 
+if(WIN32)
+    target_sources(ImageViewer PRIVATE resources/ImageViewer.rc)
+    target_include_directories(ImageViewer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+endif()
+
+# 仅在应用图标设计改变时显式构建并运行，常规构建使用已提交的 ICO。
+add_executable(ImageViewerIconGenerator EXCLUDE_FROM_ALL scripts/ExportAppIcon.cpp)
+set_target_properties(ImageViewerIconGenerator PROPERTIES WIN32_EXECUTABLE FALSE)
+target_include_directories(ImageViewerIconGenerator PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(ImageViewerIconGenerator PRIVATE Qt5::Core Qt5::Gui)
+add_custom_command(TARGET ImageViewerIconGenerator POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
+        "$<TARGET_FILE_DIR:ImageViewerIconGenerator>")
+
 qt5_add_translation(APP_TRANSLATIONS
     translations/ImageViewer_en_US.ts
 )
@@ -198,7 +213,7 @@ endif()
 get_target_property(QT_QMAKE_EXECUTABLE Qt5::qmake IMPORTED_LOCATION)
 execute_process(COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
     OUTPUT_VARIABLE QT_PLUGINS_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-foreach(runtime_target ImageViewer ImageViewerCoreTests)
+foreach(runtime_target ImageViewer ImageViewerCoreTests ImageViewerIconGenerator)
     if(TARGET ${runtime_target})
         add_custom_command(TARGET ${runtime_target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_PLUGINS_DIR}/platforms"

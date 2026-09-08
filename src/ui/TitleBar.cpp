@@ -17,7 +17,7 @@ TitleBar::TitleBar(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName(QString("CustomTitleBar"));
-    setFixedHeight(42);
+    setFixedHeight(48);
 
     iconLabel_ = new QLabel(this);
     iconLabel_->setAlignment(Qt::AlignCenter);
@@ -37,7 +37,7 @@ TitleBar::TitleBar(QWidget* parent)
     const QList<QToolButton*> buttons = { minimizeButton_, maximizeButton_, closeButton_ };
     for (QToolButton* button : buttons) {
         button->setAutoRaise(true);
-        button->setFixedSize(46, 42);
+        button->setFixedSize(50, 48);
         button->setIconSize(QSize(15, 15));
         button->setFocusPolicy(Qt::NoFocus);
     }

@@ -4,6 +4,8 @@
 
 #include <QDragEnterEvent>
 #include <QCursor>
+#include <QAction>
+#include <QToolButton>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFileInfo>
@@ -13,6 +15,7 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QResizeEvent>
 #include <QScrollBar>
@@ -71,6 +74,23 @@ ImageView::ImageView(QWidget* parent)
     , pyramidWatcher_(new QFutureWatcher<std::vector<QImage>>(this))
 {
     setupScene();
+    previousButton_ = new QToolButton(viewport());
+    nextButton_ = new QToolButton(viewport());
+    previousButton_->setObjectName(QString("PreviousImageButton"));
+    nextButton_->setObjectName(QString("NextImageButton"));
+    for (QToolButton* button : { previousButton_, nextButton_ }) {
+        button->setFixedSize(48, 64);
+        button->setIconSize(QSize(28, 28));
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setFocusPolicy(Qt::NoFocus);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setStyleSheet(QString(
+            "QToolButton { background:rgba(25,29,35,190); border:1px solid #56616c; border-radius:12px; }"
+            "QToolButton:hover { background:#176b98; border-color:#45afe2; }"
+            "QToolButton:pressed { background:#125374; }"
+            "QToolButton:disabled { background:rgba(25,29,35,85); border-color:#34383e; }"));
+        button->hide();
+    }
     setRenderHint(QPainter::Antialiasing, true);
     setRenderHint(QPainter::SmoothPixmapTransform, true);
     setDragMode(QGraphicsView::ScrollHandDrag);
@@ -97,6 +117,63 @@ ImageView::~ImageView()
     pyramidWatcher_->waitForFinished();
 }
 
+void ImageView::setNavigationActions(QAction* previous, QAction* next)
+{
+    const auto arrowIcon = [](bool bLeft) {
+        QIcon icon;
+        for (int nSize : { 28, 56 }) {
+            for (bool bDisabled : { false, true }) {
+                QPixmap pixmap(nSize, nSize);
+                pixmap.fill(Qt::transparent);
+                QPainter painter(&pixmap);
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.scale(nSize / 28.0, nSize / 28.0);
+                QPen pen(bDisabled ? QColor(100, 110, 120) : QColor(238, 246, 252));
+                pen.setWidthF(2.8);
+                pen.setCapStyle(Qt::RoundCap);
+                pen.setJoinStyle(Qt::RoundJoin);
+                painter.setPen(pen);
+                QPainterPath path;
+                path.moveTo(bLeft ? 17 : 11, 6);
+                path.lineTo(bLeft ? 9 : 19, 14);
+                path.lineTo(bLeft ? 17 : 11, 22);
+                painter.drawPath(path);
+                painter.end();
+                icon.addPixmap(pixmap, bDisabled ? QIcon::Disabled : QIcon::Normal);
+            }
+        }
+        return icon;
+    };
+    previous->setIcon(arrowIcon(true));
+    next->setIcon(arrowIcon(false));
+    previousButton_->setDefaultAction(previous);
+    nextButton_->setDefaultAction(next);
+    previousButton_->setAccessibleName(previous->text());
+    nextButton_->setAccessibleName(next->text());
+    updateNavigationButtons();
+}
+
+void ImageView::updateNavigationButtons()
+{
+    if (!previousButton_ || !nextButton_) {
+        return;
+    }
+    const bool bVisible = !current_.isNull() && previousButton_->defaultAction();
+    previousButton_->setVisible(bVisible);
+    nextButton_->setVisible(bVisible);
+    const int nY = std::max(0, (viewport()->height() - previousButton_->height()) / 2);
+    previousButton_->move(12, nY);
+    nextButton_->move(std::max(12, viewport()->width() - nextButton_->width() - 12), nY);
+    previousButton_->raise();
+    nextButton_->raise();
+}
+
+void ImageView::scrollContentsBy(int nDx, int nDy)
+{
+    QGraphicsView::scrollContentsBy(nDx, nDy);
+    updateNavigationButtons();
+}
+
 void ImageView::setupScene()
 {
     scene_ = new QGraphicsScene(this);
@@ -113,6 +190,7 @@ void ImageView::setImage(const QImage& img, bool bResetView)
     const QRectF oldRect = scene_->sceneRect();
     clearSelection();
     current_ = img;
+    updateNavigationButtons();
     original_ = QImage();
     processed_ = QImage();
     bComparisonEnabled_ = false;
@@ -144,6 +222,7 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
     original_ = original;
     processed_ = processed;
     current_ = processed_.isNull() ? original_ : processed_;
+    updateNavigationButtons();
     bComparisonEnabled_ = bEnabled && !original_.isNull() && !processed_.isNull()
         && original_.size() == processed_.size();
     ++nPyramidGeneration_;
@@ -259,6 +338,7 @@ void ImageView::wheelEvent(QWheelEvent* event)
 void ImageView::resizeEvent(QResizeEvent* event)
 {
     QGraphicsView::resizeEvent(event);
+    updateNavigationButtons();
     if (viewMode_ != ViewMode::Manual) {
         applyViewMode();
     }
@@ -420,7 +500,7 @@ void ImageView::paintEvent(QPaintEvent* event)
 
     QPainter painter(viewport());
     painter.setRenderHint(QPainter::Antialiasing, true);
-    const QRect card = QRect(QPoint(), QSize(390, 156));
+    const QRect card = QRect(QPoint(), QSize(std::min(520, viewport()->width() - 32), 180));
     QRect centeredCard = card;
     centeredCard.moveCenter(viewport()->rect().center());
     painter.setPen(QPen(QColor(78, 84, 92), 1, Qt::DashLine));
@@ -428,7 +508,7 @@ void ImageView::paintEvent(QPaintEvent* event)
     painter.drawRoundedRect(centeredCard, 10, 10);
 
     QFont titleFont = painter.font();
-    titleFont.setPointSize(12);
+    titleFont.setPixelSize(20);
     titleFont.setWeight(QFont::DemiBold);
     painter.setFont(titleFont);
     painter.setPen(QColor(226, 230, 235));
@@ -436,12 +516,12 @@ void ImageView::paintEvent(QPaintEvent* event)
         Qt::AlignCenter, tr("打开或拖放图像"));
 
     QFont hintFont = painter.font();
-    hintFont.setPointSize(9);
+    hintFont.setPixelSize(16);
     hintFont.setWeight(QFont::Normal);
     painter.setFont(hintFont);
     painter.setPen(QColor(151, 158, 168));
     painter.drawText(centeredCard.adjusted(20, 78, -20, -28),
-        Qt::AlignCenter, tr("支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O"));
+        Qt::AlignCenter | Qt::TextWordWrap, tr("支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O"));
 }
 
 void ImageView::drawBackground(QPainter* painter, const QRectF& rect)

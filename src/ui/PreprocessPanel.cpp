@@ -29,7 +29,7 @@ QWidget* makeSliderRow(QSlider*& slider, QLabel*& valueLabel,
     slider->setValue(nValue);
     valueLabel = new QLabel(QString::number(nValue), row);
     valueLabel->setObjectName(QString("ValueBadge"));
-    valueLabel->setFixedWidth(44);
+    valueLabel->setFixedWidth(56);
     valueLabel->setAlignment(Qt::AlignCenter);
     layout->setSpacing(10);
     layout->addWidget(slider, 1);
@@ -54,7 +54,7 @@ PreprocessPanel::PreprocessPanel(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName(QString("PreprocessPanel"));
-    setMinimumWidth(340);
+    setMinimumWidth(380);
 
     auto* rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(12, 12, 12, 12);

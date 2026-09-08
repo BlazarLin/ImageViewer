@@ -8,6 +8,7 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QPainter>
+#include <QScrollArea>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -72,12 +73,21 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName(QString("AnalysisPanel"));
-    setMinimumWidth(340);
+    setMinimumWidth(400);
 
-    auto* rootLayout = new QVBoxLayout(this);
+    auto* outerLayout = new QVBoxLayout(this);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(this);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    auto* content = new QWidget(scroll);
+    content->setObjectName(QString("AnalysisContent"));
+    scroll->setWidget(content);
+    outerLayout->addWidget(scroll);
+    auto* rootLayout = new QVBoxLayout(content);
     rootLayout->setContentsMargins(12, 12, 12, 12);
     rootLayout->setSpacing(12);
-    auto* pixelGroup = new QGroupBox(tr("光标像素"), this);
+    auto* pixelGroup = new QGroupBox(tr("光标像素"), content);
     auto* pixelLayout = new QFormLayout(pixelGroup);
     pixelLayout->setContentsMargins(14, 16, 14, 14);
     pixelLayout->setHorizontalSpacing(14);
@@ -94,7 +104,7 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     pixelLayout->addRow(QString("Lab"), labValue_);
     rootLayout->addWidget(pixelGroup);
 
-    auto* roiGroup = new QGroupBox(tr("ROI 统计"), this);
+    auto* roiGroup = new QGroupBox(tr("ROI 统计"), content);
     auto* roiLayout = new QFormLayout(roiGroup);
     roiLayout->setContentsMargins(14, 16, 14, 14);
     roiLayout->setHorizontalSpacing(14);
@@ -114,7 +124,7 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
     roiLayout->addRow(tr("状态"), stateValue_);
     rootLayout->addWidget(roiGroup);
 
-    auto* histogramGroup = new QGroupBox(tr("灰度直方图"), this);
+    auto* histogramGroup = new QGroupBox(tr("灰度直方图"), content);
     auto* histogramLayout = new QVBoxLayout(histogramGroup);
     histogramLayout->setContentsMargins(12, 16, 12, 12);
     histogram_ = new HistogramWidget(histogramGroup);
