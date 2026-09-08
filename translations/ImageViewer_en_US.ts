@@ -277,7 +277,7 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
         <source>ImageViewer v%1
 
 支持光标锚定缩放、像素网格、目录缩略图、自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。</source>
-        <translation>ImageViewer v%1
+        <translation type="vanished">ImageViewer v%1
 
 Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, real-time preprocessing, ROI analysis, split comparison, and image pyramids for large images.</translation>
     </message>
@@ -343,6 +343,14 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
         <source>无法打开图像所在文件夹：%1</source>
         <translation>Unable to open the containing folder: %1</translation>
     </message>
+    <message>
+        <source>&lt;h2&gt;ImageViewer v%1&lt;/h2&gt;&lt;p&gt;轻量图像查看与分析工具&lt;/p&gt;&lt;p&gt;作者：Blazar&lt;br&gt;邮箱：&lt;a href=&quot;mailto:blazarlin@gmail.com&quot;&gt;blazarlin@gmail.com&lt;/a&gt;&lt;/p&gt;&lt;p&gt;源代码采用 MIT 许可证；第三方组件遵循各自许可证。&lt;/p&gt;</source>
+        <translation type="vanished">&lt;h2&gt;ImageViewer v%1&lt;/h2&gt;&lt;p&gt;Lightweight image viewing and analysis&lt;/p&gt;&lt;p&gt;Author: Blazar&lt;br&gt;Email: &lt;a href=&quot;mailto:blazarlin@gmail.com&quot;&gt;blazarlin@gmail.com&lt;/a&gt;&lt;/p&gt;&lt;p&gt;Source code: MIT License. Third-party components retain their respective licenses.&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;h2&gt;ImageViewer v%1&lt;/h2&gt;&lt;p&gt;轻量图像查看与分析工具&lt;/p&gt;&lt;p&gt;作者：Blazar&lt;br&gt;邮箱：&lt;a style=&quot;color:#70c8ff&quot; href=&quot;mailto:blazarlin@gmail.com&quot;&gt;blazarlin@gmail.com&lt;/a&gt;&lt;/p&gt;&lt;p&gt;源代码采用 MIT 许可证；第三方组件遵循各自许可证。&lt;/p&gt;</source>
+        <translation>&lt;h2&gt;ImageViewer v%1&lt;/h2&gt;&lt;p&gt;Lightweight image viewing and analysis&lt;/p&gt;&lt;p&gt;Author: Blazar&lt;br&gt;Email: &lt;a style=&quot;color:#70c8ff&quot; href=&quot;mailto:blazarlin@gmail.com&quot;&gt;blazarlin@gmail.com&lt;/a&gt;&lt;/p&gt;&lt;p&gt;Source code: MIT License. Third-party components retain their respective licenses.&lt;/p&gt;</translation>
+    </message>
 </context>
 <context>
     <name>ui::AnalysisPanel</name>
@@ -405,7 +413,7 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     <message>
         <source>横轴：0–255；纵轴：像素数（各通道独立刻度）
 悬停查看每档计数</source>
-        <translation>X: 0–255; Y: pixel count (independent scales)
+        <translation type="vanished">X: 0–255; Y: pixel count (independent scales)
 Hover to inspect bin counts</translation>
     </message>
     <message>
@@ -414,19 +422,37 @@ Hover to inspect bin counts</translation>
     </message>
     <message>
         <source>R · 红通道</source>
-        <translation>R · Red channel</translation>
+        <translation type="vanished">R · Red channel</translation>
     </message>
     <message>
         <source>G · 绿通道</source>
-        <translation>G · Green channel</translation>
+        <translation type="vanished">G · Green channel</translation>
     </message>
     <message>
         <source>B · 蓝通道</source>
-        <translation>B · Blue channel</translation>
+        <translation type="vanished">B · Blue channel</translation>
     </message>
     <message>
         <source>像素与统计</source>
-        <translation>Pixels and statistics</translation>
+        <translation type="vanished">Pixels and statistics</translation>
+    </message>
+    <message>
+        <source>分析整张图</source>
+        <translation>Analyze full image</translation>
+    </message>
+    <message>
+        <source>横轴：0–255；纵轴：像素数（共用刻度）
+悬停查看每档计数；Shift + 拖动分析局部</source>
+        <translation>X: 0–255; Y: pixel count (shared scale)
+Hover for bin counts; Shift + drag to analyze a region</translation>
+    </message>
+    <message>
+        <source>&lt;span style=&quot;color:#ff6464&quot;&gt;R 红（实线）&lt;/span&gt; · &lt;span style=&quot;color:#5ad782&quot;&gt;G 绿（虚线）&lt;/span&gt; · &lt;span style=&quot;color:#64a5ff&quot;&gt;B 蓝（点线）&lt;/span&gt;</source>
+        <translation>&lt;span style=&quot;color:#ff6464&quot;&gt;R (solid)&lt;/span&gt; · &lt;span style=&quot;color:#5ad782&quot;&gt;G (dash)&lt;/span&gt; · &lt;span style=&quot;color:#64a5ff&quot;&gt;B (dot)&lt;/span&gt;</translation>
+    </message>
+    <message>
+        <source>无色相</source>
+        <translation>Achromatic</translation>
     </message>
 </context>
 <context>
@@ -434,6 +460,10 @@ Hover to inspect bin counts</translation>
     <message>
         <source>灰度档 %1：%2 像素</source>
         <translation>Bin %1: %2 pixels</translation>
+    </message>
+    <message>
+        <source>灰度档 %1：R %2 / G %3 / B %4 像素</source>
+        <translation>Bin %1: R %2 / G %3 / B %4 pixels</translation>
     </message>
 </context>
 <context>

@@ -16,7 +16,7 @@ class HistogramWidget : public QWidget {
     Q_OBJECT
 public:
     explicit HistogramWidget(QWidget* parent = nullptr);
-    void setHistogram(const QVector<quint64>& histogram, const QColor& color = QColor(180, 190, 200));
+    void setResult(const core::analysis::AnalysisResult& result);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -24,8 +24,9 @@ protected:
     void leaveEvent(QEvent* event) override;
 
 private:
-    QVector<quint64> histogram_;
-    QColor color_;
+    std::array<QVector<quint64>, 3> histograms_;
+    bool bColor_ = false;
+    quint64 nMaximum_ = 0;
 };
 
 class AnalysisPanel : public QWidget {
@@ -38,6 +39,9 @@ public:
     void setStatistics(const core::analysis::AnalysisResult& result);
     void setBusy(bool bBusy);
     void clear();
+
+signals:
+    void analyzeFullImageRequested();
 
 private:
     QLabel* coordinateValue_ = nullptr;
@@ -52,9 +56,8 @@ private:
     QLabel* blueStatistics_ = nullptr;
     QLabel* stateValue_ = nullptr;
     QGroupBox* histogramGroup_ = nullptr;
-    std::array<HistogramWidget*, 3> histograms_ = { nullptr, nullptr, nullptr };
-    std::array<QLabel*, 3> histogramLabels_ = { nullptr, nullptr, nullptr };
+    HistogramWidget* histogram_ = nullptr;
+    QLabel* histogramLegend_ = nullptr;
 };
 
 } // namespace ui
-

@@ -17,9 +17,15 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QScrollBar>
+#include <QSlider>
 #include <QToolBar>
 #include <QToolButton>
 #include <QTabWidget>
+#include <QTextDocument>
+#include <QToolTip>
+#include <QPushButton>
+#include <QTimer>
+#include <QDialog>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QUrl>
@@ -429,7 +435,12 @@ void testWindowWorkflow(const QString& outputRoot)
     QMouseEvent hover(QEvent::MouseMove, pixelPoint, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
     QCoreApplication::sendEvent(view->viewport(), &hover);
     auto* pixelStatus = window.findChild<QLabel*>(QString("StatusPixel"));
-    verify(pixelStatus && pixelStatus->text() == QString("X: 12  Y: 18   RGBA: 100, 110, 120, 255")
+    QTextDocument pixelText;
+    pixelText.setHtml(pixelStatus ? pixelStatus->text() : QString());
+    verify(pixelStatus && pixelText.toPlainText() == QString("X: 12 Y: 18 R:100 G:110 B:120 A:255")
+            && pixelStatus->text().contains(QString("#ff6464"))
+            && pixelStatus->text().contains(QString("#5ad782"))
+            && pixelStatus->text().contains(QString("#64a5ff"))
             && !analysisDock->isVisible(), QString("TEST-24"),
         QString("分析面板隐藏时状态栏仍实时显示原始图像坐标和 RGBA 值"));
     QEvent leave(QEvent::Leave);
@@ -493,14 +504,26 @@ void testColorHistograms(const QString& outputRoot)
     window.show();
     dock->show();
     panel->setStatistics(result);
-    auto* tabs = panel->findChild<QTabWidget*>(QString("AnalysisTabs"));
-    tabs->setCurrentIndex(1);
     QCoreApplication::processEvents();
-    auto* third = panel->findChild<ui::HistogramWidget*>(QString("Histogram2"));
-    const bool bRgbVisible = third && third->isVisible() && group->title() == QString("RGB 三通道直方图");
+    auto* histogram = panel->findChild<ui::HistogramWidget*>(QString("Histogram"));
+    const bool bRgbVisible = histogram && histogram->isVisible()
+        && panel->findChildren<ui::HistogramWidget*>().size() == 1
+        && panel->findChildren<QTabWidget*>().isEmpty()
+        && group->title() == QString("RGB 三通道直方图");
+    const int nLeft = std::max(48, histogram->fontMetrics().horizontalAdvance(QString("4")) + 8);
+    const int nHoverX = nLeft + qRound(20.0 * (histogram->width() - nLeft - 13) / 255.0);
+    QMouseEvent hover(QEvent::MouseMove, QPoint(nHoverX, 40), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(histogram, &hover);
+    const bool bTooltip = QToolTip::text() == QString("灰度档 20：R 0 / G 4 / B 0 像素");
     panel->setStatistics(grayResult);
-    verify(bRgbVisible && !third->isVisible() && group->title() == QString("灰度直方图"),
-        QString("TEST-32"), QString("彩色图显示三幅独立直方图，切换灰度结果后隐藏多余通道"));
+    verify(bRgbVisible && bTooltip && histogram->isVisible() && group->title() == QString("灰度直方图"),
+        QString("TEST-32"), QString("单图叠加 RGB、悬停显示同一档三通道计数，切换灰度清除旧通道，无独立页签"));
+    panel->setPixel(QPoint(0, 0), QColor(130, 130, 130), true);
+    bool bAchromatic = false;
+    for (const auto* label : panel->findChildren<QLabel*>()) {
+        bAchromatic = bAchromatic || label->text() == QString("无色相, 0, 130");
+    }
+    verify(bAchromatic, QString("TEST-37"), QString("灰度像素没有定义色相，显示无色相而非负一度"));
     QImage demo(640, 360, QImage::Format_RGB888);
     for (int nY = 0; nY < demo.height(); ++nY) {
         for (int nX = 0; nX < demo.width(); ++nX) {
@@ -512,14 +535,14 @@ void testColorHistograms(const QString& outputRoot)
     window.openFile(demoPath);
     auto* view = window.findChild<ui::ImageView*>();
     const bool bLoaded = waitUntil([&]() { return view->image().size() == demo.size(); });
-    QMetaObject::invokeMethod(&window, "startRoiAnalysis", Q_ARG(QRect, demo.rect()));
+    panel->findChild<QPushButton*>(QString("AnalyzeFullImage"))->click();
     const bool bAnalyzed = waitUntil([&]() { return group->title() == QString("RGB 三通道直方图"); });
     bool bPixelCount = false;
     for (const auto* label : panel->findChildren<QLabel*>()) {
         bPixelCount = bPixelCount || label->text() == QString("230400");
     }
     verify(bLoaded && bAnalyzed && bPixelCount, QString("TEST-33"),
-        QString("实际打开彩色 PNG 后，后台 ROI 分析发布 RGB 三通道结果且统计像素数正确"));
+        QString("实际打开彩色 PNG 并点击分析整张图，后台发布 RGB 三通道结果且统计像素数正确"));
     auto* thumbnails = window.findChild<ui::ThumbnailBar*>();
     waitUntil([&]() {
         for (int nIndex = 0; nIndex < thumbnails->count(); ++nIndex) {
@@ -584,6 +607,50 @@ void testOverlayNavigation(const QString& outputRoot)
     QCoreApplication::processEvents();
     verify(bAnchored && anchored(), QString("TEST-29"),
         QString("图像原尺寸滚动和窗口缩放后，翻图箭头始终固定在图像视口左右两侧居中"));
+    const auto press = [&](int nKey) {
+        QKeyEvent key(QEvent::KeyPress, nKey, Qt::NoModifier);
+        QCoreApplication::sendEvent(view, &key);
+    };
+    const auto boundaryKeepsPosition = [&](int nKey) {
+        view->actualSize();
+        view->horizontalScrollBar()->setValue(view->horizontalScrollBar()->maximum() / 2);
+        const int nBefore = view->horizontalScrollBar()->value();
+        for (int nRepeat = 0; nRepeat < 5; ++nRepeat) { press(nKey); }
+        return view->horizontalScrollBar()->value() == nBefore;
+    };
+    bool bKeys = boundaryKeepsPosition(Qt::Key_Left) && view->image() == first;
+    press(Qt::Key_Right);
+    bKeys = waitUntil([&]() { return view->image() == second; }) && bKeys;
+    bKeys = boundaryKeepsPosition(Qt::Key_Right) && view->image() == second && bKeys;
+    press(Qt::Key_Left);
+    bKeys = waitUntil([&]() { return view->image() == first; }) && bKeys;
+    verify(bKeys, QString("TEST-34"), QString("首尾连续方向键不平移图像，非边界左右键仍正确往返翻图"));
+    auto* parameters = window.findChild<ui::PreprocessPanel*>();
+    auto* slider = parameters->findChild<QSlider*>();
+    auto* preprocessDock = window.findChild<QDockWidget*>(QString("PreprocessDock"));
+    preprocessDock->show();
+    core::processing::ProcessingParameters enabled;
+    enabled.bEnabled = true;
+    parameters->setParameters(enabled);
+    slider->setValue(0);
+    slider->setFocus();
+    QKeyEvent adjust(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
+    QCoreApplication::sendEvent(slider, &adjust);
+    QCoreApplication::processEvents();
+    verify(slider->value() == 1 && view->image() == first
+            && previous->defaultAction()->shortcutContext() == Qt::WidgetWithChildrenShortcut
+            && next->defaultAction()->shortcutContext() == Qt::WidgetWithChildrenShortcut,
+        QString("TEST-36"), QString("预处理滑块中的左右键调节参数，不抢占为翻图快捷键"));
+    bool bAbout = false;
+    QTimer::singleShot(0, &window, [&]() {
+        auto* about = window.findChild<QDialog*>(QString("AboutDialog"));
+        auto* information = about ? about->findChild<QLabel*>(QString("AboutInformation")) : nullptr;
+        bAbout = information && information->text().contains(QString("Blazar"))
+            && information->text().contains(QString("mailto:blazarlin@gmail.com"));
+        if (about) { about->accept(); }
+    });
+    QMetaObject::invokeMethod(&window, "onAbout");
+    verify(bAbout, QString("TEST-35"), QString("关于窗口显示作者 Blazar 与可点击邮箱地址"));
     window.close();
 }
 

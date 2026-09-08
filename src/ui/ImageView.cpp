@@ -448,6 +448,16 @@ void ImageView::clearSelection()
 
 void ImageView::keyPressEvent(QKeyEvent* event)
 {
+    // 首尾禁用翻图动作后仍吞掉方向键，避免 QGraphicsView 将它解释为平移。
+    if (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right) {
+        auto* button = event->key() == Qt::Key_Left ? previousButton_ : nextButton_;
+        if (event->modifiers() == Qt::NoModifier && button && button->defaultAction()
+            && button->defaultAction()->isEnabled()) {
+            button->defaultAction()->trigger();
+        }
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Escape) {
         clearSelection();
         event->accept();

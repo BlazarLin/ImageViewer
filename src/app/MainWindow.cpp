@@ -38,6 +38,8 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QDialog>
+#include <QPushButton>
 #include <QMimeData>
 #include <QSettings>
 #include <QScreen>
@@ -237,12 +239,13 @@ void MainWindow::setupUi()
         "QSlider::groove:horizontal:disabled { background:#393d43; }"
         "QSlider::sub-page:horizontal:disabled { background:#48515a; }"
         "QSlider::handle:horizontal:disabled { background:#626870; border-color:#484d54; }"
-        "QPushButton#SecondaryButton { color:#cfd5dc; background:#30343a; border:1px solid #50565f; border-radius:5px; padding:6px 12px; }"
-        "QPushButton#SecondaryButton:hover { color:white; background:#393e45; border-color:#69727d; }"
+        "QPushButton#AnalyzeFullImage, QDialog#AboutDialog QPushButton, QPushButton#SecondaryButton { color:#cfd5dc; background:#30343a; border:1px solid #50565f; border-radius:5px; padding:6px 12px; }"
+        "QPushButton#AnalyzeFullImage:hover, QDialog#AboutDialog QPushButton:hover, QPushButton#SecondaryButton:hover { color:white; background:#393e45; border-color:#69727d; }"
         "QListWidget#ThumbnailBar { background:#222428; color:#d7dce2; border:0; border-top:1px solid #34383e; padding:6px; outline:0; }"
         "QListWidget#ThumbnailBar::item { background:#292c31; color:#c8ced5; border:2px solid transparent; border-radius:6px; padding:3px; }"
         "QListWidget#ThumbnailBar::item:hover { background:#31363d; border-color:#4d555f; }"
         "QListWidget#ThumbnailBar::item:selected { background:#263f50; color:white; border-color:#2d9bd3; }"
+        "QAbstractScrollArea::corner { background:#24272b; border:0; }"
         "QScrollBar { background:#24272b; border:0; }"
         "QScrollBar:vertical { width:11px; }"
         "QScrollBar:horizontal { height:11px; }"
@@ -262,6 +265,10 @@ void MainWindow::setupUi()
             }
         });
     connect(view_, &ui::ImageView::roiSelected, this, &MainWindow::startRoiAnalysis);
+    connect(analysisPanel_, &ui::AnalysisPanel::analyzeFullImageRequested, this, [this]() {
+        view_->clearSelection();
+        startRoiAnalysis(displayedImage_.rect());
+    });
     connect(view_, &ui::ImageView::fileDropped, this, &MainWindow::openFile);
     connect(thumbnailBar_, &ui::ThumbnailBar::fileActivated, this, &MainWindow::openFile);
     connect(preprocessPanel_, &ui::PreprocessPanel::parametersChanged,
@@ -312,12 +319,16 @@ void MainWindow::setupActions()
     actPrevious_ = new QAction(style()->standardIcon(QStyle::SP_ArrowBack), tr("上一张"), this);
     actPrevious_->setShortcut(QKeySequence(Qt::Key_Left));
     connect(actPrevious_, &QAction::triggered, this, &MainWindow::onPrevious);
-    addAction(actPrevious_);
+    actPrevious_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    view_->addAction(actPrevious_);
+    thumbnailBar_->addAction(actPrevious_);
 
     actNext_ = new QAction(style()->standardIcon(QStyle::SP_ArrowForward), tr("下一张"), this);
     actNext_->setShortcut(QKeySequence(Qt::Key_Right));
     connect(actNext_, &QAction::triggered, this, &MainWindow::onNext);
-    addAction(actNext_);
+    actNext_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    view_->addAction(actNext_);
+    thumbnailBar_->addAction(actNext_);
     view_->setNavigationActions(actPrevious_, actNext_);
 
     actFit_ = new QAction(tr("适应窗口"), this);
@@ -411,9 +422,10 @@ void MainWindow::setupStatusBar()
     statusFile_->setMinimumWidth(0);
     statusPixel_ = new QLabel(this);
     statusPixel_->setObjectName(QString("StatusPixel"));
+    statusPixel_->setTextFormat(Qt::RichText);
     statusPixel_->ensurePolished();
     statusPixel_->setMinimumWidth(statusPixel_->fontMetrics().horizontalAdvance(
-        QString("X: 00000  Y: 00000   RGBA: 255, 255, 255, 255")) + 16);
+        QString("X: 00000  Y: 00000   R:255 G:255 B:255 A:255")) + 16);
     statusPixel_->setToolTip(tr("图像坐标从 0 开始；显示光标所在图像的 RGBA 值（0–255）"));
     updatePixelStatus(QPoint(), QColor(), false);
     statusSize_ = new QLabel(this);
@@ -436,7 +448,9 @@ void MainWindow::updatePixelStatus(const QPoint& position, const QColor& color, 
         return;
     }
     const QString text = bValid
-        ? QString("X: %1  Y: %2   RGBA: %3, %4, %5, %6")
+        ? QString("X: %1  Y: %2   <span style=\"color:#ff6464\">R:%3</span> "
+            "<span style=\"color:#5ad782\">G:%4</span> "
+            "<span style=\"color:#64a5ff\">B:%5</span> A:%6")
             .arg(position.x()).arg(position.y()).arg(color.red()).arg(color.green())
             .arg(color.blue()).arg(color.alpha())
         : tr("坐标：—   RGBA：—");
@@ -685,10 +699,33 @@ void MainWindow::onRefresh()
 
 void MainWindow::onAbout()
 {
-    QMessageBox::about(this, tr("关于 ImageViewer"),
-        tr("ImageViewer v%1\n\n支持光标锚定缩放、像素网格、目录缩略图、"
-           "自定义标题栏、实时预处理、ROI 分析、分割对比和大图显示金字塔。")
-            .arg(app::version()));
+    QDialog dialog(this);
+    dialog.setObjectName(QString("AboutDialog"));
+    dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    dialog.setWindowTitle(tr("关于 ImageViewer"));
+    dialog.setStyleSheet(QString("QDialog#AboutDialog { background:#292c31; } QDialog#AboutDialog QLabel { color:#d7dce2; }"));
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(24, 20, 24, 20);
+    auto* icon = new QLabel(&dialog);
+    icon->setPixmap(windowIcon().pixmap(64, 64));
+    layout->addWidget(icon);
+    auto* information = new QLabel(&dialog);
+    information->setObjectName(QString("AboutInformation"));
+    information->setWordWrap(true);
+    information->setMaximumWidth(600);
+    information->setTextFormat(Qt::RichText);
+    information->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    information->setOpenExternalLinks(true);
+    information->setText(tr("<h2>ImageViewer v%1</h2><p>轻量图像查看与分析工具</p>"
+        "<p>作者：Blazar<br>邮箱：<a style=\"color:#70c8ff\" href=\"mailto:blazarlin@gmail.com\">blazarlin@gmail.com</a></p>"
+        "<p>源代码采用 MIT 许可证；第三方组件遵循各自许可证。</p>")
+        .arg(app::version()));
+    layout->addWidget(information);
+    auto* close = new QPushButton(tr("关闭"), &dialog);
+    close->setDefault(true);
+    connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+    layout->addWidget(close, 0, Qt::AlignRight);
+    dialog.exec();
 }
 
 void MainWindow::onZoomChanged(double factor)

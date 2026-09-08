@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BinaryDir = "bin/Release",
     [string]$QtDir = $env:QTDIR,
     [string]$DependencySourceDir = "",
@@ -54,9 +54,7 @@ foreach ($file in @("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG
     Copy-Item -LiteralPath (Join-Path $root $file) -Destination $package
 }
 Copy-Item -LiteralPath (Join-Path $root "licenses") -Destination $package -Recurse
-New-Item -ItemType Directory -Path (Join-Path $package "docs/images") -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $root "docs/RELEASING.md") -Destination (Join-Path $package "docs")
-Copy-Item -LiteralPath (Join-Path $root "docs/images/260908RGB三通道与字体.png") -Destination (Join-Path $package "docs/images")
+Copy-Item -LiteralPath (Join-Path $root "docs") -Destination $package -Recurse
 if ($DependencySourceDir) {
     $sourceRoot = (Resolve-Path -LiteralPath $DependencySourceDir).Path
     foreach ($file in Get-ChildItem -LiteralPath $sourceRoot -Recurse -File |
