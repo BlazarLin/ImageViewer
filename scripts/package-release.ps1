@@ -49,6 +49,10 @@ Copy-Item -LiteralPath $opencv[0].FullName -Destination $package
 Copy-Item -LiteralPath (Join-Path $binaryRoot "translations") -Destination $package -Recurse
 & (Join-Path $QtDir "bin/windeployqt.exe") --release --no-compiler-runtime --no-translations --no-opengl-sw --dir $package (Join-Path $package "ImageViewer.exe")
 if ($LASTEXITCODE -ne 0) { throw "windeployqt 部署失败。" }
+# QtConcurrent 部分调用仅实例化模板，部署工具可能无法从 EXE 导入表识别。
+foreach ($module in @("Qt5Concurrent.dll", "Qt5Network.dll")) {
+    Copy-Item -LiteralPath (Join-Path $QtDir "bin/$module") -Destination $package
+}
 Get-ChildItem -LiteralPath $VCRedistDir -Filter "*.dll" | Copy-Item -Destination $package
 foreach ($file in @("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md")) {
     Copy-Item -LiteralPath (Join-Path $root $file) -Destination $package
