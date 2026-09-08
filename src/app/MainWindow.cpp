@@ -16,6 +16,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QDateTime>
+#include <QDesktopServices>
+#include <QPainterPath>
+#include <QRegion>
+#include <QResizeEvent>
+#include <QUrl>
 #include <QCloseEvent>
 #include <QDebug>
 #include <QCursor>
@@ -193,9 +198,10 @@ void MainWindow::setupUi()
         "QToolBar QToolButton:checked { background:#176b98; border-color:#268bc0; color:white; }"
         "QToolBar QToolButton:disabled { color:#666c74; background:transparent; }"
         "QToolBar::separator { width:1px; background:#434850; margin:5px 6px; }"
-        "QStatusBar { background:#1f2124; color:#b9c0c8; border-top:1px solid #34383e; min-height:24px; }"
-        "QStatusBar QLabel { color:#b9c0c8; padding:0 10px; border-left:1px solid #34383e; }"
-        "QStatusBar QLabel#StatusFile { border-left:0; }"
+        "QStatusBar { background:#222428; color:#b9c0c8; border:0; min-height:28px; }"
+        "QStatusBar::item { border:0; background:transparent; }"
+        "QStatusBar QLabel { color:#b9c0c8; padding:0 8px; border:0; background:transparent; }"
+        "QStatusBar QLabel#StatusPixel { color:#d5e3ed; }"
         "QDockWidget { background:#25282d; color:#e5e9ef; border-left:1px solid #3a3f46; }"
         "QDockWidget::title { background:#22252a; color:#e5e9ef; padding:9px 10px; text-align:left; border-bottom:1px solid #3b4047; }"
         "QDockWidget::close-button,QDockWidget::float-button { border:0; background:transparent; padding:4px; }"
@@ -245,6 +251,7 @@ void MainWindow::setupUi()
     connect(view_, &ui::ImageView::zoomChanged, this, &MainWindow::onZoomChanged);
     connect(view_, &ui::ImageView::pixelHovered, this,
         [this](const QPoint& position, const QColor& color, bool bValid) {
+            updatePixelStatus(position, color, bValid);
             if (analysisDock_->isVisible()) {
                 analysisPanel_->setPixel(position, color, bValid);
             }
@@ -272,6 +279,17 @@ void MainWindow::setupActions()
     actOpen_ = new QAction(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("打开"), this);
     actOpen_->setShortcut(QKeySequence::Open);
     connect(actOpen_, &QAction::triggered, this, &MainWindow::onOpen);
+
+    actOpenFolder_ = new QAction(tr("打开图像所在文件夹"), this);
+    actOpenFolder_->setObjectName(QString("OpenContainingFolder"));
+    actOpenFolder_->setEnabled(false);
+    connect(actOpenFolder_, &QAction::triggered, this, &MainWindow::onOpenContainingFolder);
+    view_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(view_, &QWidget::customContextMenuRequested, this, [this](const QPoint& position) {
+        QMenu menu(this);
+        menu.addAction(actOpenFolder_);
+        menu.exec(view_->viewport()->mapToGlobal(position));
+    });
 
     actRefresh_ = new QAction(tr("刷新图像和目录"), this);
     actRefresh_->setShortcut(QKeySequence(Qt::Key_F5));
@@ -386,16 +404,70 @@ void MainWindow::setupStatusBar()
 {
     statusFile_ = new QLabel(this);
     statusFile_->setObjectName(QString("StatusFile"));
+    statusFile_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    statusFile_->setMinimumWidth(0);
+    statusPixel_ = new QLabel(this);
+    statusPixel_->setObjectName(QString("StatusPixel"));
+    statusPixel_->setMinimumWidth(statusPixel_->fontMetrics().horizontalAdvance(
+        QString("X: 00000  Y: 00000   RGBA: 255, 255, 255, 255")) + 16);
+    statusPixel_->setToolTip(tr("图像坐标从 0 开始；显示光标所在图像的 RGBA 值（0–255）"));
+    updatePixelStatus(QPoint(), QColor(), false);
     statusSize_ = new QLabel(this);
     statusSize_->setObjectName(QString("StatusSize"));
     statusZoom_ = new QLabel(this);
     statusZoom_->setObjectName(QString("StatusZoom"));
     statusProcessing_ = new QLabel(this);
     statusProcessing_->setObjectName(QString("StatusProcessing"));
+    statusBar()->setSizeGripEnabled(false);
     statusBar()->addWidget(statusFile_, 1);
+    statusBar()->addPermanentWidget(statusPixel_);
     statusBar()->addPermanentWidget(statusProcessing_);
     statusBar()->addPermanentWidget(statusSize_);
     statusBar()->addPermanentWidget(statusZoom_);
+}
+
+void MainWindow::updatePixelStatus(const QPoint& position, const QColor& color, bool bValid)
+{
+    if (!statusPixel_) {
+        return;
+    }
+    const QString text = bValid
+        ? QString("X: %1  Y: %2   RGBA: %3, %4, %5, %6")
+            .arg(position.x()).arg(position.y()).arg(color.red()).arg(color.green())
+            .arg(color.blue()).arg(color.alpha())
+        : tr("坐标：—   RGBA：—");
+    if (statusPixel_->text() != text) {
+        statusPixel_->setText(text);
+    }
+}
+
+void MainWindow::onOpenContainingFolder()
+{
+    if (currentPath_.isEmpty()) {
+        return;
+    }
+    const QString directory = QFileInfo(currentPath_).absolutePath();
+    if (!QDir(directory).exists()
+        || !QDesktopServices::openUrl(QUrl::fromLocalFile(directory))) {
+        statusBar()->showMessage(tr("无法打开图像所在文件夹：%1").arg(directory), 6000);
+    }
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    updateWindowShape();
+}
+
+void MainWindow::updateWindowShape()
+{
+    if (isMaximized() || isFullScreen()) {
+        clearMask();
+        return;
+    }
+    QPainterPath outline;
+    outline.addRoundedRect(QRectF(rect()), 12.0, 12.0);
+    setMask(QRegion(outline.toFillPolygon().toPolygon()));
 }
 
 void MainWindow::openFile(const QString& path)
@@ -830,6 +902,7 @@ void MainWindow::updateResultActions()
     actSaveResult_->setEnabled(bReady);
     actCompare_->setEnabled(bReady && !processedImage_.isNull());
     actRefresh_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
+    actOpenFolder_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
     for (QAction* action : { actFit_, actFitWidth_, actFitHeight_, actActualSize_ }) {
         action->setEnabled(!displayedImage_.isNull());
     }
@@ -865,6 +938,7 @@ void MainWindow::updateImageInformation()
         return;
     }
     statusFile_->setText(QFileInfo(currentPath_).fileName());
+    statusFile_->setToolTip(currentPath_);
     statusSize_->setText(QString("%1 × %2").arg(originalImage_.width()).arg(originalImage_.height()));
     titleBar_->setInfoText(formatTitleText(), currentPath_);
     setWindowTitle(QString("ImageViewer - %1").arg(QFileInfo(currentPath_).fileName()));
@@ -960,6 +1034,7 @@ void MainWindow::changeEvent(QEvent* event)
     QMainWindow::changeEvent(event);
     if (event->type() == QEvent::WindowStateChange && titleBar_) {
         titleBar_->setMaximized(isMaximized());
+        updateWindowShape();
     }
 }
 

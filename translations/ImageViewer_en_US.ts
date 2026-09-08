@@ -327,6 +327,22 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
         <translation>File already exists. Overwrite?
 %1</translation>
     </message>
+    <message>
+        <source>打开图像所在文件夹</source>
+        <translation>Open containing folder</translation>
+    </message>
+    <message>
+        <source>图像坐标从 0 开始；显示光标所在图像的 RGBA 值（0–255）</source>
+        <translation>Image coordinates start at 0; RGBA values under the cursor range from 0 to 255</translation>
+    </message>
+    <message>
+        <source>坐标：—   RGBA：—</source>
+        <translation>Position: —   RGBA: —</translation>
+    </message>
+    <message>
+        <source>无法打开图像所在文件夹：%1</source>
+        <translation>Unable to open the containing folder: %1</translation>
+    </message>
 </context>
 <context>
     <name>ui::AnalysisPanel</name>

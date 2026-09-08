@@ -3,6 +3,7 @@
 #include "core/cache/ImagePyramid.h"
 
 #include <QDragEnterEvent>
+#include <QCursor>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFileInfo>
@@ -82,6 +83,10 @@ ImageView::ImageView(QWidget* parent)
     setAcceptDrops(true);
     viewport()->setAcceptDrops(true);
     setMouseTracking(true);
+    viewport()->setMouseTracking(true);
+    const auto refreshPixel = [this](int) { updateHoverPixel(viewport()->mapFromGlobal(QCursor::pos())); };
+    connect(horizontalScrollBar(), &QScrollBar::valueChanged, this, refreshPixel);
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this, refreshPixel);
     connect(pyramidWatcher_, &QFutureWatcher<std::vector<QImage>>::finished,
         this, &ImageView::onPyramidFinished);
 }
@@ -128,6 +133,7 @@ void ImageView::setImage(const QImage& img, bool bResetView)
         updateRenderMode();
         viewport()->update();
     }
+    updateHoverPixel(viewport()->mapFromGlobal(QCursor::pos()));
 }
 
 void ImageView::setComparisonImages(const QImage& original, const QImage& processed,
@@ -153,6 +159,7 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
         viewport()->update();
     }
     requestPyramid();
+    updateHoverPixel(viewport()->mapFromGlobal(QCursor::pos()));
 }
 
 void ImageView::setComparisonEnabled(bool bEnabled)
@@ -169,6 +176,7 @@ void ImageView::setComparisonEnabled(bool bEnabled)
     if (!bComparisonEnabled_) {
         requestPyramid();
     }
+    updateHoverPixel(viewport()->mapFromGlobal(QCursor::pos()));
 }
 
 void ImageView::rebuildPixmapItems()
@@ -312,10 +320,12 @@ void ImageView::mouseMoveEvent(QMouseEvent* event)
             clippedItem->setSplit(dComparisonSplit_);
         }
         viewport()->update();
+        updateHoverPixel(event->pos());
         event->accept();
         return;
     }
     QGraphicsView::mouseMoveEvent(event);
+    updateHoverPixel(event->pos());
 }
 
 void ImageView::mouseReleaseEvent(QMouseEvent* event)
@@ -455,7 +465,7 @@ void ImageView::drawBackground(QPainter* painter, const QRectF& rect)
 
 void ImageView::updateHoverPixel(const QPoint& viewportPosition)
 {
-    if (current_.isNull()) {
+    if (current_.isNull() || !viewport()->rect().contains(viewportPosition)) {
         emit pixelHovered(QPoint(), QColor(), false);
         return;
     }
@@ -647,6 +657,7 @@ void ImageView::applyPyramidLevel()
 
 void ImageView::notifyZoomChanged()
 {
+    updateHoverPixel(viewport()->mapFromGlobal(QCursor::pos()));
     const double dZoom = zoomFactor();
     if (std::abs(dZoom - lastEmittedZoom_) < 0.00001) {
         return;

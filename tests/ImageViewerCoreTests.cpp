@@ -1,4 +1,4 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：独立验证目录导航与 OpenCV 预处理核心行为。
 // 目的：在不启动主窗口的情况下提供可重复的中文业务验收输出。
 #include <Windows.h>
@@ -417,7 +417,37 @@ void testWindowWorkflow(const QString& outputRoot)
         QString("TEST-19"), QString("本地文件拖放事件通过主视图到主窗口，更新图片及同目录缩略图"));
     verify(waitUntil([&]() { return !thumbnails->item(2)->icon().isNull(); }),
         QString("TEST-20"), QString("当前图片缩略图在后台完成加载"));
+    analysisDock->hide();
+    view->actualSize();
+    const QPoint pixelPoint = view->mapFromScene(QPointF(12, 18));
+    QMouseEvent hover(QEvent::MouseMove, pixelPoint, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(view->viewport(), &hover);
+    auto* pixelStatus = window.findChild<QLabel*>(QString("StatusPixel"));
+    verify(pixelStatus && pixelStatus->text() == QString("X: 12  Y: 18   RGBA: 100, 110, 120, 255")
+            && !analysisDock->isVisible(), QString("TEST-24"),
+        QString("分析面板隐藏时状态栏仍实时显示原始图像坐标和 RGBA 值"));
+    QEvent leave(QEvent::Leave);
+    QCoreApplication::sendEvent(view, &leave);
+    verify(pixelStatus && pixelStatus->text() == QString("坐标：—   RGBA：—"),
+        QString("TEST-25"), QString("光标离开图像视图后清除状态栏旧像素值"));
+    auto* folderAction = window.findChild<QAction*>(QString("OpenContainingFolder"));
+    verify(folderAction && folderAction->isEnabled()
+            && view->contextMenuPolicy() == Qt::CustomContextMenu, QString("TEST-26"),
+        QString("成功打开本地图片后启用图像右键菜单的所在文件夹操作"));
     window.resize(1100, 750);
+    const bool bRounded = !window.mask().contains(QPoint(0, 0))
+        && window.mask().contains(window.rect().center());
+    window.showMaximized();
+    QCoreApplication::processEvents();
+    const bool bMaximized = window.mask().isEmpty();
+    window.showNormal();
+    QCoreApplication::processEvents();
+    verify(bRounded && bMaximized && !window.mask().isEmpty(), QString("TEST-27"),
+        QString("普通窗口四角裁切，最大化解除裁切，还原后恢复圆角"));
+    view->fitToWindow();
+    QMouseEvent finalHover(QEvent::MouseMove, view->mapFromScene(QPointF(12, 18)),
+        Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(view->viewport(), &finalHover);
     window.grab().save(QDir(outputRoot).filePath(QString("优化后界面.png")));
     window.close();
     MainWindow restored;

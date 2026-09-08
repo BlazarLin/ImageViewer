@@ -44,6 +44,7 @@ public:
     void openFile(const QString& path);
 
 protected:
+    void resizeEvent(QResizeEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -52,6 +53,7 @@ protected:
 
 private slots:
     void onOpen();
+    void onOpenContainingFolder();
     void startImageLoad();
     void onImageLoadFinished();
     void onRefresh();
@@ -83,6 +85,8 @@ private:
     void setupActions();
     void setupMenusAndToolbar();
     void setupStatusBar();
+    void updateWindowShape();
+    void updatePixelStatus(const QPoint& position, const QColor& color, bool bValid);
     void updateImageInformation();
     void updateNavigationActions();
     void showOriginalImage();
@@ -126,6 +130,7 @@ private:
     bool bPreloadPending_ = false;
 
     QAction* actOpen_ = nullptr;
+    QAction* actOpenFolder_ = nullptr;
     QAction* actRefresh_ = nullptr;
     QAction* actSaveResult_ = nullptr;
     QAction* actSavePreset_ = nullptr;
@@ -143,6 +148,7 @@ private:
     QAction* actAbout_ = nullptr;
     QAction* actExit_ = nullptr;
 
+    QLabel* statusPixel_ = nullptr;
     QLabel* statusFile_ = nullptr;
     QLabel* statusSize_ = nullptr;
     QLabel* statusZoom_ = nullptr;
