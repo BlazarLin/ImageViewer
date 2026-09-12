@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenuBar>
 #include <QMouseEvent>
 #include <QStyle>
 #include <QToolButton>
@@ -17,13 +18,14 @@ TitleBar::TitleBar(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName(QString("CustomTitleBar"));
-    setFixedHeight(48);
+    // 单行标题栏：图标、菜单栏、图像信息与窗口按钮同行展示。
+    setFixedHeight(38);
 
     iconLabel_ = new QLabel(this);
     iconLabel_->setAlignment(Qt::AlignCenter);
-    iconLabel_->setFixedSize(26, 26);
+    iconLabel_->setFixedSize(22, 22);
     iconLabel_->setObjectName(QString("AppIcon"));
-    iconLabel_->setPixmap(createAppIcon().pixmap(26, 26));
+    iconLabel_->setPixmap(createAppIcon().pixmap(22, 22));
     iconLabel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     infoLabel_ = new QLabel(tr("未打开图像  |  ImageViewer"), this);
@@ -37,8 +39,8 @@ TitleBar::TitleBar(QWidget* parent)
     const QList<QToolButton*> buttons = { minimizeButton_, maximizeButton_, closeButton_ };
     for (QToolButton* button : buttons) {
         button->setAutoRaise(true);
-        button->setFixedSize(50, 48);
-        button->setIconSize(QSize(15, 15));
+        button->setFixedSize(46, 38);
+        button->setIconSize(QSize(13, 13));
         button->setFocusPolicy(Qt::NoFocus);
     }
     minimizeButton_->setText(QString("—"));
@@ -60,6 +62,16 @@ TitleBar::TitleBar(QWidget* parent)
     connect(minimizeButton_, &QToolButton::clicked, this, &TitleBar::minimizeRequested);
     connect(maximizeButton_, &QToolButton::clicked, this, &TitleBar::maximizeRestoreRequested);
     connect(closeButton_, &QToolButton::clicked, this, &TitleBar::closeRequested);
+}
+
+void TitleBar::setMenuBar(QMenuBar* menuBar)
+{
+    if (!menuBar || !layout()) {
+        return;
+    }
+    menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    // 插在图标之后、信息标签之前，保持单行布局。
+    dynamic_cast<QHBoxLayout*>(layout())->insertWidget(1, menuBar);
 }
 
 void TitleBar::setInfoText(const QString& text, const QString& fullPath)

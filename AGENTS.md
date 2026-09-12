@@ -4,6 +4,10 @@
 
 `src/` contains the C++17 application. Window orchestration lives in `src/app/`, Qt widgets in `src/ui/`, image loading/navigation/processing/analysis/cache code in `src/core/`, and small platform helpers in `src/util/`. `tests/ImageViewerCoreTests.cpp` is the standalone core regression executable. Translation sources are under `translations/`; design notes and handoff records are under `docs/`. `cmake/Config.props` supplies Visual Studio dependency paths, while `scripts/` contains repeatable build and validation helpers. Treat `bin/`, `obj/`, and `build/` as generated output.
 
+## Design Principles
+
+- **高性能**：保持图像切换、加载与查看的速度，最大化降低切换图带来的时延，避免让用户感觉需要等待。新增功能不得阻塞前台解码与显示路径；重计算一律放到后台线程并作废旧结果，缓存必须有界。
+
 ## Build, Test, and Development Commands
 
 Run commands from the repository root in PowerShell:

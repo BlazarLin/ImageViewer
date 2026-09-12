@@ -7,6 +7,7 @@
 
 class QAction;
 class QToolButton;
+class QPainter;
 class QGraphicsPixmapItem;
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -24,7 +25,7 @@ public:
     explicit ImageView(QWidget* parent = nullptr);
     ~ImageView() override;
 
-    // 设置当前展示的图像。空图像清空场景。
+    // 设置当前展示的图像。空图像清空场景；默认保留当前缩放比与视图模式。
     void setImage(const QImage& img);
     void setImage(const QImage& img, bool bResetView);
 
@@ -36,6 +37,10 @@ public:
     void setSelectionEnabled(bool bEnabled) { bSelectionEnabled_ = bEnabled; }
     double comparisonSplit() const { return dComparisonSplit_; }
     bool comparisonEnabled() const { return bComparisonEnabled_; }
+
+    // 局部放大镜：跟随鼠标显示光标附近像素的放大视图。
+    void setLoupeEnabled(bool bEnabled) { bLoupeEnabled_ = bEnabled; refreshLoupe(); }
+    bool loupeEnabled() const { return bLoupeEnabled_; }
 
     // 当前图像引用。
     const QImage& image() const { return current_; }
@@ -94,6 +99,8 @@ private:
     void requestPyramid();
     void onPyramidFinished();
     void applyPyramidLevel();
+    void drawLoupe(QPainter& painter);
+    void refreshLoupe();
 
     QToolButton* previousButton_ = nullptr;
     QToolButton* nextButton_ = nullptr;
@@ -119,6 +126,7 @@ private:
     quint64 nRunningPyramidGeneration_ = 0;
     int nDisplayedPyramidLevel_ = -1;
     bool bPyramidPending_ = false;
+    bool bLoupeEnabled_ = false;
 };
 
 } // namespace ui

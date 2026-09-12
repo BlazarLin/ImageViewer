@@ -55,6 +55,8 @@ protected:
 private slots:
     void onOpen();
     void onOpenContainingFolder();
+    void onCopyImageFile();
+    void onDeleteImageFile();
     void startImageLoad();
     void onImageLoadFinished();
     void onRefresh();
@@ -148,6 +150,10 @@ private:
     QAction* actTogglePreprocess_ = nullptr;
     QAction* actToggleAnalysis_ = nullptr;
     QAction* actToggleThumbnails_ = nullptr;
+    QAction* actLoupe_ = nullptr;
+    QAction* actCopyFile_ = nullptr;
+    QAction* actFullScreen_ = nullptr;
+    QAction* actDeleteFile_ = nullptr;
     QAction* actCompare_ = nullptr;
     QAction* actShowConsole_ = nullptr;
     QAction* actAbout_ = nullptr;

@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+class QMenuBar;
 class QLabel;
 class QToolButton;
 
@@ -17,6 +18,7 @@ public:
 
     void setInfoText(const QString& text, const QString& fullPath);
     void setMaximized(bool bMaximized);
+    void setMenuBar(QMenuBar* menuBar);
 
 signals:
     void minimizeRequested();

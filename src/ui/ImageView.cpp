@@ -172,6 +172,7 @@ void ImageView::scrollContentsBy(int nDx, int nDy)
 {
     QGraphicsView::scrollContentsBy(nDx, nDy);
     updateNavigationButtons();
+    refreshLoupe();
 }
 
 void ImageView::setupScene()
@@ -182,12 +183,12 @@ void ImageView::setupScene()
 
 void ImageView::setImage(const QImage& img)
 {
-    setImage(img, true);
+    // 切换图像默认保留当前缩放比，避免翻图时重新适配打断浏览节奏。
+    setImage(img, false);
 }
 
 void ImageView::setImage(const QImage& img, bool bResetView)
 {
-    const QRectF oldRect = scene_->sceneRect();
     clearSelection();
     current_ = img;
     updateNavigationButtons();
@@ -204,10 +205,15 @@ void ImageView::setImage(const QImage& img, bool bResetView)
         scene_->setSceneRect(QRectF());
     }
     requestPyramid();
-    if (bResetView || oldRect.size() != scene_->sceneRect().size()) {
+    if (bResetView) {
         viewMode_ = ViewMode::FitWindow;
         applyViewMode();
+    } else if (viewMode_ != ViewMode::Manual) {
+        // 适配模式重算适配比例；同一视口下缩放比不变。
+        applyViewMode();
     } else {
+        // 手动缩放：保留当前缩放比，仅将新图居中。
+        centerOn(scene_->sceneRect().center());
         updateRenderMode();
         viewport()->update();
     }
@@ -388,6 +394,9 @@ void ImageView::mousePressEvent(QMouseEvent* event)
 void ImageView::mouseMoveEvent(QMouseEvent* event)
 {
     updateHoverPixel(event->pos());
+    if (bLoupeEnabled_) {
+        viewport()->update();
+    }
     if (bSelectingRoi_) {
         roiEnd_ = mapToScene(event->pos());
         viewport()->update();
@@ -460,6 +469,9 @@ void ImageView::keyPressEvent(QKeyEvent* event)
     }
     if (event->key() == Qt::Key_Escape) {
         clearSelection();
+        if (window() && window()->isFullScreen()) {
+            window()->showNormal();
+        }
         event->accept();
         return;
     }
@@ -469,6 +481,7 @@ void ImageView::keyPressEvent(QKeyEvent* event)
 void ImageView::leaveEvent(QEvent* event)
 {
     emit pixelHovered(QPoint(), QColor(), false);
+    refreshLoupe();
     QGraphicsView::leaveEvent(event);
 }
 
@@ -504,6 +517,10 @@ void ImageView::dropEvent(QDropEvent* event)
 void ImageView::paintEvent(QPaintEvent* event)
 {
     QGraphicsView::paintEvent(event);
+    if (bLoupeEnabled_ && !current_.isNull()) {
+        QPainter loupePainter(viewport());
+        drawLoupe(loupePainter);
+    }
     if (!current_.isNull()) {
         return;
     }
@@ -518,7 +535,7 @@ void ImageView::paintEvent(QPaintEvent* event)
     painter.drawRoundedRect(centeredCard, 10, 10);
 
     QFont titleFont = painter.font();
-    titleFont.setPixelSize(20);
+    titleFont.setPixelSize(15);
     titleFont.setWeight(QFont::DemiBold);
     painter.setFont(titleFont);
     painter.setPen(QColor(226, 230, 235));
@@ -526,12 +543,87 @@ void ImageView::paintEvent(QPaintEvent* event)
         Qt::AlignCenter, tr("打开或拖放图像"));
 
     QFont hintFont = painter.font();
-    hintFont.setPixelSize(16);
+    hintFont.setPixelSize(12);
     hintFont.setWeight(QFont::Normal);
     painter.setFont(hintFont);
     painter.setPen(QColor(151, 158, 168));
     painter.drawText(centeredCard.adjusted(20, 78, -20, -28),
         Qt::AlignCenter | Qt::TextWordWrap, tr("支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O"));
+}
+
+void ImageView::refreshLoupe()
+{
+    if (bLoupeEnabled_) {
+        viewport()->update();
+    }
+}
+
+void ImageView::drawLoupe(QPainter& painter)
+{
+    const QPoint pos = viewport()->mapFromGlobal(QCursor::pos());
+    if (!viewport()->rect().contains(pos)) {
+        return;
+    }
+    const QPointF scenePosition = mapToScene(pos);
+    const QPoint pixel(static_cast<int>(std::floor(scenePosition.x())),
+        static_cast<int>(std::floor(scenePosition.y())));
+    if (!current_.rect().contains(pixel)) {
+        return;
+    }
+
+    constexpr int kLoupePixels = 20;
+    constexpr int kLoupeScale = 8;
+    constexpr int kLoupeSize = kLoupePixels * kLoupeScale;
+    constexpr int kMargin = 12;
+
+    const QRect source(pixel.x() - kLoupePixels / 2, pixel.y() - kLoupePixels / 2,
+        kLoupePixels, kLoupePixels);
+    const QRect clipped = source.intersected(current_.rect());
+
+    QPoint topLeft(pos.x() + 24, pos.y() + 24);
+    if (topLeft.x() + kLoupeSize > viewport()->width() - kMargin) {
+        topLeft.setX(pos.x() - 24 - kLoupeSize);
+    }
+    if (topLeft.y() + kLoupeSize > viewport()->height() - kMargin) {
+        topLeft.setY(pos.y() - 24 - kLoupeSize);
+    }
+    topLeft.setX(std::clamp(topLeft.x(), kMargin,
+        std::max(kMargin, viewport()->width() - kLoupeSize - kMargin)));
+    topLeft.setY(std::clamp(topLeft.y(), kMargin,
+        std::max(kMargin, viewport()->height() - kLoupeSize - kMargin)));
+
+    painter.save();
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+    const QRectF target(topLeft, QSize(kLoupeSize, kLoupeSize));
+    painter.fillRect(target, QColor(24, 26, 30));
+    if (!clipped.isEmpty()) {
+        const QRectF clippedTarget(topLeft.x() + (clipped.left() - source.left()) * kLoupeScale,
+            topLeft.y() + (clipped.top() - source.top()) * kLoupeScale,
+            clipped.width() * kLoupeScale, clipped.height() * kLoupeScale);
+        // 对比模式下与像素取样一致：分割线左侧显示原图。
+        const QImage& sample = pixelUsesOriginal(pixel) && !original_.isNull() ? original_ : current_;
+        painter.drawImage(clippedTarget, sample, QRectF(clipped));
+    }
+
+    // 中心十字与当前像素框。
+    const QPointF center = target.center();
+    QPen crossPen(QColor(255, 255, 255, 190), 1);
+    crossPen.setCosmetic(true);
+    painter.setPen(crossPen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawLine(QPointF(center.x() - 14, center.y()), QPointF(center.x() - 5, center.y()));
+    painter.drawLine(QPointF(center.x() + 5, center.y()), QPointF(center.x() + 14, center.y()));
+    painter.drawLine(QPointF(center.x(), center.y() - 14), QPointF(center.x(), center.y() - 5));
+    painter.drawLine(QPointF(center.x(), center.y() + 5), QPointF(center.x(), center.y() + 14));
+    painter.setPen(QPen(QColor(76, 190, 255), 1));
+    painter.drawRect(QRectF(center.x() - kLoupeScale / 2.0, center.y() - kLoupeScale / 2.0,
+        kLoupeScale, kLoupeScale));
+
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(QPen(QColor(45, 155, 211), 2));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(target.adjusted(-1, -1, 1, 1), 6, 6);
+    painter.restore();
 }
 
 void ImageView::drawBackground(QPainter* painter, const QRectF& rect)

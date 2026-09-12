@@ -17,6 +17,9 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    # 仅标签发布步骤需要写权限创建 Release，其余步骤只读。
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -54,6 +57,11 @@ jobs:
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
           ./scripts/check-bom.ps1
+      - name: 读取版本号
+        run: |
+          $text = Get-Content src/app/AppVersion.h -Raw
+          if ($text -notmatch 'QString\("(\d+\.\d+\.\d+)"\)') { throw '无法读取 AppVersion.h 版本号。' }
+          "APP_VERSION=$($Matches[1])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: 验证标签并生成便携包
         run: |
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
@@ -76,9 +84,18 @@ jobs:
       - name: 上传待验收产物
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ImageViewer-windows-x64
+          name: ImageViewer-${{ env.APP_VERSION }}-windows-x64
           path: |
             dist/*.zip
             dist/*.sha256
           if-no-files-found: error
           retention-days: 14
+      - name: 发布带版本的安装包
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (!(Test-Path "dist/ImageViewer-$env:APP_VERSION-windows-x64.zip")) { throw '便携包文件名与版本号不一致。' }
+          gh release create "$env:GITHUB_REF_NAME" --verify-tag --generate-notes dist/* `
+            || gh release upload "$env:GITHUB_REF_NAME" --clobber dist/*
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

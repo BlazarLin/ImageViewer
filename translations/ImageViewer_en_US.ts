@@ -403,6 +403,64 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
         <translation>Wheel to zoom; double-click for fit / 100%; show Analysis then Shift-drag for ROI; Esc to clear</translation>
     </message>
     <message>
+        <source>滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单</source>
+        <translation>Wheel to zoom; double-click for fit / 100%; show Analysis then Shift-drag for ROI; Esc clears selection or exits full screen; right-click for the context menu</translation>
+    </message>
+    <message>
+        <source>复制图像文件</source>
+        <translation>Copy image file</translation>
+    </message>
+    <message>
+        <source>已复制图像文件：%1</source>
+        <translation>Image file copied: %1</translation>
+    </message>
+    <message>
+        <source>全屏显示</source>
+        <translation>Full screen</translation>
+    </message>
+    <message>
+        <source>退出全屏</source>
+        <translation>Exit full screen</translation>
+    </message>
+    <message>
+        <source>全屏后按 Esc 或 F11 退出</source>
+        <translation>Press Esc or F11 to exit full screen</translation>
+    </message>
+    <message>
+        <source>删除</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>删除图像</source>
+        <translation>Delete Image</translation>
+    </message>
+    <message>
+        <source>确定要删除该图像文件吗？
+%1</source>
+        <translation>Delete this image file?
+%1</translation>
+    </message>
+    <message>
+        <source>删除失败</source>
+        <translation>Delete failed</translation>
+    </message>
+    <message>
+        <source>无法删除文件：%1</source>
+        <translation>Unable to delete file: %1</translation>
+    </message>
+    <message>
+        <source>已删除：%1</source>
+        <translation>Deleted: %1</translation>
+    </message>
+    <message>
+        <source>已移入回收站：%1</source>
+        <translation>Moved to Recycle Bin: %1</translation>
+    </message>
+    <message>
+        <source>局部放大图</source>
+        <translation>Magnifier</translation>
+    </message>
+    <message>
         <source>显示缩略图</source>
         <translation>Show thumbnails</translation>
     </message>

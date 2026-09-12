@@ -15,6 +15,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QClipboard>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QPainterPath>
@@ -29,6 +30,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFutureWatcher>
@@ -113,16 +115,12 @@ MainWindow::~MainWindow()
 
 void MainWindow::setupUi()
 {
+    // 单行顶栏：标题栏内嵌菜单栏，替代原先标题栏 + 菜单栏两行占位。
     titleBar_ = new ui::TitleBar(this);
-    auto* topContainer = new QWidget(this);
-    auto* topLayout = new QVBoxLayout(topContainer);
-    topLayout->setContentsMargins(0, 0, 0, 0);
-    topLayout->setSpacing(0);
-    topLayout->addWidget(titleBar_);
-    auto* appMenuBar = new QMenuBar(topContainer);
+    auto* appMenuBar = new QMenuBar(titleBar_);
     appMenuBar->setObjectName(QString("AppMenuBar"));
-    topLayout->addWidget(appMenuBar);
-    setMenuWidget(topContainer);
+    titleBar_->setMenuBar(appMenuBar);
+    setMenuWidget(titleBar_);
 
     connect(titleBar_, &ui::TitleBar::minimizeRequested, this, &QWidget::showMinimized);
     connect(titleBar_, &ui::TitleBar::maximizeRestoreRequested, this, &MainWindow::toggleMaximized);
@@ -188,32 +186,33 @@ void MainWindow::setupUi()
 
     setStyleSheet(QString(
         "QMainWindow { background:#2d3035; color:#e5e9ef; }"
-        "QWidget { font-family:'Microsoft YaHei UI'; font-size:18px; }"
+        "QWidget { font-family:'Microsoft YaHei UI'; font-size:13px; }"
         "QWidget#CustomTitleBar { background:#1d1f22; border-bottom:1px solid #30343a; }"
-        "QLabel#TitleInfo { color:#dce1e7; font-size:18px; }"
-        "QLabel#AppIcon { background:#1479ad; color:white; border-radius:5px; font-weight:600; }"
-        "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:18px; }"
+        "QLabel#TitleInfo { color:#dce1e7; font-size:13px; }"
+        "QLabel#AppIcon { background:#1479ad; color:white; border-radius:4px; font-weight:600; }"
+        "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:13px; }"
         "QWidget#CustomTitleBar QToolButton:hover { background:#33373d; }"
         "QWidget#CustomTitleBar QToolButton#CloseButton:hover { background:#c42b1c; }"
-        "QMenuBar { background:#222428; color:#dfe3e8; padding:2px 6px; border-bottom:1px solid #30343a; }"
-        "QMenuBar::item { background:transparent; padding:5px 10px; border-radius:4px; }"
+        "QMenuBar { background:transparent; color:#dfe3e8; padding:0 2px; border:0; }"
+        // 上下 padding 让菜单项撑满 38px 标题栏，与窗口按钮同高齐平。
+        "QMenuBar::item { background:transparent; padding:10px 8px; border-radius:4px; }"
         "QMenuBar::item:selected { background:#353a41; color:white; }"
         "QMenuBar::item:pressed { background:#176b98; color:white; }"
-        "QMenu { background:#282b30; color:#e4e8ed; border:1px solid #454a52; padding:6px; }"
-        "QMenu::item { padding:7px 28px 7px 12px; border-radius:4px; }"
+        "QMenu { background:#282b30; color:#e4e8ed; border:1px solid #454a52; padding:5px; }"
+        "QMenu::item { padding:5px 24px 5px 10px; border-radius:4px; }"
         "QMenu::item:selected { background:#176b98; color:white; }"
         "QMenu::item:disabled { color:#747a83; }"
         "QMenu::separator { height:1px; background:#41464d; margin:5px 8px; }"
-        "QToolBar { background:#222428; border:0; border-bottom:1px solid #34383e; spacing:3px; padding:6px 8px; }"
+        "QToolBar { background:#222428; border:0; border-bottom:1px solid #34383e; spacing:3px; padding:4px 8px; }"
         "QToolButton { color:#dfe3e8; background:#30353b; border:1px solid #50565f; border-radius:4px; padding:4px 6px; }"
         "QToolButton:hover { background:#3c454e; }"
-        "QToolBar QToolButton { color:#dfe3e8; background:transparent; border:1px solid transparent; border-radius:5px; min-height:34px; padding:5px 12px; }"
+        "QToolBar QToolButton { color:#dfe3e8; background:transparent; border:1px solid transparent; border-radius:5px; min-height:26px; padding:4px 10px; }"
         "QToolBar QToolButton:hover { background:#343941; border-color:#454b54; color:white; }"
         "QToolBar QToolButton:pressed { background:#1c5e82; }"
         "QToolBar QToolButton:checked { background:#176b98; border-color:#268bc0; color:white; }"
         "QToolBar QToolButton:disabled { color:#666c74; background:transparent; }"
         "QToolBar::separator { width:1px; background:#434850; margin:5px 6px; }"
-        "QStatusBar { background:#222428; color:#b9c0c8; border:0; min-height:34px; }"
+        "QStatusBar { background:#222428; color:#b9c0c8; border:0; min-height:26px; }"
         "QStatusBar::item { border:0; background:transparent; }"
         "QStatusBar QLabel { color:#b9c0c8; padding:0 8px; border:0; background:transparent; }"
         "QStatusBar QLabel#StatusPixel { color:#d5e3ed; }"
@@ -223,11 +222,11 @@ void MainWindow::setupUi()
         "QDockWidget::close-button:hover,QDockWidget::float-button:hover { background:#3a3f46; }"
         "QWidget#DockTitleBar { background:#22252a; border-bottom:1px solid #3b4047; }"
         "QLabel#DockTitleLabel { color:#e5e9ef; font-weight:600; }"
-        "QToolButton#DockCloseButton { color:#c9cfd6; background:transparent; border:0; border-radius:4px; font-size:18px; }"
+        "QToolButton#DockCloseButton { color:#c9cfd6; background:transparent; border:0; border-radius:4px; font-size:12px; }"
         "QToolButton#DockCloseButton:hover { color:white; background:#c42b1c; }"
         "QWidget#PreprocessPanel,QWidget#AnalysisPanel,QWidget#AnalysisContent { background:#25282d; color:#e1e5ea; }"
         "QTabWidget::pane { border:0; background:#25282d; }"
-        "QTabBar::tab { background:#30343a; color:#dfe3e8; padding:10px 16px; }"
+        "QTabBar::tab { background:#30343a; color:#dfe3e8; padding:6px 12px; }"
         "QTabBar::tab:selected { background:#176b98; color:white; }"
         "QFrame#ProcessingSwitchCard { background:#2b3b46; border:1px solid #31586f; border-radius:7px; }"
         "QCheckBox#ProcessingSwitch { color:#edf4f8; font-weight:600; spacing:9px; }"
@@ -298,7 +297,7 @@ void MainWindow::setupUi()
         else { view_->clearSelection(); clearAnalysis(); }
     });
     connect(view_, &ui::ImageView::selectionCleared, this, &MainWindow::clearAnalysis);
-    view_->setToolTip(tr("滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区"));
+    view_->setToolTip(tr("滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单"));
 }
 
 void MainWindow::setupActions()
@@ -311,10 +310,39 @@ void MainWindow::setupActions()
     actOpenFolder_->setObjectName(QString("OpenContainingFolder"));
     actOpenFolder_->setEnabled(false);
     connect(actOpenFolder_, &QAction::triggered, this, &MainWindow::onOpenContainingFolder);
+
+    actCopyFile_ = new QAction(tr("复制图像文件"), this);
+    actCopyFile_->setObjectName(QString("CopyImageFile"));
+    actCopyFile_->setEnabled(false);
+    connect(actCopyFile_, &QAction::triggered, this, &MainWindow::onCopyImageFile);
+
+    actFullScreen_ = new QAction(tr("全屏显示"), this);
+    actFullScreen_->setObjectName(QString("ToggleFullScreen"));
+    actFullScreen_->setCheckable(true);
+    actFullScreen_->setShortcut(QKeySequence(Qt::Key_F11));
+    actFullScreen_->setToolTip(tr("全屏后按 Esc 或 F11 退出"));
+    connect(actFullScreen_, &QAction::toggled, this, [this](bool bFullScreen) {
+        bFullScreen ? showFullScreen() : showNormal();
+    });
+
+    actDeleteFile_ = new QAction(tr("删除"), this);
+    actDeleteFile_->setObjectName(QString("DeleteImageFile"));
+    actDeleteFile_->setShortcut(QKeySequence(Qt::Key_Delete));
+    actDeleteFile_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    actDeleteFile_->setEnabled(false);
+    connect(actDeleteFile_, &QAction::triggered, this, &MainWindow::onDeleteImageFile);
+    view_->addAction(actDeleteFile_);
+    thumbnailBar_->addAction(actDeleteFile_);
+
     view_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(view_, &QWidget::customContextMenuRequested, this, [this](const QPoint& position) {
         QMenu menu(this);
         menu.addAction(actOpenFolder_);
+        menu.addAction(actCopyFile_);
+        menu.addSeparator();
+        menu.addAction(actFullScreen_);
+        menu.addSeparator();
+        menu.addAction(actDeleteFile_);
         menu.exec(view_->viewport()->mapToGlobal(position));
     });
 
@@ -375,6 +403,16 @@ void MainWindow::setupActions()
     const bool bThumbnails = QSettings().value(QString("ui/thumbnailsVisible"), true).toBool();
     actToggleThumbnails_->setChecked(bThumbnails);
     thumbnailContainer_->setVisible(bThumbnails);
+    actLoupe_ = new QAction(tr("局部放大图"), this);
+    actLoupe_->setObjectName(QString("ToggleLoupe"));
+    actLoupe_->setCheckable(true);
+    actLoupe_->setShortcut(QKeySequence(QString("Ctrl+M")));
+    connect(actLoupe_, &QAction::toggled, this, [this](bool bEnabled) {
+        view_->setLoupeEnabled(bEnabled);
+        QSettings().setValue(QString("ui/loupeEnabled"), bEnabled);
+    });
+    const bool bLoupe = QSettings().value(QString("ui/loupeEnabled"), false).toBool();
+    actLoupe_->setChecked(bLoupe);
     actCompare_ = new QAction(tr("原图 / 处理图对比"), this);
     actCompare_->setCheckable(true);
     actCompare_->setEnabled(false);
@@ -418,6 +456,7 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addAction(actCompare_);
     viewMenu->addSeparator();
     viewMenu->addAction(actToggleThumbnails_);
+    viewMenu->addAction(actLoupe_);
     auto* languageMenu = appMenuBar->addMenu(tr("语言(&L)"));
     QAction* chineseAction = languageMenu->addAction(tr("简体中文"));
     QAction* englishAction = languageMenu->addAction(QString("English"));
@@ -498,6 +537,76 @@ void MainWindow::onOpenContainingFolder()
         || !QDesktopServices::openUrl(QUrl::fromLocalFile(directory))) {
         statusBar()->showMessage(tr("无法打开图像所在文件夹：%1").arg(directory), 6000);
     }
+}
+
+void MainWindow::onCopyImageFile()
+{
+    if (currentPath_.isEmpty()) {
+        return;
+    }
+    // 以文件 URL 写入剪贴板，资源管理器中可直接粘贴复制该文件。
+    auto* mimeData = new QMimeData();
+    mimeData->setUrls({ QUrl::fromLocalFile(currentPath_) });
+    QApplication::clipboard()->setMimeData(mimeData);
+    statusBar()->showMessage(tr("已复制图像文件：%1").arg(QFileInfo(currentPath_).fileName()), 4000);
+}
+
+void MainWindow::onDeleteImageFile()
+{
+    if (currentPath_.isEmpty() || bLoading_) {
+        return;
+    }
+    const QString path = currentPath_;
+    if (QMessageBox::question(this, tr("删除图像"),
+        tr("确定要删除该图像文件吗？\n%1").arg(path)) != QMessageBox::Yes) {
+        return;
+    }
+    bool bRemoved = false;
+    bool bTrashed = false;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    bTrashed = QFile::moveToTrash(path);
+    bRemoved = bTrashed;
+#endif
+    if (!bRemoved) {
+        bRemoved = QFile::remove(path);
+    }
+    if (!bRemoved) {
+        QMessageBox::warning(this, tr("删除失败"), tr("无法删除文件：%1").arg(path));
+        return;
+    }
+    imageCache_.clear();
+    // 优先切到相邻图像；applyLoadedImage 会重新扫描目录并移除已删文件。
+    const int nIndex = directoryModel_->currentIndex();
+    QString nextPath;
+    if (nIndex >= 0) {
+        const QStringList& files = directoryModel_->files();
+        if (nIndex + 1 < files.size()) {
+            nextPath = files.at(nIndex + 1);
+        } else if (nIndex > 0) {
+            nextPath = files.at(nIndex - 1);
+        }
+    }
+    if (!nextPath.isEmpty()) {
+        openFile(nextPath);
+    } else {
+        clearAnalysis();
+        currentPath_.clear();
+        originalImage_ = QImage();
+        processedImage_ = QImage();
+        displayedImage_ = QImage();
+        ++nProcessingGeneration_;
+        ++nAnalysisGeneration_;
+        bProcessingPending_ = false;
+        actCompare_->setChecked(false);
+        actCompare_->setEnabled(false);
+        view_->setImage(QImage());
+        thumbnailBar_->setFiles(QStringList(), -1);
+        statusProcessing_->clear();
+        updateNavigationActions();
+        updateImageInformation();
+        updateResultActions();
+    }
+    statusBar()->showMessage((bTrashed ? tr("已移入回收站：%1") : tr("已删除：%1")).arg(path), 5000);
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)
@@ -998,6 +1107,8 @@ void MainWindow::updateResultActions()
     actCompare_->setEnabled(bReady && !processedImage_.isNull());
     actRefresh_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
     actOpenFolder_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
+    actCopyFile_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
+    actDeleteFile_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
     for (QAction* action : { actFit_, actFitWidth_, actFitHeight_, actActualSize_ }) {
         action->setEnabled(!displayedImage_.isNull());
     }
@@ -1130,6 +1241,11 @@ void MainWindow::changeEvent(QEvent* event)
     if (event->type() == QEvent::WindowStateChange && titleBar_) {
         titleBar_->setMaximized(isMaximized());
         updateWindowShape();
+        if (actFullScreen_) {
+            const QSignalBlocker blocker(actFullScreen_);
+            actFullScreen_->setChecked(isFullScreen());
+            actFullScreen_->setText(isFullScreen() ? tr("退出全屏") : tr("全屏显示"));
+        }
     }
 }
 
