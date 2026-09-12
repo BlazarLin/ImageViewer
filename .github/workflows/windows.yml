@@ -95,7 +95,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if (!(Test-Path "dist/ImageViewer-$env:APP_VERSION-windows-x64.zip")) { throw '便携包文件名与版本号不一致。' }
-          gh release create "$env:GITHUB_REF_NAME" --verify-tag --generate-notes dist/* `
-            || gh release upload "$env:GITHUB_REF_NAME" --clobber dist/*
+          $zip = "dist/ImageViewer-$env:APP_VERSION-windows-x64.zip"
+          $sha = "$zip.sha256"
+          if (!(Test-Path $zip) -or !(Test-Path $sha)) { throw '便携包或 SHA-256 文件与版本号不一致。' }
+          # 显式传入压缩包与校验文件，避免 dist 下的 stage-* 临时目录被当作资产上传。
+          gh release create "$env:GITHUB_REF_NAME" --verify-tag --generate-notes $zip $sha `
+            || gh release upload "$env:GITHUB_REF_NAME" --clobber $zip $sha
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
