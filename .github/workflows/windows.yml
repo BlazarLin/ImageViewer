@@ -81,13 +81,22 @@ jobs:
             Expand-Archive "_deps/$module-source.zip" -DestinationPath _deps/qt-sources
           }
           ./scripts/package-release.ps1 -BinaryDir build/Release -QtDir $env:QT_ROOT_DIR -DependencySourceDir @('_deps/opencv', '_deps/qt-sources')
+      - name: 生成安装版安装包
+        run: |
+          $stage = Get-ChildItem dist -Directory -Filter "stage-*" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          ./scripts/build-installer.ps1 -PackageDir `
+            (Join-Path $stage.FullName "ImageViewer-$env:APP_VERSION-windows-x64") -OutputDir dist
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: 上传待验收产物
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ImageViewer-${{ env.APP_VERSION }}-windows-x64
           path: |
             dist/*.zip
-            dist/*.sha256
+            dist/*.zip.sha256
+            dist/*-setup.exe
+            dist/*-setup.exe.sha256
           if-no-files-found: error
           retention-days: 14
       - name: 发布带版本的安装包
@@ -97,8 +106,11 @@ jobs:
         run: |
           $zip = "dist/ImageViewer-$env:APP_VERSION-windows-x64.zip"
           $sha = "$zip.sha256"
+          $setup = "dist/ImageViewer-$env:APP_VERSION-windows-x64-setup.exe"
+          $setupSha = "$setup.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $sha)) { throw '便携包或 SHA-256 文件与版本号不一致。' }
+          if (!(Test-Path $setup) -or !(Test-Path $setupSha)) { throw '安装版或 SHA-256 文件与版本号不一致。' }
           # 显式传入压缩包与校验文件，避免 dist 下的 stage-* 临时目录被当作资产上传。
-          gh release create "$env:GITHUB_REF_NAME" --verify-tag --generate-notes $zip $sha `
-            || gh release upload "$env:GITHUB_REF_NAME" --clobber $zip $sha
+          gh release create "$env:GITHUB_REF_NAME" --verify-tag --generate-notes $zip $sha $setup $setupSha `
+            || gh release upload "$env:GITHUB_REF_NAME" --clobber $zip $sha $setup $setupSha
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

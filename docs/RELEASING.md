@@ -8,7 +8,7 @@
 2. 使用干净检出和受支持的依赖执行 Debug、Release 构建、回归以及编码检查。Windows Actions 从官方固定 OpenCV 提交构建共享库，使用 Qt 5.15.2；发布时核对远端工作流状态与提交 SHA。
 3. 人工检查 100%、150%、200% Windows 缩放及多屏切换，确认字体、圆角、窗口边缘缩放、两侧箭头、像素坐标、RGB/灰度切换和 ROI 计数。
 4. 核对真实图片拖放、损坏文件恢复、保存、中文路径、语言切换及空白/小窗口。自动 offscreen 回归不能替代这些桌面检查。
-5. 使用 `scripts/package-release.ps1` 生成 ZIP 与 `.sha256`，在无 Qt/OpenCV 开发环境的 Windows 上解压启动并打开 PNG/JPEG/BMP/TIFF。检查所有 DLL 依赖，不能只测试开发目录。
+5. 使用 `scripts/package-release.ps1` 生成 ZIP 与 `.sha256`，再用 `scripts/build-installer.ps1` 生成安装版 EXE 与 `.sha256`。在无 Qt/OpenCV 开发环境的 Windows 上分别验证：便携包解压启动并打开 PNG/JPEG/BMP/TIFF；安装版默认按当前用户安装、可静默卸载。检查所有 DLL 依赖，不能只测试开发目录。
 
 ## 开源与许可
 
@@ -20,7 +20,7 @@
 
 ## 正式发布
 
-将已提交版本推送到仓库，检查该提交的远端构建与回归结果，再推送同名标签。CI 在标签推送后自动创建与标签同名的 GitHub Release，并附上带版本号的 `ImageViewer-<version>-windows-x64.zip` 与 `.sha256` 文件，Release 资产名称必须与 `AppVersion.h` 版本一致，否则步骤会直接失败。发布后维护者需核对资产完整性，并在 Release 说明中补充变更要点；如需先内部验收，可保留为草稿或在仓库设置中限制发布权限。
+将已提交版本推送到仓库，检查该提交的远端构建与回归结果，再推送同名标签。CI 在标签推送后自动创建与标签同名的 GitHub Release，并附上带版本号的便携 ZIP、安装版 Setup EXE 及各自的 `.sha256` 文件，Release 资产名称必须与 `AppVersion.h` 版本一致，否则步骤会直接失败。发布后维护者需核对资产完整性，并在 Release 说明中补充变更要点；如需先内部验收，可保留为草稿或在仓库设置中限制发布权限。
 
 未覆盖的环境验收须在发布记录中如实列出。CI 的职责是构建、测试和创建带版本安装包的 Release；无代码签名版本应如实说明，不能宣称安装程序、自动更新或签名已完成。
 

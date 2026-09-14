@@ -5,7 +5,7 @@
 [![Windows 构建与测试](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml/badge.svg)](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**首个公开版本：v2.2.0。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.2.0/ImageViewer-2.2.0-windows-x64.zip) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.2.0)。解压后即可运行，无需安装 Qt/OpenCV。
+**当前版本：v2.3.0。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.3.0/ImageViewer-2.3.0-windows-x64.zip) · [下载安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.3.0/ImageViewer-2.3.0-windows-x64-setup.exe) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.3.0)。安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式，可随时在系统设置中卸载；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。
 
 ![小缩略图与统一分析面板](docs/images/260908首版界面.png)
 
@@ -25,7 +25,7 @@
 
 ## 快速使用
 
-解压完整便携包后运行 `ImageViewer.exe`。请保留同目录 DLL、`platforms`、`imageformats` 和 `translations`；只复制 EXE 无法运行。
+解压完整便携包后运行 `ImageViewer.exe`，或使用安装版直接安装。请保留同目录 DLL、`platforms`、`imageformats` 和 `translations`；只复制 EXE 无法运行。
 
 1. 点击“打开”或将图片拖入主图区。首次打开后，下方展示同目录缩略图。
 2. 滚轮缩放、左键拖动平移；点击图像两侧箭头，或在图像区/缩略图区按左右方向键翻图；到达首尾不会平移图像。
@@ -94,7 +94,7 @@ CMake 会读取 `OPENCV_DIR` 环境变量。使用独立 OpenCV CMake 安装/构
 # CMake 输出则使用 -BinaryDir build/Release
 ```
 
-脚本创建独立运行目录、ZIP、SHA-256 校验文件与 `build-info.json`，只从当前 Release EXE 部署实际 Qt 依赖，不混入 Debug DLL。也可通过 `-DependencySourceDir` 附带依赖源码目录中的许可证和归属文件。维护者发布流程、源码和依赖许可检查见 [RELEASING](docs/RELEASING.md)。
+脚本创建独立运行目录、ZIP、SHA-256 校验文件与 `build-info.json`，只从当前 Release EXE 部署实际 Qt 依赖，不混入 Debug DLL。也可通过 `-DependencySourceDir` 附带依赖源码目录中的许可证和归属文件。需要 EXE 安装版时，用 `scripts/build-installer.ps1 -PackageDir <上述独立运行目录>` 基于 Inno Setup 生成带版本号的 Setup EXE 与 SHA-256。维护者发布流程、源码和依赖许可检查见 [RELEASING](docs/RELEASING.md)。
 
 ## 快捷键
 
