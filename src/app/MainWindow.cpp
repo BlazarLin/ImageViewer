@@ -40,6 +40,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QDialog>
+#include <QProcess>
 #include <QPushButton>
 #include <QMimeData>
 #include <QSettings>
@@ -308,6 +309,12 @@ void MainWindow::setupUi()
 
 void MainWindow::setupActions()
 {
+    actNewWindow_ = new QAction(tr("新建窗口"), this);
+    actNewWindow_->setObjectName(QString("NewWindow"));
+    actNewWindow_->setShortcut(QKeySequence::New);
+    actNewWindow_->setToolTip(tr("打开一个新的独立窗口，可同时查看不同文件夹的图像"));
+    connect(actNewWindow_, &QAction::triggered, this, &MainWindow::onNewWindow);
+
     actOpen_ = new QAction(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("打开"), this);
     actOpen_->setShortcut(QKeySequence::Open);
     connect(actOpen_, &QAction::triggered, this, &MainWindow::onOpen);
@@ -428,6 +435,14 @@ void MainWindow::setupActions()
     actShowConsole_->setCheckable(true);
     actShowConsole_->setChecked(QSettings().value(QString("ui/showDebugConsole"), false).toBool());
     connect(actShowConsole_, &QAction::toggled, this, &MainWindow::setDebugConsoleVisible);
+    actMultiInstance_ = new QAction(tr("允许多实例"), this);
+    actMultiInstance_->setObjectName(QString("MultiInstance"));
+    actMultiInstance_->setCheckable(true);
+    actMultiInstance_->setChecked(QSettings().value(QString("ui/multiInstance"), false).toBool());
+    actMultiInstance_->setToolTip(tr("开启后，每次从系统打开图片都会启动独立窗口，可同时查看不同文件夹"));
+    connect(actMultiInstance_, &QAction::toggled, this, [](bool bEnabled) {
+        QSettings().setValue(QString("ui/multiInstance"), bEnabled);
+    });
     actAbout_ = new QAction(tr("关于"), this);
     connect(actAbout_, &QAction::triggered, this, &MainWindow::onAbout);
     actExit_ = new QAction(tr("退出"), this);
@@ -439,6 +454,7 @@ void MainWindow::setupMenusAndToolbar()
 {
     // 菜单挂在标题栏的按钮上，按钮由 setupUi 创建。
     auto* fileMenu = new QMenu(this);
+    fileMenu->addAction(actNewWindow_);
     fileMenu->addAction(actOpen_);
     fileMenu->addAction(actRefresh_);
     fileMenu->addAction(actSaveResult_);
@@ -469,6 +485,8 @@ void MainWindow::setupMenusAndToolbar()
     if (auto* button = titleBar_->menuButton(2)) { button->setMenu(languageMenu); }
     auto* settingsMenu = new QMenu(this);
     settingsMenu->addAction(actShowConsole_);
+    settingsMenu->addSeparator();
+    settingsMenu->addAction(actMultiInstance_);
     if (auto* button = titleBar_->menuButton(3)) { button->setMenu(settingsMenu); }
     auto* helpMenu = new QMenu(this);
     helpMenu->addAction(actAbout_);
@@ -543,6 +561,15 @@ void MainWindow::onOpenContainingFolder()
     if (!QDir(directory).exists()
         || !QDesktopServices::openUrl(QUrl::fromLocalFile(directory))) {
         statusBar()->showMessage(tr("无法打开图像所在文件夹：%1").arg(directory), 6000);
+    }
+}
+
+void MainWindow::onNewWindow()
+{
+    // 以独立模式再启动一个进程，不转发给当前实例，可查看其他文件夹。
+    if (!QProcess::startDetached(QCoreApplication::applicationFilePath(),
+        { QString("--new-window") })) {
+        QMessageBox::warning(this, tr("启动失败"), tr("无法启动新窗口进程。"));
     }
 }
 

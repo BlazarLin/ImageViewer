@@ -859,7 +859,7 @@ void testFeedbackWorkflow(const QString& outputRoot)
     QSettings().setValue(QString("analysis/statisticsExpanded"), true);
 }
 
-void testForwardedFiles(const QString& outputRoot)
+void testForwardedFiles(const QString& outputRoot, const QString& settingsPath)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("多文件-XXXXXX")));
     QTemporaryDir other(QDir(outputRoot).filePath(QString("其他目录-XXXXXX")));
@@ -887,6 +887,27 @@ void testForwardedFiles(const QString& outputRoot)
     const bool bActivated = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
     verify(bFiles && bActivated && child.exitCode() == 0 && nRequests == 2 && received.isEmpty(),
         QString("TEST-47"), QString("真实子进程转发中文空格及多文件参数并确认接收，重复路径去重，无参数请求也通知激活"));
+    // TEST-51：--new-window 与多实例设置下子进程独立成窗不转发，关闭设置后恢复转发。
+    qputenv("IMAGEVIEWER_TEST_SETTINGS", settingsPath.toUtf8());
+    qputenv("IMAGEVIEWER_TEST_ORG", QByteArray("ImageViewerTests"));
+    child.start(QCoreApplication::applicationFilePath(),
+        { QString("--ipc-client"), QString("--new-window"), first });
+    const bool bStandaloneFlag = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
+    const int nExitFlag = child.exitCode();
+    QSettings().setValue(QString("ui/multiInstance"), true);
+    child.start(QCoreApplication::applicationFilePath(), { QString("--ipc-client"), first });
+    const bool bStandaloneSetting = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
+    const int nExitSetting = child.exitCode();
+    QSettings().setValue(QString("ui/multiInstance"), false);
+    child.start(QCoreApplication::applicationFilePath(), { QString("--ipc-client"), first });
+    const bool bForwardResumed = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
+    verify(bStandaloneFlag && nExitFlag == 23 && bStandaloneSetting && nExitSetting == 23
+        && bForwardResumed && child.exitCode() == 0 && nRequests == 3,
+        QString("TEST-51"),
+        QString("--new-window 与允许多实例设置下子进程独立成窗不转发，关闭设置后恢复转发"));
+    QSettings().setValue(QString("ui/multiInstance"), false);
+    qunsetenv("IMAGEVIEWER_TEST_SETTINGS");
+    qunsetenv("IMAGEVIEWER_TEST_ORG");
     QCoreApplication::setApplicationName(oldName);
     qunsetenv("IMAGEVIEWER_TEST_INSTANCE");
     core::navigation::DirectoryModel model;
@@ -923,6 +944,12 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
     if (app.arguments().contains(QString("--ipc-client"))) {
         QCoreApplication::setApplicationName(qEnvironmentVariable("IMAGEVIEWER_TEST_INSTANCE"));
+        const QString settingsPath = qEnvironmentVariable("IMAGEVIEWER_TEST_SETTINGS");
+        if (!settingsPath.isEmpty()) {
+            QSettings::setDefaultFormat(QSettings::IniFormat);
+            QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsPath);
+            QCoreApplication::setOrganizationName(qEnvironmentVariable("IMAGEVIEWER_TEST_ORG"));
+        }
         Application client(&app);
         return client.startup() ? 23 : (client.startupError().isEmpty() ? 0 : 24);
     }
@@ -956,7 +983,7 @@ int main(int argc, char* argv[])
     testHistogramSmoothing();
     testColorHistograms(outputRoot);
     testFeedbackWorkflow(outputRoot);
-    testForwardedFiles(outputRoot);
+    testForwardedFiles(outputRoot, settingsDirectory.path());
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

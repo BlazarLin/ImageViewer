@@ -461,6 +461,30 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
         <translation>Magnifier</translation>
     </message>
     <message>
+        <source>新建窗口</source>
+        <translation>New window</translation>
+    </message>
+    <message>
+        <source>打开一个新的独立窗口，可同时查看不同文件夹的图像</source>
+        <translation>Open a new independent window to view images from different folders at the same time</translation>
+    </message>
+    <message>
+        <source>允许多实例</source>
+        <translation>Allow multiple instances</translation>
+    </message>
+    <message>
+        <source>开启后，每次从系统打开图片都会启动独立窗口，可同时查看不同文件夹</source>
+        <translation>When enabled, each image opened from the system launches an independent window, so different folders can be viewed at the same time</translation>
+    </message>
+    <message>
+        <source>启动失败</source>
+        <translation>Launch failed</translation>
+    </message>
+    <message>
+        <source>无法启动新窗口进程。</source>
+        <translation>Unable to start the new window process.</translation>
+    </message>
+    <message>
         <source>显示缩略图</source>
         <translation>Show thumbnails</translation>
     </message>

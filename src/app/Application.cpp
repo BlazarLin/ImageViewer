@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QSettings>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QThread>
@@ -38,6 +39,11 @@ void Application::parseArgs()
     const QStringList args = app_->arguments();
     for (int i = 1; i < args.size(); ++i) {
         const QString& a = args.at(i);
+        if (a == QString("--new-window") || a == QString("-n")) {
+            // 显式要求独立新窗口，不转发给已有实例。
+            bNewWindow_ = true;
+            continue;
+        }
         if (a.startsWith('-')) {
             continue;
         }
@@ -57,6 +63,11 @@ void Application::parseArgs()
 bool Application::startup()
 {
     parseArgs();
+    bMultiInstance_ = QSettings().value(QString("ui/multiInstance"), false).toBool();
+    if (bNewWindow_ || bMultiInstance_) {
+        // 独立窗口模式：不建立单实例锁与转发通道，可同时查看不同文件夹。
+        return true;
+    }
 
     DWORD nSessionId = 0;
     ::ProcessIdToSessionId(::GetCurrentProcessId(), &nSessionId);

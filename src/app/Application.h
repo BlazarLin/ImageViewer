@@ -16,6 +16,9 @@ public:
     // 解析命令行,返回待打开的图片路径列表。
     QStringList pendingFiles() const { return pendingFiles_; }
 
+    // 是否要求以独立新窗口运行（--new-window）。
+    bool isNewWindow() const { return bNewWindow_; }
+
     // 应用启动入口。返回 true 表示应继续运行, false 应退出(已有实例接管)。
     bool startup();
     QString startupError() const { return startupError_; }
@@ -28,6 +31,8 @@ private:
 
     QApplication* app_ = nullptr;
     QStringList pendingFiles_;
+    bool bNewWindow_ = false;
+    bool bMultiInstance_ = false;
 
     QLocalServer* server_ = nullptr;
     QString startupError_;

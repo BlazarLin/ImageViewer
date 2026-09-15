@@ -55,6 +55,7 @@ protected:
 private slots:
     void onOpen();
     void onOpenContainingFolder();
+    void onNewWindow();
     void onCopyImageFile();
     void onDeleteImageFile();
     void startImageLoad();
@@ -135,6 +136,7 @@ private:
     core::cache::ImageCache imageCache_;
     bool bPreloadPending_ = false;
 
+    QAction* actNewWindow_ = nullptr;
     QAction* actOpen_ = nullptr;
     QAction* actOpenFolder_ = nullptr;
     QAction* actRefresh_ = nullptr;
@@ -156,6 +158,7 @@ private:
     QAction* actDeleteFile_ = nullptr;
     QAction* actCompare_ = nullptr;
     QAction* actShowConsole_ = nullptr;
+    QAction* actMultiInstance_ = nullptr;
     QAction* actAbout_ = nullptr;
     QAction* actExit_ = nullptr;
 
