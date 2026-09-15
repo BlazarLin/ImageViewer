@@ -4,8 +4,8 @@
 #pragma once
 
 #include <QWidget>
+#include <QVector>
 
-class QMenuBar;
 class QLabel;
 class QToolButton;
 
@@ -18,7 +18,9 @@ public:
 
     void setInfoText(const QString& text, const QString& fullPath);
     void setMaximized(bool bMaximized);
-    void setMenuBar(QMenuBar* menuBar);
+    // 在标题栏内添加菜单按钮（文件/视图/…），返回按钮供调用方绑定 QMenu。
+    QToolButton* addMenuButton(const QString& text);
+    QToolButton* menuButton(int nIndex) const;
 
 signals:
     void minimizeRequested();
@@ -34,6 +36,7 @@ protected:
 private:
     QLabel* iconLabel_ = nullptr;
     QLabel* infoLabel_ = nullptr;
+    QVector<QToolButton*> menuButtons_;
     QToolButton* minimizeButton_ = nullptr;
     QToolButton* maximizeButton_ = nullptr;
     QToolButton* closeButton_ = nullptr;

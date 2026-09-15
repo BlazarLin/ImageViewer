@@ -35,3 +35,11 @@ ui_*.h
 
 # 用户配置
 cmake/Config.local.props
+
+# 临时调试与本地测试产物
+/_*.png
+/_*.zip
+/_*.exe
+/_*.log
+/_*.txt
+/_deps/

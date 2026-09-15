@@ -189,6 +189,14 @@ void ImageView::setImage(const QImage& img)
 
 void ImageView::setImage(const QImage& img, bool bResetView)
 {
+    const QRectF oldRect = scene_->sceneRect();
+    // 记录当前视口中心在图像中的相对位置，切图后恢复到同样的相对位置。
+    QPointF relativeCenter(0.5, 0.5);
+    if (!oldRect.isEmpty() && viewMode_ == ViewMode::Manual) {
+        const QPointF center = mapToScene(viewport()->rect().center());
+        relativeCenter.setX(std::clamp((center.x() - oldRect.left()) / oldRect.width(), 0.0, 1.0));
+        relativeCenter.setY(std::clamp((center.y() - oldRect.top()) / oldRect.height(), 0.0, 1.0));
+    }
     clearSelection();
     current_ = img;
     updateNavigationButtons();
@@ -212,8 +220,10 @@ void ImageView::setImage(const QImage& img, bool bResetView)
         // 适配模式重算适配比例；同一视口下缩放比不变。
         applyViewMode();
     } else {
-        // 手动缩放：保留当前缩放比，仅将新图居中。
-        centerOn(scene_->sceneRect().center());
+        // 手动缩放：保留当前缩放比，并恢复到切图前查看的相对位置。
+        const QRectF bounds = scene_->sceneRect();
+        centerOn(bounds.left() + bounds.width() * relativeCenter.x(),
+            bounds.top() + bounds.height() * relativeCenter.y());
         updateRenderMode();
         viewport()->update();
     }

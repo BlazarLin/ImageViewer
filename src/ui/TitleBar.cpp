@@ -7,7 +7,6 @@
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMenuBar>
 #include <QMouseEvent>
 #include <QStyle>
 #include <QToolButton>
@@ -64,14 +63,26 @@ TitleBar::TitleBar(QWidget* parent)
     connect(closeButton_, &QToolButton::clicked, this, &TitleBar::closeRequested);
 }
 
-void TitleBar::setMenuBar(QMenuBar* menuBar)
+QToolButton* TitleBar::addMenuButton(const QString& text)
 {
-    if (!menuBar || !layout()) {
-        return;
+    auto* button = new QToolButton(this);
+    button->setObjectName(QString("MenuButton"));
+    button->setText(text);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    button->setPopupMode(QToolButton::InstantPopup);
+    button->setFocusPolicy(Qt::NoFocus);
+    button->setCursor(Qt::PointingHandCursor);
+    // 插在信息标签之前，保持菜单按钮都在图标右侧。
+    if (auto* box = dynamic_cast<QHBoxLayout*>(layout())) {
+        box->insertWidget(box->indexOf(infoLabel_), button);
     }
-    menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
-    // 插在图标之后、信息标签之前，保持单行布局。
-    dynamic_cast<QHBoxLayout*>(layout())->insertWidget(1, menuBar);
+    menuButtons_.append(button);
+    return button;
+}
+
+QToolButton* TitleBar::menuButton(int nIndex) const
+{
+    return (nIndex >= 0 && nIndex < menuButtons_.size()) ? menuButtons_.at(nIndex) : nullptr;
 }
 
 void TitleBar::setInfoText(const QString& text, const QString& fullPath)

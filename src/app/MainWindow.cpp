@@ -38,7 +38,6 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
-#include <QMenuBar>
 #include <QMessageBox>
 #include <QDialog>
 #include <QPushButton>
@@ -58,6 +57,10 @@
 
 #include <vector>
 #include <algorithm>
+
+namespace {
+
+} // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -115,11 +118,14 @@ MainWindow::~MainWindow()
 
 void MainWindow::setupUi()
 {
-    // 单行顶栏：标题栏内嵌菜单栏，替代原先标题栏 + 菜单栏两行占位。
+    // 单行顶栏：标题栏内嵌菜单按钮（QMenuBar 在无边框窗口中会被平台层当作拖拽区，
+    // 导致菜单无法点击，因此改用 QToolButton + QMenu）。
     titleBar_ = new ui::TitleBar(this);
-    auto* appMenuBar = new QMenuBar(titleBar_);
-    appMenuBar->setObjectName(QString("AppMenuBar"));
-    titleBar_->setMenuBar(appMenuBar);
+    titleBar_->addMenuButton(tr("文件(&F)"));
+    titleBar_->addMenuButton(tr("视图(&V)"));
+    titleBar_->addMenuButton(tr("语言(&L)"));
+    titleBar_->addMenuButton(tr("设置(&S)"));
+    titleBar_->addMenuButton(tr("帮助(&H)"));
     setMenuWidget(titleBar_);
 
     connect(titleBar_, &ui::TitleBar::minimizeRequested, this, &QWidget::showMinimized);
@@ -193,11 +199,11 @@ void MainWindow::setupUi()
         "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:13px; }"
         "QWidget#CustomTitleBar QToolButton:hover { background:#33373d; }"
         "QWidget#CustomTitleBar QToolButton#CloseButton:hover { background:#c42b1c; }"
-        "QMenuBar { background:transparent; color:#dfe3e8; padding:0 2px; border:0; }"
-        // 上下 padding 让菜单项撑满 38px 标题栏，与窗口按钮同高齐平。
-        "QMenuBar::item { background:transparent; padding:10px 8px; border-radius:4px; }"
-        "QMenuBar::item:selected { background:#353a41; color:white; }"
-        "QMenuBar::item:pressed { background:#176b98; color:white; }"
+        "QWidget#CustomTitleBar QToolButton#MenuButton { border:0; background:transparent; color:#dfe3e8; font-size:13px; padding:4px 10px; border-radius:4px; }"
+        "QWidget#CustomTitleBar QToolButton#MenuButton:hover { background:#33373d; color:white; }"
+        "QWidget#CustomTitleBar QToolButton#MenuButton:pressed,"
+        "QWidget#CustomTitleBar QToolButton#MenuButton:checked { background:#176b98; color:white; }"
+        "QWidget#CustomTitleBar QToolButton::menu-indicator { image:none; width:0; }"
         "QMenu { background:#282b30; color:#e4e8ed; border:1px solid #454a52; padding:5px; }"
         "QMenu::item { padding:5px 24px 5px 10px; border-radius:4px; }"
         "QMenu::item:selected { background:#176b98; color:white; }"
@@ -431,12 +437,8 @@ void MainWindow::setupActions()
 
 void MainWindow::setupMenusAndToolbar()
 {
-    QWidget* topContainer = menuWidget();
-    QMenuBar* appMenuBar = topContainer ? topContainer->findChild<QMenuBar*>(QString("AppMenuBar")) : nullptr;
-    if (!appMenuBar) {
-        return;
-    }
-    auto* fileMenu = appMenuBar->addMenu(tr("文件(&F)"));
+    // 菜单挂在标题栏的按钮上，按钮由 setupUi 创建。
+    auto* fileMenu = new QMenu(this);
     fileMenu->addAction(actOpen_);
     fileMenu->addAction(actRefresh_);
     fileMenu->addAction(actSaveResult_);
@@ -445,7 +447,8 @@ void MainWindow::setupMenusAndToolbar()
     fileMenu->addAction(actLoadPreset_);
     fileMenu->addSeparator();
     fileMenu->addAction(actExit_);
-    auto* viewMenu = appMenuBar->addMenu(tr("视图(&V)"));
+    if (auto* button = titleBar_->menuButton(0)) { button->setMenu(fileMenu); }
+    auto* viewMenu = new QMenu(this);
     viewMenu->addAction(actFit_);
     viewMenu->addAction(actFitWidth_);
     viewMenu->addAction(actFitHeight_);
@@ -457,15 +460,19 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addSeparator();
     viewMenu->addAction(actToggleThumbnails_);
     viewMenu->addAction(actLoupe_);
-    auto* languageMenu = appMenuBar->addMenu(tr("语言(&L)"));
+    if (auto* button = titleBar_->menuButton(1)) { button->setMenu(viewMenu); }
+    auto* languageMenu = new QMenu(this);
     QAction* chineseAction = languageMenu->addAction(tr("简体中文"));
     QAction* englishAction = languageMenu->addAction(QString("English"));
     connect(chineseAction, &QAction::triggered, this, [this]() { selectLanguage(QString("zh_CN")); });
     connect(englishAction, &QAction::triggered, this, [this]() { selectLanguage(QString("en_US")); });
-    auto* settingsMenu = appMenuBar->addMenu(tr("设置(&S)"));
+    if (auto* button = titleBar_->menuButton(2)) { button->setMenu(languageMenu); }
+    auto* settingsMenu = new QMenu(this);
     settingsMenu->addAction(actShowConsole_);
-    auto* helpMenu = appMenuBar->addMenu(tr("帮助(&H)"));
+    if (auto* button = titleBar_->menuButton(3)) { button->setMenu(settingsMenu); }
+    auto* helpMenu = new QMenu(this);
     helpMenu->addAction(actAbout_);
+    if (auto* button = titleBar_->menuButton(4)) { button->setMenu(helpMenu); }
 
     auto* toolbar = addToolBar(tr("主工具栏"));
     toolbar->setObjectName(QString("MainToolBar"));
