@@ -129,6 +129,7 @@
     <ClInclude Include="core\cache\ImageCache.h" />
     <ClInclude Include="core\cache\ThumbnailCache.h" />
     <ClInclude Include="core\cache\ImagePyramid.h" />
+    <ClInclude Include="util\BackgroundWork.h" />
     <ClInclude Include="util\ElapsedLog.h" />
     <ClInclude Include="util\DebugConsole.h" />
   </ItemGroup>

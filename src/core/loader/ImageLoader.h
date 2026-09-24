@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 
+#include <QDateTime>
 #include <QImage>
 #include <QString>
 
@@ -9,6 +10,8 @@ namespace core::loader {
 struct LoadResult {
     QImage image;
     QString error;
+    qint64 nFileBytes = 0;
+    QDateTime modified;
     bool ok() const { return error.isEmpty() && !image.isNull(); }
 };
 

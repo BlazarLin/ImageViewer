@@ -1,4 +1,4 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：实现像素信息、ROI 统计和灰度直方图界面。
 // 目的：让偶发分析操作不占用常规看图空间。
 #include "AnalysisPanel.h"
@@ -324,7 +324,7 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
         histogram_->setSmoothingSigma(dSigma);
         QSettings().setValue(QString("analysis/histogramSigma"), dSigma);
     });
-    auto* histogramHint = new QLabel(tr("横轴：0–255；纵轴：像素数（共用刻度）\n悬停显示原始计数；平滑仅影响曲线"), histogramGroup_);
+    auto* histogramHint = new QLabel(tr("横轴：8 位显示值 0–255；纵轴：像素数（共用刻度）\n悬停显示原始计数；平滑仅影响曲线"), histogramGroup_);
     histogramHint->setWordWrap(true);
     histogramLayout->addWidget(histogramHint);
     rootLayout->insertWidget(2, histogramGroup_, 1);

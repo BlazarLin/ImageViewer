@@ -1,4 +1,4 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：实现内存共享起始层和高质量二分降采样金字塔。
 // 目的：在后台构建有限层级，避免 UI 线程承担大图缩放工作。
 #include "ImagePyramid.h"
@@ -8,16 +8,17 @@
 namespace core::cache {
 
 std::vector<QImage> ImagePyramid::build(const QImage& source, int nSmallestSideLimit,
-    int nMaximumLevels)
+    int nMaximumLevels, const util::Cancellation& canceled)
 {
     std::vector<QImage> levels;
-    if (source.isNull() || nMaximumLevels <= 0) {
+    if (util::canceled(canceled) || source.isNull() || nMaximumLevels <= 0) {
         return levels;
     }
     levels.reserve(nMaximumLevels);
     levels.push_back(source);
     const int nLimit = std::max(64, nSmallestSideLimit);
     while (static_cast<int>(levels.size()) < nMaximumLevels) {
+        if (util::canceled(canceled)) { return {}; }
         const QImage& previous = levels.back();
         if (std::max(previous.width(), previous.height()) <= nLimit) {
             break;

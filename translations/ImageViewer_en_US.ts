@@ -500,6 +500,22 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
         <source>隐藏工具栏</source>
         <translation>Hide toolbar</translation>
     </message>
+    <message>
+        <source>正在保存：%1</source>
+        <translation>Saving: %1</translation>
+    </message>
+    <message>
+        <source>保存失败：%1</source>
+        <translation>Save failed: %1</translation>
+    </message>
+    <message>
+        <source>正在完成保存，完成后自动关闭</source>
+        <translation>Finishing save; the window will close when complete</translation>
+    </message>
+    <message>
+        <source> | 取样/统计/处理：8 位</source>
+        <translation> | Sampling/statistics/processing: 8-bit</translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -637,7 +653,7 @@ Hover for bin counts; Shift + drag to analyze a region</translation>
     <message>
         <source>横轴：0–255；纵轴：像素数（共用刻度）
 悬停显示原始计数；平滑仅影响曲线</source>
-        <translation>X: 0–255; Y: pixel count (shared scale)
+        <translation type="vanished">X: 0–255; Y: pixel count (shared scale)
 Hover shows raw counts; smoothing affects curves only</translation>
     </message>
     <message>
@@ -671,6 +687,12 @@ Hover shows raw counts; smoothing affects curves only</translation>
     <message>
         <source>点击分析整张图，或 Shift + 拖动选择 ROI</source>
         <translation>Click Analyze full image or Shift-drag to select an ROI</translation>
+    </message>
+    <message>
+        <source>横轴：8 位显示值 0–255；纵轴：像素数（共用刻度）
+悬停显示原始计数；平滑仅影响曲线</source>
+        <translation>X: 8-bit display values 0–255; Y: pixel count (shared scale)
+Hover for original counts; smoothing only affects curves</translation>
     </message>
 </context>
 <context>
@@ -707,6 +729,12 @@ Hover shows raw counts; smoothing affects curves only</translation>
 %3</source>
         <translation>X: %1  Y: %2
 %3</translation>
+    </message>
+    <message>
+        <source>
+8 位显示值（非原始值）</source>
+        <translation>
+8-bit display value (not the original value)</translation>
     </message>
 </context>
 <context>
@@ -872,7 +900,7 @@ Hover shows raw counts; smoothing affects curves only</translation>
     <name>ui::ThumbnailBar</name>
     <message>
         <source>%1/%2</source>
-        <translation>%1/%2</translation>
+        <translation type="vanished">%1/%2</translation>
     </message>
 </context>
 <context>

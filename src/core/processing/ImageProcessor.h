@@ -1,8 +1,9 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：定义实时图像预处理管线的参数与结果。
 // 目的：以无 UI 依赖的纯计算接口支撑异步预览和单元测试。
 #pragma once
 
+#include "util/BackgroundWork.h"
 #include <QImage>
 #include <QMetaType>
 #include <QString>
@@ -45,7 +46,7 @@ struct ProcessingResult {
 class ImageProcessor {
 public:
     static ProcessingResult process(const QImage& source,
-        const ProcessingParameters& parameters);
+        const ProcessingParameters& parameters, const util::Cancellation& canceled = {});
 };
 
 } // namespace core::processing

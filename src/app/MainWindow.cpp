@@ -1,4 +1,4 @@
-#include "MainWindow.h"
+﻿#include "MainWindow.h"
 
 #include "core/loader/ImageLoader.h"
 #include "core/analysis/ImageAnalysis.h"
@@ -57,6 +57,8 @@
 #include <Windows.h>
 
 #include <vector>
+#include <QImageReader>
+#include <QSet>
 #include <algorithm>
 
 namespace {
@@ -69,7 +71,9 @@ MainWindow::MainWindow(QWidget* parent)
     , directoryModel_(std::make_unique<core::navigation::DirectoryModel>())
     , processingWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
     , analysisWatcher_(new QFutureWatcher<core::analysis::AnalysisResult>(this))
-    , preloadWatcher_(new QFutureWatcher<QVector<PreloadResult>>(this))
+    , preloadWatcher_(new QFutureWatcher<int>(this))
+    , directoryWatcher_(new QFutureWatcher<core::navigation::DirectoryModel>(this))
+    , saveWatcher_(new QFutureWatcher<AsyncSaveResult>(this))
     , processingTimer_(new QTimer(this))
 {
     setWindowTitle(QString("ImageViewer"));
@@ -83,6 +87,12 @@ MainWindow::MainWindow(QWidget* parent)
     setupActions();
     setupMenusAndToolbar();
     setupStatusBar();
+    connect(view_, &ui::ImageView::firstFramePainted, this, [this]() {
+        if (bPerformanceTrace_ && requestTimer_.isValid() && !bLoading_) {
+            qInfo() << "PERF first_frame_ms" << requestTimer_.elapsed()
+                << "cache_hits" << imageCache_->hitCount() << "decodes" << imageCache_->decodeCount();
+        }
+    });
 
     processingTimer_->setSingleShot(true);
     processingTimer_->setInterval(80);
@@ -91,10 +101,13 @@ MainWindow::MainWindow(QWidget* parent)
         this, &MainWindow::onPreprocessFinished);
     connect(analysisWatcher_, &QFutureWatcher<core::analysis::AnalysisResult>::finished,
         this, &MainWindow::onRoiAnalysisFinished);
-    connect(preloadWatcher_, &QFutureWatcher<QVector<PreloadResult>>::finished,
+    connect(preloadWatcher_, &QFutureWatcher<int>::finished,
         this, &MainWindow::onNeighborPreloadFinished);
     connect(loadWatcher_, &QFutureWatcher<core::loader::LoadResult>::finished,
         this, &MainWindow::onImageLoadFinished);
+    connect(directoryWatcher_, &QFutureWatcher<core::navigation::DirectoryModel>::finished,
+        this, &MainWindow::onDirectoryScanFinished);
+    connect(saveWatcher_, &QFutureWatcher<AsyncSaveResult>::finished, this, &MainWindow::onSaveFinished);
     QSettings settings;
     restoreGeometry(settings.value(QString("ui/geometry")).toByteArray());
     restoreState(settings.value(QString("ui/windowState")).toByteArray());
@@ -111,14 +124,12 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-    ++nLoadGeneration_;
-    if (analysisCanceled_) { analysisCanceled_->store(true); }
-    loadWatcher_->waitForFinished();
-    ++nProcessingGeneration_;
-    ++nAnalysisGeneration_;
-    processingWatcher_->waitForFinished();
-    analysisWatcher_->waitForFinished();
-    preloadWatcher_->waitForFinished();
+    // 任务只持有值对象/共享缓存；销毁观察者不会让后台访问已释放的窗口。
+    util::cancel(loadCanceled_);
+    util::cancel(processingCanceled_);
+    util::cancel(analysisCanceled_);
+    util::cancel(preloadCanceled_);
+    util::cancel(directoryCanceled_);
 }
 
 void MainWindow::setupUi()
@@ -262,10 +273,10 @@ void MainWindow::setupUi()
         "QSlider::handle:horizontal:disabled { background:#626870; border-color:#484d54; }"
         "QPushButton#AnalyzeFullImage, QDialog#AboutDialog QPushButton, QPushButton#SecondaryButton { color:#cfd5dc; background:#30343a; border:1px solid #50565f; border-radius:5px; padding:6px 12px; }"
         "QPushButton#AnalyzeFullImage:hover, QDialog#AboutDialog QPushButton:hover, QPushButton#SecondaryButton:hover { color:white; background:#393e45; border-color:#69727d; }"
-        "QListWidget#ThumbnailBar { background:#222428; color:#d7dce2; border:0; border-top:1px solid #34383e; padding:6px; outline:0; }"
-        "QListWidget#ThumbnailBar::item { background:#292c31; color:#c8ced5; border:2px solid transparent; border-radius:6px; padding:3px; }"
-        "QListWidget#ThumbnailBar::item:hover { background:#31363d; border-color:#4d555f; }"
-        "QListWidget#ThumbnailBar::item:selected { background:#263f50; color:white; border-color:#2d9bd3; }"
+        "QListView#ThumbnailBar { background:#222428; color:#d7dce2; border:0; border-top:1px solid #34383e; padding:6px; outline:0; }"
+        "QListView#ThumbnailBar::item { background:#292c31; color:#c8ced5; border:2px solid transparent; border-radius:6px; padding:3px; }"
+        "QListView#ThumbnailBar::item:hover { background:#31363d; border-color:#4d555f; }"
+        "QListView#ThumbnailBar::item:selected { background:#263f50; color:white; border-color:#2d9bd3; }"
         "QAbstractScrollArea::corner { background:#24272b; border:0; }"
         "QScrollBar { background:#24272b; border:0; }"
         "QScrollBar:vertical { width:11px; }"
@@ -671,7 +682,8 @@ void MainWindow::onDeleteImageFile()
         QMessageBox::warning(this, tr("删除失败"), tr("无法删除文件：%1").arg(path));
         return;
     }
-    imageCache_.clear();
+    imageCache_->remove(path);
+    bRefreshDirectoryOnLoad_ = true;
     // 优先切到相邻图像；applyLoadedImage 会重新扫描目录并移除已删文件。
     const int nIndex = directoryModel_->currentIndex();
     QString nextPath;
@@ -697,6 +709,9 @@ void MainWindow::onDeleteImageFile()
         actCompare_->setChecked(false);
         actCompare_->setEnabled(false);
         view_->setImage(QImage());
+        *directoryModel_ = core::navigation::DirectoryModel();
+        util::cancel(directoryCanceled_);
+        ++nDirectoryGeneration_;
         thumbnailBar_->setFiles(QStringList(), -1);
         statusProcessing_->clear();
         updateNavigationActions();
@@ -726,10 +741,11 @@ void MainWindow::updateWindowShape()
 void MainWindow::openFiles(const QStringList& paths)
 {
     QStringList files;
+    QSet<QString> seen;
     for (const QString& path : paths) {
         const QFileInfo info(path);
         const QString absolute = info.absoluteFilePath();
-        if (info.isFile() && !files.contains(absolute, Qt::CaseInsensitive)) { files.append(absolute); }
+        if (!seen.contains(absolute.toCaseFolded())) { seen.insert(absolute.toCaseFolded()); files.append(absolute); }
     }
     if (files.isEmpty()) { return; }
     openFile(files.first());
@@ -741,13 +757,25 @@ void MainWindow::openFile(const QString& path)
     if (path.isEmpty()) {
         return;
     }
+    if (bPerformanceTrace_) { requestTimer_.start(); }
     pendingFileList_.clear();
+    bReloadAfterDirectory_ = false;
+    util::cancel(loadCanceled_);
+    util::cancel(preloadCanceled_);
+    util::cancel(processingCanceled_);
+    ++nProcessingGeneration_;
+    bProcessingPending_ = false;
+    processingTimer_->stop();
+    util::cancel(directoryCanceled_);
+    ++nDirectoryGeneration_;
+    bDirectoryPending_ = false;
     clearAnalysis();
     requestedPath_ = QFileInfo(path).absoluteFilePath();
     ++nLoadGeneration_;
     bLoading_ = true;
     statusBar()->showMessage(tr("正在打开：%1").arg(QFileInfo(path).fileName()));
     updateResultActions();
+    updateNavigationActions();
     // 只保留最后一次请求；最多一个前台解码任务，避免快速翻图堆积。
     if (!bLoadTaskActive_) {
         startImageLoad();
@@ -760,13 +788,15 @@ void MainWindow::startImageLoad()
     runningLoadPath_ = requestedPath_;
     nRunningLoadGeneration_ = nLoadGeneration_;
     const QString path = runningLoadPath_;
-    QImage cached;
-    imageCache_.find(path, &cached);
-    loadWatcher_->setFuture(QtConcurrent::run([path, cached]() {
-        if (!cached.isNull()) {
-            return core::loader::LoadResult{ cached, QString() };
-        }
-        return core::loader::loadImage(path);
+    loadCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = loadCanceled_;
+    const auto cache = imageCache_;
+    loadWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Decode), [path, cache, canceled]() {
+        auto result = cache->load(path, canceled);
+        const QFileInfo info(path);
+        result.nFileBytes = info.size();
+        result.modified = info.lastModified();
+        return result;
     }));
 }
 
@@ -781,23 +811,27 @@ void MainWindow::onImageLoadFinished()
     const auto result = loadWatcher_->result();
     if (!result.ok()) {
         thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
+        if (!currentPath_.isEmpty() && directoryModel_->count() == 0) { startDirectoryScan(); }
+        updateNavigationActions();
         statusBar()->showMessage(tr("打开失败：%1").arg(result.error), 10000);
         updateResultActions();
         return;
     }
-    imageCache_.insert(runningLoadPath_, result.image);
+    if (bPerformanceTrace_) { qInfo() << "PERF decode_ready_ms" << requestTimer_.elapsed(); }
+    nFileBytes_ = result.nFileBytes;
+    fileModified_ = result.modified;
     statusBar()->clearMessage();
     applyLoadedImage(runningLoadPath_, result.image);
 }
 
 void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
 {
-    const QStringList oldFiles = directoryModel_->files();
-    if (!pendingFileList_.isEmpty()) {
-        directoryModel_->setFileList(pendingFileList_, path);
-        pendingFileList_.clear();
-    } else {
-        directoryModel_->loadForFile(QFileInfo(path).absoluteFilePath());
+    const QStringList explicitFiles = pendingFileList_;
+    pendingFileList_.clear();
+    const bool bKnownPath = explicitFiles.isEmpty() && directoryModel_->setCurrentPath(path);
+    if (!bKnownPath) {
+        *directoryModel_ = core::navigation::DirectoryModel();
+        thumbnailBar_->setFiles({}, -1);
     }
     currentPath_ = QFileInfo(path).absoluteFilePath();
     originalImage_ = image;
@@ -815,22 +849,68 @@ void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
     statusProcessing_->clear();
     QSettings().setValue(QString("files/lastDirectory"), QFileInfo(path).absolutePath());
 
-    if (oldFiles != directoryModel_->files()) {
-        thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
-    } else {
-        thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
-    }
+    thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
     if (processingParameters_.bEnabled) {
         bProcessingPending_ = true;
         statusProcessing_->setText(tr("等待预处理…"));
         processingTimer_->start();
-    } else {
-        showOriginalImage();
     }
     updateNavigationActions();
     updateImageInformation();
     updateResultActions();
-    scheduleNeighborPreload();
+    if (!bKnownPath || bRefreshDirectoryOnLoad_) {
+        scanFiles_ = explicitFiles;
+        startDirectoryScan(bRefreshDirectoryOnLoad_);
+        bRefreshDirectoryOnLoad_ = false;
+    } else {
+        scheduleNeighborPreload();
+    }
+}
+
+void MainWindow::startDirectoryScan(bool bRefresh)
+{
+    util::cancel(directoryCanceled_);
+    ++nDirectoryGeneration_;
+    bDirectoryRefresh_ = bDirectoryRefresh_ || bRefresh;
+    if (directoryWatcher_->isRunning()) { bDirectoryPending_ = true; return; }
+    bDirectoryPending_ = false;
+    nRunningDirectoryGeneration_ = nDirectoryGeneration_;
+    scanPath_ = currentPath_;
+    const QString path = scanPath_;
+    const QStringList files = scanFiles_;
+    scanFiles_.clear();
+    const bool bForce = bDirectoryRefresh_;
+    bDirectoryRefresh_ = false;
+    directoryCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = directoryCanceled_;
+    auto model = *directoryModel_;
+    directoryWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Directory),
+        [model, path, files, bForce, canceled]() mutable {
+            if (!files.isEmpty()) { model.setFileList(files, path, canceled); }
+            else { model.loadForFile(path, bForce, canceled); }
+            return model;
+        }));
+}
+
+void MainWindow::onDirectoryScanFinished()
+{
+    if (nRunningDirectoryGeneration_ == nDirectoryGeneration_ && scanPath_ == currentPath_) {
+        if (bPerformanceTrace_) { qInfo() << "PERF directory_ready_ms" << requestTimer_.elapsed(); }
+        const auto result = directoryWatcher_->result();
+        const bool bChanged = result.files() != directoryModel_->files();
+        *directoryModel_ = result;
+        if (bChanged) { thumbnailBar_->setFiles(result.files(), result.currentIndex()); }
+        else { thumbnailBar_->setCurrentFileIndex(result.currentIndex()); }
+        updateNavigationActions();
+        updateImageInformation();
+        if (bReloadAfterDirectory_) {
+            bReloadAfterDirectory_ = false;
+            const QString path = result.currentIndex() < 0 && result.count() > 0
+                ? result.files().at(std::clamp(nRefreshIndex_, 0, result.count() - 1)) : currentPath_;
+            openFile(path);
+        } else { scheduleNeighborPreload(); }
+    }
+    if (bDirectoryPending_) { startDirectoryScan(); }
 }
 
 void MainWindow::onOpen()
@@ -848,7 +928,6 @@ void MainWindow::onSaveResult()
     if (!actSaveResult_->isEnabled() || displayedImage_.isNull()) {
         return;
     }
-    const QImage imageToSave = displayedImage_;
     const QString suggestedName = currentPath_.isEmpty()
         ? QString("result.png")
         : QFileInfo(currentPath_).completeBaseName() + (processedImage_.isNull() ? QString("_original.png") : QString("_processed.png"));
@@ -871,17 +950,53 @@ void MainWindow::onSaveResult()
             return;
         }
     }
-    QString error;
-    if (!core::loader::saveImage(path, imageToSave, &error)) {
-        QMessageBox::warning(this, tr("保存失败"), error);
+    saveResultTo(path);
+}
+
+bool MainWindow::saveResultTo(const QString& path)
+{
+    if (path.isEmpty() || !actSaveResult_->isEnabled() || displayedImage_.isNull() || bSaving_) { return false; }
+    bSaving_ = true;
+    savedPath_ = path;
+    const QImage image = displayedImage_;
+    const auto cache = imageCache_;
+    statusBar()->showMessage(tr("正在保存：%1").arg(path));
+    saveWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Save), [path, image, cache]() {
+        AsyncSaveResult result;
+        if (core::loader::saveImage(path, image, &result.error)) {
+            cache->remove(path);
+            const QFileInfo info(path);
+            result.nFileBytes = info.size();
+            result.modified = info.lastModified();
+        }
+        return result;
+    }));
+    updateResultActions();
+    return true;
+}
+
+void MainWindow::onSaveFinished()
+{
+    const auto result = saveWatcher_->result();
+    const QString error = result.error;
+    bSaving_ = false;
+    updateResultActions();
+    if (!error.isEmpty()) {
+        bCloseAfterSave_ = false;
+        statusBar()->showMessage(tr("保存失败：%1").arg(error), 10000);
         return;
     }
-    imageCache_.clear();
-    directoryModel_->loadForFile(currentPath_, true);
-    thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
-    updateNavigationActions();
-    updateImageInformation();
-    statusBar()->showMessage(tr("已保存：%1").arg(path), 4000);
+    if (savedPath_ == currentPath_) {
+        nFileBytes_ = result.nFileBytes;
+        fileModified_ = result.modified;
+        updateImageInformation();
+    }
+    thumbnailBar_->invalidateFile(savedPath_);
+    if (!currentPath_.isEmpty() && QFileInfo(savedPath_).absolutePath() == QFileInfo(currentPath_).absolutePath()) {
+        startDirectoryScan(true);
+    }
+    statusBar()->showMessage(tr("已保存：%1").arg(savedPath_), 5000);
+    if (bCloseAfterSave_) { close(); }
 }
 
 void MainWindow::onSavePreset()
@@ -919,7 +1034,7 @@ void MainWindow::onLoadPreset()
 
 void MainWindow::onPrevious()
 {
-    const int nRequestedIndex = bLoading_ ? directoryModel_->files().indexOf(requestedPath_) : -1;
+    const int nRequestedIndex = bLoading_ ? directoryModel_->indexOf(requestedPath_) : -1;
     const int nIndex = nRequestedIndex >= 0 ? nRequestedIndex : directoryModel_->currentIndex();
     if (nIndex > 0) {
         openFile(directoryModel_->files().at(nIndex - 1));
@@ -928,7 +1043,7 @@ void MainWindow::onPrevious()
 
 void MainWindow::onNext()
 {
-    const int nRequestedIndex = bLoading_ ? directoryModel_->files().indexOf(requestedPath_) : -1;
+    const int nRequestedIndex = bLoading_ ? directoryModel_->indexOf(requestedPath_) : -1;
     const int nIndex = nRequestedIndex >= 0 ? nRequestedIndex : directoryModel_->currentIndex();
     if (nIndex >= 0 && nIndex + 1 < directoryModel_->count()) {
         openFile(directoryModel_->files().at(nIndex + 1));
@@ -940,17 +1055,11 @@ void MainWindow::onRefresh()
     if (currentPath_.isEmpty()) {
         return;
     }
-    const int nPreviousIndex = directoryModel_->currentIndex();
-    imageCache_.clear();
-    directoryModel_->loadForFile(currentPath_, true);
-    thumbnailBar_->setFiles(directoryModel_->files(), directoryModel_->currentIndex());
-    updateNavigationActions();
-    updateImageInformation();
-    if (directoryModel_->currentIndex() < 0 && directoryModel_->count() > 0) {
-        openFile(directoryModel_->files().at(std::clamp(nPreviousIndex, 0, directoryModel_->count() - 1)));
-    } else {
-        openFile(currentPath_);
-    }
+    imageCache_->remove(currentPath_);
+    thumbnailBar_->invalidateFile(currentPath_);
+    nRefreshIndex_ = directoryModel_->currentIndex();
+    bReloadAfterDirectory_ = true;
+    startDirectoryScan(true);
 }
 
 void MainWindow::onAbout()
@@ -995,6 +1104,7 @@ void MainWindow::onZoomChanged(double factor)
 void MainWindow::onPreprocessParametersChanged(
     const core::processing::ProcessingParameters& parameters)
 {
+    util::cancel(processingCanceled_);
     processingParameters_ = parameters;
     ++nProcessingGeneration_;
     if (!processingParameters_.bEnabled || originalImage_.isNull()) {
@@ -1015,6 +1125,7 @@ void MainWindow::onPreprocessParametersChanged(
 
 void MainWindow::startPreprocess()
 {
+    if (bLoading_) { bProcessingPending_ = true; return; }
     if (!processingParameters_.bEnabled || originalImage_.isNull()) {
         showOriginalImage();
         return;
@@ -1029,8 +1140,10 @@ void MainWindow::startPreprocess()
     const core::processing::ProcessingParameters parameters = processingParameters_;
     actSaveResult_->setEnabled(false);
     statusProcessing_->setText(tr("处理中…"));
-    processingWatcher_->setFuture(QtConcurrent::run([source, parameters]() {
-        return core::processing::ImageProcessor::process(source, parameters);
+    processingCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = processingCanceled_;
+    processingWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Compute), [source, parameters, canceled]() {
+        return core::processing::ImageProcessor::process(source, parameters, canceled);
     }));
 }
 
@@ -1081,7 +1194,7 @@ void MainWindow::startRoiAnalysis(const QRect& region)
     const QRect requestedRegion = pendingAnalysisRegion_;
     analysisCanceled_ = std::make_shared<std::atomic_bool>(false);
     const auto canceled = analysisCanceled_;
-    analysisWatcher_->setFuture(QtConcurrent::run([image, requestedRegion, canceled]() {
+    analysisWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Compute), [image, requestedRegion, canceled]() {
         return core::analysis::ImageAnalysis::analyze(image, requestedRegion, canceled);
     }));
 }
@@ -1115,56 +1228,33 @@ void MainWindow::toggleComparison(bool bEnabled)
 
 void MainWindow::scheduleNeighborPreload()
 {
-    if (preloadWatcher_->isRunning()) {
-        bPreloadPending_ = true;
-        return;
-    }
-    const int nCurrentIndex = directoryModel_->currentIndex();
-    if (nCurrentIndex < 0) {
-        return;
-    }
-    std::vector<QString> requests;
-    requests.reserve(4);
-    for (int nDistance = 1; nDistance <= 2; ++nDistance) {
-        const int candidates[] = { nCurrentIndex + nDistance, nCurrentIndex - nDistance };
-        for (int nIndex : candidates) {
-            if (nIndex < 0 || nIndex >= directoryModel_->count()) {
-                continue;
-            }
-            const QString path = directoryModel_->files().at(nIndex);
-            QImage cached;
-            if (!imageCache_.find(path, &cached)) {
-                requests.push_back(path);
-            }
-        }
-    }
-    if (requests.empty()) {
-        bPreloadPending_ = false;
-        return;
-    }
+    if (preloadWatcher_->isRunning()) { bPreloadPending_ = true; return; }
     bPreloadPending_ = false;
-    preloadWatcher_->setFuture(QtConcurrent::run([requests]() {
-        QVector<PreloadResult> results;
-        results.reserve(static_cast<int>(requests.size()));
+    const int nIndex = directoryModel_->currentIndex();
+    if (nIndex < 0 || !core::cache::ImageCache::canPrefetch(originalImage_.size())) { return; }
+    QStringList requests;
+    for (int nCandidate : { nIndex + 1, nIndex - 1 }) {
+        if (nCandidate >= 0 && nCandidate < directoryModel_->count()) { requests.append(directoryModel_->files().at(nCandidate)); }
+    }
+    const auto cache = imageCache_;
+    preloadCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = preloadCanceled_;
+    preloadWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Prefetch), [requests, cache, canceled]() {
+        int nLoaded = 0;
         for (const QString& path : requests) {
-            const core::loader::LoadResult loaded = core::loader::loadImage(path);
-            if (loaded.ok()) {
-                results.push_back({ path, loaded.image });
-            }
+            if (util::canceled(canceled)) { break; }
+            QImageReader reader(path);
+            if (!core::cache::ImageCache::canPrefetch(reader.size())) { continue; }
+            // 每张完成即入共享缓存，结果数组不持有整批图片。
+            if (cache->load(path, canceled).ok()) { ++nLoaded; }
         }
-        return results;
+        return nLoaded;
     }));
 }
 
 void MainWindow::onNeighborPreloadFinished()
 {
-    const QVector<PreloadResult> results = preloadWatcher_->result();
-    for (const PreloadResult& result : results) {
-        imageCache_.insert(result.path, result.image);
-    }
-    if (bPreloadPending_) {
-        scheduleNeighborPreload();
-    }
+    if (bPreloadPending_ && !bLoading_) { scheduleNeighborPreload(); }
 }
 
 void MainWindow::showOriginalImage()
@@ -1200,7 +1290,7 @@ void MainWindow::updateResultActions()
         && (!processingParameters_.bEnabled || (!bProcessingPending_
             && !processingTimer_->isActive() && !processingWatcher_->isRunning()));
     analysisPanel_->setImageState(bReady, !processedImage_.isNull());
-    actSaveResult_->setEnabled(bReady);
+    actSaveResult_->setEnabled(bReady && !bSaving_);
     actCompare_->setEnabled(bReady && !processedImage_.isNull());
     actRefresh_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
     actOpenFolder_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
@@ -1213,6 +1303,17 @@ void MainWindow::updateResultActions()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    if (bSaving_) {
+        bCloseAfterSave_ = true;
+        statusBar()->showMessage(tr("正在完成保存，完成后自动关闭"));
+        event->ignore();
+        return;
+    }
+    util::cancel(loadCanceled_);
+    util::cancel(processingCanceled_);
+    util::cancel(analysisCanceled_);
+    util::cancel(preloadCanceled_);
+    util::cancel(directoryCanceled_);
     QSettings settings;
     settings.setValue(QString("ui/geometry"), saveGeometry());
     settings.setValue(QString("ui/windowState"), saveState());
@@ -1221,7 +1322,8 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 void MainWindow::updateNavigationActions()
 {
-    const int nIndex = directoryModel_->currentIndex();
+    const int nRequested = bLoading_ ? directoryModel_->indexOf(requestedPath_) : -1;
+    const int nIndex = nRequested >= 0 ? nRequested : directoryModel_->currentIndex();
     actPrevious_->setEnabled(nIndex > 0);
     actNext_->setEnabled(nIndex >= 0 && nIndex + 1 < directoryModel_->count());
 }
@@ -1242,31 +1344,31 @@ void MainWindow::updateImageInformation()
     }
     statusFile_->setText(QFileInfo(currentPath_).fileName());
     statusFile_->setToolTip(currentPath_);
-    statusSize_->setText(QString("%1 × %2").arg(originalImage_.width()).arg(originalImage_.height()));
+    statusSize_->setText(QString("%1 × %2").arg(originalImage_.width()).arg(originalImage_.height())
+        + (util::highDepth(originalImage_) ? tr(" | 取样/统计/处理：8 位") : QString()));
     titleBar_->setInfoText(formatTitleText(), currentPath_);
     setWindowTitle(QString("ImageViewer - %1").arg(QFileInfo(currentPath_).fileName()));
 }
 
 QString MainWindow::formatTitleText() const
 {
-    const QFileInfo info(currentPath_);
     const int nIndex = directoryModel_->currentIndex();
     return tr("%1  |  %2/%3 个文件  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10")
-        .arg(info.fileName())
+        .arg(QFileInfo(currentPath_).fileName())
         .arg(nIndex >= 0 ? nIndex + 1 : 0)
         .arg(directoryModel_->count())
         .arg(QString::number(view_->zoomFactor() * 100.0, 'f', view_->zoomFactor() < 0.1 ? 1 : 0))
         .arg(originalImage_.width()).arg(originalImage_.height())
-        .arg(formatFileSize(info.size()))
+        .arg(formatFileSize(nFileBytes_))
         .arg(pixelFormatText(originalImage_))
-        .arg(info.lastModified().toString(QString("yyyy/MM/dd HH:mm:ss")))
+        .arg(fileModified_.toString(QString("yyyy/MM/dd HH:mm:ss")))
         .arg(app::version());
 }
 
 QString MainWindow::pixelFormatText(const QImage& image) const
 {
     const int nDepth = image.depth();
-    if (image.isGrayscale()) {
+    if (util::grayFormat(image)) {
         return tr("灰度/%1-bit").arg(nDepth);
     }
     if (image.hasAlphaChannel()) {

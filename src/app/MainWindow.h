@@ -1,19 +1,22 @@
-#pragma once
+﻿#pragma once
 
 #include "core/processing/ImageProcessor.h"
 #include "core/loader/ImageLoader.h"
 #include "core/analysis/ImageAnalysis.h"
 #include "core/cache/ImageCache.h"
+#include "core/navigation/DirectoryModel.h"
 
+#include <QElapsedTimer>
 #include <QImage>
 #include <QMainWindow>
 
 #include <memory>
 #include <QVector>
 
-struct PreloadResult {
-    QString path;
-    QImage image;
+struct AsyncSaveResult {
+    QString error;
+    qint64 nFileBytes = 0;
+    QDateTime modified;
 };
 
 class QAction;
@@ -44,6 +47,7 @@ public:
 
     void openFile(const QString& path);
     void openFiles(const QStringList& paths);
+    bool saveResultTo(const QString& path);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -78,6 +82,9 @@ private slots:
     void toggleComparison(bool bEnabled);
     void scheduleNeighborPreload();
     void onNeighborPreloadFinished();
+    void startDirectoryScan(bool bRefresh = false);
+    void onDirectoryScanFinished();
+    void onSaveFinished();
     void toggleMaximized();
     void selectLanguage(const QString& localeName);
     void setDebugConsoleVisible(bool bVisible);
@@ -126,7 +133,29 @@ private:
     std::unique_ptr<core::navigation::DirectoryModel> directoryModel_;
     QFutureWatcher<core::processing::ProcessingResult>* processingWatcher_ = nullptr;
     QFutureWatcher<core::analysis::AnalysisResult>* analysisWatcher_ = nullptr;
-    QFutureWatcher<QVector<PreloadResult>>* preloadWatcher_ = nullptr;
+    QFutureWatcher<int>* preloadWatcher_ = nullptr;
+    QFutureWatcher<core::navigation::DirectoryModel>* directoryWatcher_ = nullptr;
+    QFutureWatcher<AsyncSaveResult>* saveWatcher_ = nullptr;
+    util::Cancellation loadCanceled_;
+    util::Cancellation processingCanceled_;
+    util::Cancellation preloadCanceled_;
+    util::Cancellation directoryCanceled_;
+    QStringList scanFiles_;
+    QString scanPath_;
+    QString savedPath_;
+    bool bDirectoryPending_ = false;
+    bool bDirectoryRefresh_ = false;
+    bool bReloadAfterDirectory_ = false;
+    bool bRefreshDirectoryOnLoad_ = false;
+    bool bCloseAfterSave_ = false;
+    bool bSaving_ = false;
+    int nRefreshIndex_ = 0;
+    quint64 nDirectoryGeneration_ = 0;
+    quint64 nRunningDirectoryGeneration_ = 0;
+    qint64 nFileBytes_ = 0;
+    QDateTime fileModified_;
+    QElapsedTimer requestTimer_;
+    bool bPerformanceTrace_ = qEnvironmentVariableIsSet("IMAGEVIEWER_PERF_TRACE");
     QTimer* processingTimer_ = nullptr;
     core::processing::ProcessingParameters processingParameters_;
     QImage originalImage_;
@@ -140,7 +169,7 @@ private:
     QRect pendingAnalysisRegion_;
     bool bAnalysisPending_ = false;
     std::shared_ptr<std::atomic_bool> analysisCanceled_;
-    core::cache::ImageCache imageCache_;
+    std::shared_ptr<core::cache::ImageCache> imageCache_ = core::cache::ImageCache::shared();
     bool bPreloadPending_ = false;
 
     QAction* actNewWindow_ = nullptr;

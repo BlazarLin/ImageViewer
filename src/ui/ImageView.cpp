@@ -1,4 +1,4 @@
-#include "ImageView.h"
+﻿#include "ImageView.h"
 
 #include "core/cache/ImagePyramid.h"
 
@@ -119,8 +119,9 @@ ImageView::ImageView(QWidget* parent)
 
 ImageView::~ImageView()
 {
+    util::cancel(pyramidCanceled_);
     ++nPyramidGeneration_;
-    pyramidWatcher_->waitForFinished();
+    util::cancel(pyramidCanceled_);
 }
 
 void ImageView::setNavigationActions(QAction* previous, QAction* next)
@@ -251,10 +252,12 @@ void ImageView::setImage(const QImage& img, bool bResetView)
     }
     clearSelection();
     current_ = img;
+    bAwaitingFirstFrame_ = !img.isNull();
     updateNavigationButtons();
     original_ = QImage();
     processed_ = QImage();
     bComparisonEnabled_ = false;
+    util::cancel(pyramidCanceled_);
     ++nPyramidGeneration_;
     pyramid_.clear();
     nDisplayedPyramidLevel_ = -1;
@@ -293,6 +296,7 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
     updateNavigationButtons();
     bComparisonEnabled_ = bEnabled && !original_.isNull() && !processed_.isNull()
         && original_.size() == processed_.size();
+    util::cancel(pyramidCanceled_);
     ++nPyramidGeneration_;
     pyramid_.clear();
     nDisplayedPyramidLevel_ = -1;
@@ -595,6 +599,7 @@ void ImageView::dropEvent(QDropEvent* event)
 void ImageView::paintEvent(QPaintEvent* event)
 {
     QGraphicsView::paintEvent(event);
+    if (bAwaitingFirstFrame_) { bAwaitingFirstFrame_ = false; emit firstFramePainted(); }
     if (bLoupeEnabled_ && !current_.isNull()) {
         QPainter loupePainter(viewport());
         drawLoupe(loupePainter);
@@ -754,7 +759,8 @@ void ImageView::updateHoverPixel(const QPoint& viewportPosition)
         || (sampledImage.depth() <= 8 && sampledImage.isGrayscale());
     const QString value = bGray ? tr("灰度: %1").arg(color.red())
         : tr("BGR: %1, %2, %3").arg(color.blue()).arg(color.green()).arg(color.red());
-    const QString text = tr("X: %1  Y: %2\n%3").arg(pixelPosition.x()).arg(pixelPosition.y()).arg(value);
+    const QString text = tr("X: %1  Y: %2\n%3").arg(pixelPosition.x()).arg(pixelPosition.y()).arg(value)
+        + (util::highDepth(sampledImage) ? tr("\n8 位显示值（非原始值）") : QString());
     if (pixelHint_->text() != text) { pixelHint_->setText(text); pixelHint_->adjustSize(); }
     QPoint position = viewportPosition + QPoint(18, 22);
     if (position.x() + pixelHint_->width() > viewport()->width()) {
@@ -879,6 +885,7 @@ void ImageView::updateRenderMode()
     if (!pixmapItem_) {
         return;
     }
+    if (pyramid_.empty() && !pyramidWatcher_->isRunning()) { requestPyramid(); }
     const bool bShowPixels = zoomFactor() >= 8.0;
     applyPyramidLevel();
     pixmapItem_->setTransformationMode(
@@ -893,7 +900,7 @@ void ImageView::updateRenderMode()
 
 void ImageView::requestPyramid()
 {
-    if (current_.isNull() || bComparisonEnabled_
+    if (current_.isNull() || bComparisonEnabled_ || zoomFactor() >= 1.0
         || std::max(current_.width(), current_.height()) <= 2048) {
         return;
     }
@@ -904,8 +911,10 @@ void ImageView::requestPyramid()
     bPyramidPending_ = false;
     nRunningPyramidGeneration_ = nPyramidGeneration_;
     const QImage source = current_;
-    pyramidWatcher_->setFuture(QtConcurrent::run([source]() {
-        return core::cache::ImagePyramid::build(source);
+    pyramidCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = pyramidCanceled_;
+    pyramidWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Compute), [source, canceled]() {
+        return core::cache::ImagePyramid::build(source, 1024, 8, canceled);
     }));
 }
 

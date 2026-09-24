@@ -1,7 +1,8 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：异步加载可见区域附近的缩略图并管理有界缓存。
 // 目的：保证大目录中的缩略图导航响应与内存稳定。
 #include "ThumbnailBar.h"
+#include <QAbstractListModel>
 
 #include "core/cache/ThumbnailCache.h"
 
@@ -99,11 +100,44 @@ public:
 
 namespace ui {
 
+class ThumbnailListModel : public QAbstractListModel {
+public:
+    explicit ThumbnailListModel(ThumbnailBar* bar) : QAbstractListModel(bar), bar_(bar) {}
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override { return parent.isValid() ? 0 : bar_->count(); }
+    QVariant data(const QModelIndex& index, int role) const override
+    {
+        if (!index.isValid() || index.row() < 0 || index.row() >= bar_->count()) { return {}; }
+        const QString& path = bar_->files_.at(index.row());
+        if (role == Qt::DisplayRole) { return QFileInfo(path).fileName(); }
+        if (role == Qt::ToolTipRole) { return path; }
+        if (role == Qt::DecorationRole) { return bar_->iconCache_.value(index.row()); }
+        if (role == Qt::UserRole) { return QString("%1/%2").arg(index.row() + 1).arg(bar_->count()); }
+        return {};
+    }
+    void resetFiles(const QStringList& files)
+    {
+        beginResetModel();
+        bar_->files_ = files;
+        bar_->iconCache_.clear();
+        bar_->cacheOrder_.clear();
+        endResetModel();
+    }
+    void changed(int nRow) { emit dataChanged(index(nRow), index(nRow), { Qt::DecorationRole }); }
+private:
+    ThumbnailBar* bar_;
+};
+
+
 ThumbnailBar::ThumbnailBar(QWidget* parent)
-    : QListWidget(parent)
+    : QListView(parent)
     , watcher_(new QFutureWatcher<QVector<ThumbnailResult>>(this))
     , loadTimer_(new QTimer(this))
 {
+    listModel_ = new ThumbnailListModel(this);
+    setModel(listModel_);
+    setUniformItemSizes(true);
+    setLayoutMode(QListView::Batched);
+    setBatchSize(256);
     setObjectName(QString("ThumbnailBar"));
     setViewMode(QListView::IconMode);
     setFlow(QListView::LeftToRight);
@@ -127,14 +161,14 @@ ThumbnailBar::ThumbnailBar(QWidget* parent)
         this, &ThumbnailBar::onLoadFinished);
     connect(horizontalScrollBar(), &QScrollBar::valueChanged,
         this, &ThumbnailBar::scheduleVisibleThumbnails);
-    connect(this, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
-        const int nIndex = row(item);
+    connect(this, &QListView::activated, this, [this](const QModelIndex& item) {
+        const int nIndex = item.row();
         if (nIndex >= 0 && nIndex < files_.size()) {
             emit fileActivated(files_.at(nIndex));
         }
     });
-    connect(this, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
-        const int nIndex = row(item);
+    connect(this, &QListView::clicked, this, [this](const QModelIndex& item) {
+        const int nIndex = item.row();
         if (nIndex >= 0 && nIndex < files_.size()) {
             emit fileActivated(files_.at(nIndex));
         }
@@ -144,35 +178,38 @@ ThumbnailBar::ThumbnailBar(QWidget* parent)
 ThumbnailBar::~ThumbnailBar()
 {
     ++nGeneration_;
-    watcher_->waitForFinished();
+    util::cancel(canceled_);
 }
 
 void ThumbnailBar::setFiles(const QStringList& files, int nCurrentIndex)
 {
+    util::cancel(canceled_);
     ++nGeneration_;
-    files_ = files;
-    iconCache_.clear();
-    cacheOrder_.clear();
-    clear();
-
-    for (const QString& path : files_) {
-        auto* item = new QListWidgetItem(QFileInfo(path).fileName());
-        item->setToolTip(path);
-        item->setData(Qt::UserRole, tr("%1/%2").arg(count() + 1).arg(files_.size()));
-        addItem(item);
-    }
+    listModel_->resetFiles(files);
     setCurrentFileIndex(nCurrentIndex);
+    scheduleVisibleThumbnails();
+}
+
+void ThumbnailBar::invalidateFile(const QString& path)
+{
+    const int nIndex = files_.indexOf(path);
+    if (nIndex < 0) { return; }
+    util::cancel(canceled_);
+    ++nGeneration_;
+    iconCache_.remove(nIndex);
+    cacheOrder_.removeAll(nIndex);
+    listModel_->changed(nIndex);
     scheduleVisibleThumbnails();
 }
 
 void ThumbnailBar::setCurrentFileIndex(int nIndex)
 {
     if (nIndex < 0 || nIndex >= count()) {
-        setCurrentRow(-1);
+        setCurrentIndex(QModelIndex());
         return;
     }
-    setCurrentRow(nIndex);
-    if (!item(nIndex)->isHidden()) { scrollToItem(item(nIndex), QAbstractItemView::PositionAtCenter); }
+    setCurrentIndex(model()->index(nIndex, 0));
+    scrollTo(currentIndex(), QAbstractItemView::PositionAtCenter);
     scheduleVisibleThumbnails();
 }
 
@@ -188,13 +225,13 @@ void ThumbnailBar::wheelEvent(QWheelEvent* event)
 
 void ThumbnailBar::showEvent(QShowEvent* event)
 {
-    QListWidget::showEvent(event);
+    QListView::showEvent(event);
     scheduleVisibleThumbnails();
 }
 
 void ThumbnailBar::resizeEvent(QResizeEvent* event)
 {
-    QListWidget::resizeEvent(event);
+    QListView::resizeEvent(event);
     scheduleVisibleThumbnails();
 }
 
@@ -255,12 +292,15 @@ void ThumbnailBar::startPendingLoad()
 
     nRunningGeneration_ = nGeneration_;
     const QSize targetSize = iconSize();
-    watcher_->setFuture(QtConcurrent::run([requests, targetSize]() {
+    canceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = canceled_;
+    watcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Thumbnail), [requests, targetSize, canceled]() {
         static std::once_flag pruneFlag;
         std::call_once(pruneFlag, []() { core::cache::ThumbnailCache::prune(); });
         QVector<ThumbnailResult> results;
         results.reserve(requests.size());
         for (const auto& request : requests) {
+            if (util::canceled(canceled)) { break; }
             QImage thumbnail = core::cache::ThumbnailCache::load(request.second, targetSize);
             QImageReader reader(request.second);
             reader.setAutoTransform(true);
@@ -298,9 +338,6 @@ void ThumbnailBar::onLoadFinished()
             }
             const QIcon icon = result.image.isNull()
                 ? QIcon() : QIcon(QPixmap::fromImage(result.image));
-            if (!icon.isNull()) {
-                item(result.nIndex)->setIcon(icon);
-            }
             cacheThumbnail(result.nIndex, icon);
         }
     }
@@ -314,12 +351,13 @@ void ThumbnailBar::cacheThumbnail(int nIndex, const QIcon& icon)
         return;
     }
     iconCache_.insert(nIndex, icon);
+    listModel_->changed(nIndex);
     cacheOrder_.enqueue(nIndex);
     while (cacheOrder_.size() > kCacheLimit) {
         const int nOldIndex = cacheOrder_.dequeue();
         iconCache_.remove(nOldIndex);
         if (nOldIndex >= 0 && nOldIndex < count()) {
-            item(nOldIndex)->setIcon(QIcon());
+            listModel_->changed(nOldIndex);
         }
     }
 }

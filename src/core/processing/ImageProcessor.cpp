@@ -1,4 +1,4 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：实现亮度、对比度、Gamma、通道、平滑、锐化、阈值、边缘和形态学管线。
 // 目的：提供稳定、有界、可异步调用的 OpenCV 实时预处理。
 #include "ImageProcessor.h"
@@ -27,7 +27,7 @@ cv::Mat qImageToWorkingMat(const QImage& image)
     if (image.isNull()) {
         return {};
     }
-    if (image.isGrayscale()) {
+    if (util::grayFormat(image)) {
         const QImage gray = image.convertToFormat(QImage::Format_Grayscale8);
         return cv::Mat(gray.height(), gray.width(), CV_8UC1,
             const_cast<uchar*>(gray.constBits()), gray.bytesPerLine()).clone();
@@ -207,7 +207,7 @@ void applyMorphology(cv::Mat& image, const ProcessingParameters& parameters)
 } // namespace
 
 ProcessingResult ImageProcessor::process(const QImage& source,
-    const ProcessingParameters& parameters)
+    const ProcessingParameters& parameters, const util::Cancellation& canceled)
 {
     ProcessingResult result;
     QElapsedTimer timer;
@@ -217,7 +217,13 @@ ProcessingResult ImageProcessor::process(const QImage& source,
         result.error = QCoreApplication::translate("ImageProcessor", "没有可处理的图像");
         return result;
     }
-    if (!parameters.bEnabled) {
+    if (util::canceled(canceled)) { return {}; }
+    const bool bIdentity = parameters.channel == ChannelView::Original
+        && parameters.nBrightness == 0 && parameters.dContrast == 1.0 && parameters.dGamma == 1.0
+        && parameters.smooth == SmoothMode::None && parameters.dSharpenAmount == 0.0
+        && parameters.threshold == ThresholdMode::None && parameters.edge == EdgeMode::None
+        && parameters.morphology == MorphologyMode::None;
+    if (!parameters.bEnabled || bIdentity) {
         result.image = source;
         result.nElapsedMs = timer.elapsed();
         return result;
@@ -230,11 +236,28 @@ ProcessingResult ImageProcessor::process(const QImage& source,
             return result;
         }
         applyChannel(working, parameters.channel);
+        if (util::canceled(canceled)) { return {}; }
         applyTone(working, parameters);
+        if (util::canceled(canceled)) { return {}; }
         applySmoothAndSharpen(working, parameters);
+        if (util::canceled(canceled)) { return {}; }
         applyThresholdOrEdge(working, parameters);
+        if (util::canceled(canceled)) { return {}; }
         applyMorphology(working, parameters);
+        if (util::canceled(canceled)) { return {}; }
         result.image = workingMatToQImage(working);
+        // 颜色处理不改变覆盖率；直通路径保留原始精度，处理路径明确为 8 位。
+        if (source.hasAlphaChannel() && !result.image.isNull()) {
+            QImage output = result.image.convertToFormat(QImage::Format_ARGB32);
+            for (int nY = 0; nY < output.height(); ++nY) {
+                if (util::canceled(canceled)) { return {}; }
+                QRgb* row = reinterpret_cast<QRgb*>(output.scanLine(nY));
+                for (int nX = 0; nX < output.width(); ++nX) {
+                    row[nX] = (row[nX] & 0x00ffffff) | (static_cast<quint32>(source.pixelColor(nX, nY).alpha()) << 24);
+                }
+            }
+            result.image = output;
+        }
         if (result.image.isNull()) {
             result.error = QCoreApplication::translate("ImageProcessor", "处理结果无法转换为显示图像");
         }

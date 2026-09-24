@@ -1,4 +1,4 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：持久化缩略图并按源文件状态生成稳定缓存键。
 // 目的：加速重复打开大目录，同时用磁盘硬上限避免无限累积。
 #pragma once
@@ -17,6 +17,7 @@ public:
     static void prune(qint64 nMaximumBytes = 256LL * 1024 * 1024);
     static QString keyForFile(const QString& sourcePath, const QSize& targetSize);
     static QString cacheDirectory();
+    static quint64 maintenanceScanCount();
 };
 
 } // namespace core::cache

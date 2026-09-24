@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // ImageViewer - 入口
 // 目标:VS2019 + Qt 5.14 + OpenCV 4.5.5 / Windows / x64 / Unicode
 // =============================================================================
@@ -67,21 +67,27 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    MainWindow w;
-    QObject::connect(&appl, &Application::filesRequested, &w, [&w](const QStringList& paths) {
-        if (w.isMinimized()) { w.setWindowState(w.windowState() & ~Qt::WindowMinimized); }
+    int nExitCode = 0;
+    {
+        MainWindow w;
+        QObject::connect(&appl, &Application::filesRequested, &w, [&w](const QStringList& paths) {
+            if (w.isMinimized()) { w.setWindowState(w.windowState() & ~Qt::WindowMinimized); }
+            w.show();
+            w.raise();
+            w.activateWindow();
+            w.openFiles(paths);
+        });
         w.show();
-        w.raise();
-        w.activateWindow();
-        w.openFiles(paths);
-    });
-    w.show();
 
-    // 命令行传入的文件
-    const QStringList files = appl.pendingFiles();
-    if (!files.isEmpty()) {
-        w.openFiles(files);
+        // 命令行传入的文件
+        const QStringList files = appl.pendingFiles();
+        if (!files.isEmpty()) {
+            w.openFiles(files);
+        }
+
+        nExitCode = app.exec();
     }
-
-    return app.exec();
+    // 窗口已销毁并取消任务；Qt 插件卸载前收尾不可中断的解码/文件 I/O。
+    util::waitForBackgroundWork();
+    return nExitCode;
 }

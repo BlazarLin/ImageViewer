@@ -52,6 +52,7 @@
     <ClInclude Include="core\cache\ImageCache.h"><Filter>核心\cache</Filter></ClInclude>
     <ClInclude Include="core\cache\ThumbnailCache.h"><Filter>核心\cache</Filter></ClInclude>
     <ClInclude Include="core\cache\ImagePyramid.h"><Filter>核心\cache</Filter></ClInclude>
+    <ClInclude Include="util\BackgroundWork.h"><Filter>工具</Filter></ClInclude>
     <ClInclude Include="util\ElapsedLog.h"><Filter>工具</Filter></ClInclude>
     <ClInclude Include="util\DebugConsole.h"><Filter>工具</Filter></ClInclude>
   </ItemGroup>

@@ -1,7 +1,8 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：实现 ROI 通道统计与灰度直方图计算。
 // 目的：使用一次连续像素遍历提供确定、可测试的分析结果。
 #include "ImageAnalysis.h"
+#include "util/BackgroundWork.h"
 
 #include <algorithm>
 #include <cmath>
@@ -32,7 +33,7 @@ AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requeste
         histogram.fill(0, 256);
     }
     // 按图像类型选择展示方式，RGB 编码的灰度图允许三条相同通道。
-    result.bColor = !image.isGrayscale();
+    result.bColor = !util::grayFormat(image);
 
     std::array<double, 3> sums = { 0.0, 0.0, 0.0 };
     std::array<double, 3> squareSums = { 0.0, 0.0, 0.0 };
@@ -41,20 +42,23 @@ AnalysisResult ImageAnalysis::analyze(const QImage& image, const QRect& requeste
         statistics.dMaximum = 0.0;
     }
 
+    const bool bGray8 = image.format() == QImage::Format_Grayscale8;
+    const bool bBgr888 = image.format() == QImage::Format_BGR888;
     const bool bRgb888 = image.format() == QImage::Format_RGB888;
     const bool bRgb32 = image.format() == QImage::Format_RGB32 || image.format() == QImage::Format_ARGB32;
     for (int nY = result.region.top(); nY <= result.region.bottom(); ++nY) {
         if (canceled && canceled->load(std::memory_order_relaxed)) { return {}; }
         // 常用格式直接读取行数据；其他格式仅转换 ROI 的一行，避免整图副本。
-        const QImage converted = bRgb888 || bRgb32 ? QImage()
+        const QImage converted = bRgb888 || bRgb32 || bGray8 || bBgr888 ? QImage()
             : image.copy(result.region.left(), nY, result.region.width(), 1).convertToFormat(QImage::Format_RGB888);
-        const uchar* line = bRgb888 ? image.constScanLine(nY) + result.region.left() * 3
+        const uchar* line = bGray8 ? image.constScanLine(nY) + result.region.left()
+            : bRgb888 || bBgr888 ? image.constScanLine(nY) + result.region.left() * 3
             : (bRgb32 ? nullptr : converted.constScanLine(0));
         const QRgb* pixels = bRgb32 ? reinterpret_cast<const QRgb*>(image.constScanLine(nY)) + result.region.left() : nullptr;
         for (int nX = 0; nX < result.region.width(); ++nX) {
-            const int nRed = bRgb32 ? qRed(pixels[nX]) : line[nX * 3 + 0];
-            const int nGreen = bRgb32 ? qGreen(pixels[nX]) : line[nX * 3 + 1];
-            const int nBlue = bRgb32 ? qBlue(pixels[nX]) : line[nX * 3 + 2];
+            const int nRed = bRgb32 ? qRed(pixels[nX]) : bGray8 ? line[nX] : line[nX * 3 + (bBgr888 ? 2 : 0)];
+            const int nGreen = bRgb32 ? qGreen(pixels[nX]) : bGray8 ? line[nX] : line[nX * 3 + 1];
+            const int nBlue = bRgb32 ? qBlue(pixels[nX]) : bGray8 ? line[nX] : line[nX * 3 + (bBgr888 ? 0 : 2)];
             const std::array<int, 3> values = { nRed, nGreen, nBlue };
             for (int nChannel = 0; nChannel < 3; ++nChannel) {
                 const double dValue = values[nChannel];

@@ -99,6 +99,7 @@ set(APP_HEADERS
     src/core/cache/ImageCache.h
     src/core/cache/ThumbnailCache.h
     src/core/cache/ImagePyramid.h
+    src/util/BackgroundWork.h
     src/util/ElapsedLog.h
     src/util/DebugConsole.h
 )

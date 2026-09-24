@@ -1,42 +1,50 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：扫描、自然排序并导航当前目录的图像文件。
 // 目的：将文件系统逻辑与图形界面分离。
 #include "DirectoryModel.h"
 
 #include <QCollator>
 #include <QDir>
+#include <QDirIterator>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QSet>
 
 #include <algorithm>
+#include <vector>
 
 namespace core::navigation {
 
-void DirectoryModel::setFileList(const QStringList& paths, const QString& currentPath)
+void DirectoryModel::setFileList(const QStringList& paths, const QString& currentPath, const util::Cancellation& canceled)
 {
     bExplicitFiles_ = paths.size() > 1;
     directoryPath_.clear();
     files_.clear();
     nCurrentIndex_ = -1;
-    if (!bExplicitFiles_) { loadForFile(currentPath); return; }
+    if (!bExplicitFiles_) { loadForFile(currentPath, false, canceled); return; }
+    QSet<QString> seen;
     for (const QString& path : paths) {
+        if (util::canceled(canceled)) { return; }
         const QString absolute = QFileInfo(path).absoluteFilePath();
-        if (QFileInfo(absolute).isFile() && !files_.contains(absolute, Qt::CaseInsensitive)) {
+        if (QFileInfo(absolute).isFile() && !seen.contains(absolute.toCaseFolded())) {
+            seen.insert(absolute.toCaseFolded());
             files_.append(absolute);
         }
     }
+    rebuildIndex();
     setCurrentPath(currentPath);
 }
 
-bool DirectoryModel::loadForFile(const QString& path, bool bRefresh)
+bool DirectoryModel::loadForFile(const QString& path, bool bRefresh, const util::Cancellation& canceled)
 {
-    if (bExplicitFiles_ && (bRefresh || files_.contains(QFileInfo(path).absoluteFilePath(), Qt::CaseInsensitive))) {
+    if (util::canceled(canceled)) { return false; }
+    if (bExplicitFiles_ && (bRefresh || indexOf(path) >= 0)) {
         if (bRefresh) {
             files_.erase(std::remove_if(files_.begin(), files_.end(), [](const QString& entry) {
                 return !QFileInfo(entry).isFile();
             }), files_.end());
         }
+        rebuildIndex();
         nCurrentIndex_ = -1;
         setCurrentPath(path);
         return true;
@@ -63,10 +71,11 @@ bool DirectoryModel::loadForFile(const QString& path, bool bRefresh)
         }
 
         QStringList paths;
-        const QFileInfoList entries = QDir(directoryPath).entryInfoList(
-            QDir::Files | QDir::Readable | QDir::NoSymLinks, QDir::NoSort);
-        paths.reserve(entries.size());
-        for (const QFileInfo& info : entries) {
+        QDirIterator entries(directoryPath, QDir::Files | QDir::Readable | QDir::NoSymLinks);
+        while (entries.hasNext()) {
+            if (util::canceled(canceled)) { return false; }
+            entries.next();
+            const QFileInfo info = entries.fileInfo();
             if (suffixes.contains(info.suffix().toLower())) {
                 paths.push_back(info.absoluteFilePath());
             }
@@ -79,12 +88,23 @@ bool DirectoryModel::loadForFile(const QString& path, bool bRefresh)
         QCollator collator;
         collator.setNumericMode(true);
         collator.setCaseSensitivity(Qt::CaseInsensitive);
-        std::sort(paths.begin(), paths.end(), [&collator](const QString& left, const QString& right) {
-            return collator.compare(QFileInfo(left).fileName(), QFileInfo(right).fileName()) < 0;
+        struct Entry { QString path; QCollatorSortKey key; };
+        std::vector<Entry> sorted;
+        sorted.reserve(paths.size());
+        for (const QString& entry : paths) {
+            if (util::canceled(canceled)) { return false; }
+            sorted.push_back({ entry, collator.sortKey(QFileInfo(entry).fileName()) });
+        }
+        std::sort(sorted.begin(), sorted.end(), [](const Entry& left, const Entry& right) {
+            return left.key.compare(right.key) < 0;
         });
+        if (util::canceled(canceled)) { return false; }
+        paths.clear();
+        for (const auto& entry : sorted) { paths.append(entry.path); }
 
         directoryPath_ = directoryPath;
         files_ = std::move(paths);
+        rebuildIndex();
         nCurrentIndex_ = -1;
     }
 
@@ -92,21 +112,28 @@ bool DirectoryModel::loadForFile(const QString& path, bool bRefresh)
         return true;
     }
     if (!setCurrentPath(currentInfo.absoluteFilePath())) {
-        return loadForFile(path, true);
+        return loadForFile(path, true, canceled);
     }
     return true;
 }
 
+void DirectoryModel::rebuildIndex()
+{
+    indices_.clear();
+    for (int nIndex = 0; nIndex < files_.size(); ++nIndex) { indices_.insert(files_.at(nIndex).toCaseFolded(), nIndex); }
+}
+
+int DirectoryModel::indexOf(const QString& path) const
+{
+    return indices_.value(QFileInfo(path).absoluteFilePath().toCaseFolded(), -1);
+}
+
 bool DirectoryModel::setCurrentPath(const QString& path)
 {
-    const QString absolutePath = QFileInfo(path).absoluteFilePath();
-    for (int nIndex = 0; nIndex < files_.size(); ++nIndex) {
-        if (QString::compare(files_.at(nIndex), absolutePath, Qt::CaseInsensitive) == 0) {
-            nCurrentIndex_ = nIndex;
-            return true;
-        }
-    }
-    return false;
+    const int nIndex = indexOf(path);
+    if (nIndex < 0) { return false; }
+    nCurrentIndex_ = nIndex;
+    return true;
 }
 
 bool DirectoryModel::movePrevious()

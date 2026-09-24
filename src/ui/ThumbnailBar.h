@@ -1,10 +1,11 @@
-// 2026-09-06
+﻿// 2026-09-06
 // 功能：显示当前目录的水平缩略图导航栏。
 // 目的：在不阻塞 UI 的前提下快速切换同目录图像。
 #pragma once
 
 #include <QHash>
-#include <QListWidget>
+#include <QListView>
+#include "util/BackgroundWork.h"
 #include <QQueue>
 #include <QVector>
 
@@ -19,7 +20,9 @@ struct ThumbnailResult {
     QImage image;
 };
 
-class ThumbnailBar : public QListWidget {
+class ThumbnailListModel;
+
+class ThumbnailBar : public QListView {
     Q_OBJECT
 public:
     explicit ThumbnailBar(QWidget* parent = nullptr);
@@ -27,6 +30,9 @@ public:
 
     void setFiles(const QStringList& files, int nCurrentIndex);
     void setCurrentFileIndex(int nIndex);
+    int count() const { return files_.size(); }
+    int currentRow() const { return currentIndex().row(); }
+    void invalidateFile(const QString& path);
 
 
 signals:
@@ -45,6 +51,9 @@ private slots:
 private:
     void cacheThumbnail(int nIndex, const QIcon& icon);
 
+    friend class ThumbnailListModel;
+    ThumbnailListModel* listModel_ = nullptr;
+    util::Cancellation canceled_;
     QStringList files_;
     QHash<int, QIcon> iconCache_;
     QQueue<int> cacheOrder_;

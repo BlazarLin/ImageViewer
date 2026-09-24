@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 
+#include "util/BackgroundWork.h"
 #include <QGraphicsView>
 #include <QColor>
 #include <QImage>
@@ -61,6 +62,7 @@ public slots:
 
 signals:
     void zoomChanged(double factor);
+    void firstFramePainted();
     void pixelHovered(const QPoint& position, const QColor& color, bool bValid);
     void roiSelected(const QRect& region);
     void fileDropped(const QString& path);
@@ -112,6 +114,7 @@ private:
     QToolButton* thumbnailsButton_ = nullptr;
     QLabel* pixelHint_ = nullptr;
     bool bMinimalMode_ = false;
+    bool bAwaitingFirstFrame_ = false;
     QGraphicsScene* scene_ = nullptr;
     QGraphicsPixmapItem* pixmapItem_ = nullptr;
     QGraphicsPixmapItem* comparisonItem_ = nullptr;
@@ -134,6 +137,7 @@ private:
     quint64 nRunningPyramidGeneration_ = 0;
     int nDisplayedPyramidLevel_ = -1;
     bool bPyramidPending_ = false;
+    util::Cancellation pyramidCanceled_;
     bool bLoupeEnabled_ = false;
 };
 

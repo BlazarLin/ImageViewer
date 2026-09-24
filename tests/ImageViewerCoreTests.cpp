@@ -2,7 +2,11 @@
 // 功能：独立验证目录导航与 OpenCV 预处理核心行为。
 // 目的：在不启动主窗口的情况下提供可重复的中文业务验收输出。
 #include <Windows.h>
+#include <psapi.h>
+#include <algorithm>
 #include <QApplication>
+#include <QtConcurrent/QtConcurrentRun>
+#include <QSemaphore>
 #include <QAction>
 #include <QBuffer>
 #include <QDockWidget>
@@ -348,8 +352,8 @@ void testExifThumbnail(const QString& outputRoot)
     bar.resize(400, 132);
     bar.show();
     bar.setFiles({ path }, 0);
-    const bool bLoaded = waitUntil([&]() { return !bar.item(0)->icon().isNull(); });
-    const QSize size = bar.item(0)->icon().actualSize(QSize(112, 76));
+    const bool bLoaded = waitUntil([&]() { return !qvariant_cast<QIcon>(bar.model()->index(0, 0).data(Qt::DecorationRole)).isNull(); });
+    const QSize size = qvariant_cast<QIcon>(bar.model()->index(0, 0).data(Qt::DecorationRole)).actualSize(QSize(112, 76));
     verify(loaded.ok() && loaded.image.size() == QSize(60, 120)
             && bLoaded && size.height() > size.width(), QString("TEST-22"),
         QString("带 EXIF 旋转的 JPEG 主图与缩略图方向一致"));
@@ -388,7 +392,7 @@ void testWindowWorkflow(const QString& outputRoot)
     verify(bDeferred && waitUntil([&]() { return view->image() == second; }),
         QString("TEST-15"), QString("打开异步返回，连续请求仅最后一张成为当前图"));
     window.openFile(firstPath);
-    waitUntil([&]() { return view->image() == first; });
+    waitUntil([&]() { return view->image() == first && thumbnails->count() == 3; });
     QMetaObject::invokeMethod(&window, "onNext");
     const bool bFailed = waitUntil([&]() { return window.statusBar()->currentMessage().contains(QString("打开失败")); });
     verify(bFailed && thumbnails->currentRow() == 0 && view->image() == first,
@@ -430,10 +434,9 @@ void testWindowWorkflow(const QString& outputRoot)
     QDropEvent drop(point, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
     QCoreApplication::sendEvent(view->viewport(), &drop);
     verify(drag.isAccepted() && drop.isAccepted()
-            && waitUntil([&]() { return view->image() == second; })
-            && thumbnails->currentRow() == 2,
+            && waitUntil([&]() { return view->image() == second && thumbnails->currentRow() == 2; }),
         QString("TEST-19"), QString("本地文件拖放事件通过主视图到主窗口，更新图片及同目录缩略图"));
-    verify(waitUntil([&]() { return !thumbnails->item(2)->icon().isNull(); }),
+    verify(waitUntil([&]() { return !qvariant_cast<QIcon>(thumbnails->model()->index(2, 0).data(Qt::DecorationRole)).isNull(); }),
         QString("TEST-20"), QString("当前图片缩略图在后台完成加载"));
     analysisDock->hide();
     view->actualSize();
@@ -587,7 +590,7 @@ void testColorHistograms(const QString& outputRoot)
     auto* thumbnails = window.findChild<ui::ThumbnailBar*>();
     waitUntil([&]() {
         for (int nIndex = 0; nIndex < thumbnails->count(); ++nIndex) {
-            if (thumbnails->item(nIndex)->icon().isNull()) { return false; }
+            if (qvariant_cast<QIcon>(thumbnails->model()->index(nIndex, 0).data(Qt::DecorationRole)).isNull()) { return false; }
         }
         return true;
     });
@@ -613,7 +616,7 @@ void testOverlayNavigation(const QString& outputRoot)
     auto* next = view->findChild<QToolButton*>(QString("NextImageButton"));
     const bool bEmptyHidden = previous && next && !previous->isVisible() && !next->isVisible();
     window.openFile(firstPath);
-    const bool bFirst = waitUntil([&]() { return view->image() == first; });
+    const bool bFirst = waitUntil([&]() { return view->image() == first && next->isEnabled(); });
     bool bNavigation = bEmptyHidden && bFirst && previous->isVisible() && next->isVisible()
         && !previous->isEnabled() && next->isEnabled()
         && previous->toolButtonStyle() == Qt::ToolButtonIconOnly && !previous->icon().isNull();
@@ -815,8 +818,8 @@ void testFeedbackWorkflow(const QString& outputRoot)
         && thumbnails->horizontalScrollBarPolicy() == Qt::ScrollBarAlwaysOff
         && !window.findChild<QLineEdit*>(QString("ThumbnailSearch"))
         && !window.findChild<QComboBox*>(QString("ThumbnailSize"))
-        && thumbnails->item(0)->data(Qt::UserRole).toString() == QString("1/2")
-        && thumbnails->item(1)->data(Qt::UserRole).toString() == QString("2/2");
+        && thumbnails->model()->index(0, 0).data(Qt::UserRole).toString() == QString("1/2")
+        && thumbnails->model()->index(1, 0).data(Qt::UserRole).toString() == QString("2/2");
     window.findChild<QAction*>(QString("ToggleThumbnails"))->setChecked(false);
     QKeyEvent previous(QEvent::KeyPress, Qt::Key_Left, Qt::NoModifier);
     QCoreApplication::sendEvent(view, &previous);
@@ -831,14 +834,14 @@ void testFeedbackWorkflow(const QString& outputRoot)
     strip.setFiles(many, 29);
     QCoreApplication::processEvents();
     strip.setCurrentFileIndex(29);
-    bool bScroll = strip.viewport()->rect().intersects(strip.visualItemRect(strip.item(29)));
+    bool bScroll = strip.viewport()->rect().intersects(strip.visualRect(strip.model()->index(29, 0)));
     strip.horizontalScrollBar()->setValue(0);
     QWheelEvent wheel(QPointF(100, 40), strip.mapToGlobal(QPoint(100, 40)), QPoint(), QPoint(0, -120),
         Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
     QCoreApplication::sendEvent(strip.viewport(), &wheel);
     verify(bScroll && strip.horizontalScrollBar()->value() > 0
             && !strip.horizontalScrollBar()->isVisible()
-            && strip.item(29)->data(Qt::UserRole).toString() == QString("30/30"),
+            && strip.model()->index(29, 0).data(Qt::UserRole).toString() == QString("30/30"),
         QString("TEST-50"), QString("隐藏缩略图滚动条后，滚轮仍横向浏览，末项自动定位且序号准确"));
     strip.close();
     // 留下可复用的合成图界面证据，不包含用户图像。
@@ -1045,6 +1048,241 @@ void testViewingPresentation(const QString& outputRoot)
     QSettings().remove(QString("ui/toolbarVisible"));
 }
 
+
+void testPerformanceAndCorrectness(const QString& outputRoot)
+{
+    using core::processing::ImageProcessor;
+    using core::processing::ProcessingParameters;
+    QImage transparent(4, 2, QImage::Format_ARGB32);
+    for (int nY = 0; nY < 2; ++nY) {
+        for (int nX = 0; nX < 4; ++nX) { transparent.setPixelColor(nX, nY, QColor(20, 40, 60, nX * 85)); }
+    }
+    ProcessingParameters parameters;
+    parameters.bEnabled = true;
+    const auto identity = ImageProcessor::process(transparent, parameters);
+    parameters.nBrightness = 10;
+    const auto adjusted = ImageProcessor::process(transparent, parameters);
+    bool bAlpha = identity.ok() && identity.image.cacheKey() == transparent.cacheKey() && adjusted.ok();
+    for (int nX = 0; nX < 4 && bAlpha; ++nX) {
+        bAlpha = adjusted.image.pixelColor(nX, 0) == QColor(30, 50, 70, nX * 85);
+    }
+    QString error;
+    const QString alphaPath = QDir(outputRoot).filePath(QString("透明处理.png"));
+    bAlpha = bAlpha && core::loader::saveImage(alphaPath, adjusted.image, &error)
+        && core::loader::loadImage(alphaPath).image == adjusted.image;
+    verify(bAlpha, QString("TEST-56"), QString("默认处理零拷贝直通，亮度处理和 PNG 导出保留全透明/半透明 Alpha"));
+
+    auto canceled = std::make_shared<std::atomic_bool>(true);
+    verify(!ImageProcessor::process(transparent, parameters, canceled).ok()
+            && core::cache::ImagePyramid::build(transparent, 64, 8, canceled).empty()
+            && !core::analysis::ImageAnalysis::analyze(transparent, transparent.rect(), canceled).ok(),
+        QString("TEST-57"), QString("已取消的预处理、金字塔和统计不生成可显示旧结果"));
+
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("perf-XXXXXX")));
+    const QString firstPath = directory.filePath(QString("图1.bmp"));
+    const QString secondPath = directory.filePath(QString("图2.bmp"));
+    QImage first(1600, 1200, QImage::Format_RGB32);
+    first.fill(QColor(77, 77, 77));
+    QImage second(1600, 1200, QImage::Format_RGB32);
+    second.fill(QColor(90, 40, 20));
+    first.save(firstPath);
+    second.save(secondPath);
+    auto cache = std::make_shared<core::cache::ImageCache>(32);
+    QThreadPool pool;
+    pool.setMaxThreadCount(4);
+    QVector<QFuture<core::loader::LoadResult>> futures;
+    for (int nIndex = 0; nIndex < 8; ++nIndex) {
+        futures.append(QtConcurrent::run(&pool, [cache, firstPath]() { return cache->load(firstPath); }));
+    }
+    bool bShared = true;
+    for (auto& future : futures) { future.waitForFinished(); bShared = bShared && future.result().image == first; }
+    bShared = bShared && cache->decodeCount() == 1;
+    cache->load(secondPath);
+    cache->remove(firstPath);
+    QImage cached;
+    bShared = bShared && cache->find(secondPath, &cached) && !cache->find(firstPath, &cached);
+    verify(bShared && !core::cache::ImageCache::canPrefetch(QSize(10000, 10000))
+            && !core::cache::ImageCache::canPrefetch(QSize())
+            && core::cache::ImageCache::canPrefetch(QSize(2448, 2048)),
+        QString("TEST-58"), QString("并发相同图片只解码一次；失效单文件保留邻图；超大图/未知尺寸不投机预加载"));
+
+    QImage gray16(8, 8, QImage::Format_Grayscale16);
+    gray16.fill(QColor::fromRgba64(32768, 32768, 32768, 65535));
+    parameters.nBrightness = 0;
+    const auto highIdentity = ImageProcessor::process(gray16, parameters);
+    ui::ImageView grayView;
+    grayView.resize(400, 300);
+    grayView.show();
+    grayView.setImage(gray16);
+    grayView.actualSize();
+    grayView.scale(16, 16);
+    QCoreApplication::processEvents();
+    QMouseEvent hover(QEvent::MouseMove, grayView.mapFromScene(QPointF(3.5, 3.5)),
+        Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(grayView.viewport(), &hover);
+    auto* hint = grayView.findChild<QLabel*>(QString("CursorPixelHint"));
+    verify(highIdentity.image.format() == QImage::Format_Grayscale16
+            && highIdentity.image.cacheKey() == gray16.cacheKey() && hint
+            && hint->text().contains(QString("8 位显示值")), QString("TEST-59"),
+        QString("16 位默认直通保留原数据，光标读数明确标记为 8 位显示值"));
+    grayView.close();
+
+    // 故意占用目录线程，验证首图显示无需等目录完成。
+    auto gate = std::make_shared<QSemaphore>();
+    auto blocker = QtConcurrent::run(util::workPool(util::WorkPool::Directory), [gate]() { gate->acquire(); });
+    MainWindow window;
+    window.show();
+    auto* view = window.findChild<ui::ImageView*>();
+    auto* strip = window.findChild<ui::ThumbnailBar*>();
+    window.openFile(firstPath);
+    const bool bFirstBeforeScan = waitUntil([&]() { return view->image() == first; }) && strip->count() == 0;
+    window.openFile(secondPath);
+    const bool bSecond = waitUntil([&]() { return view->image() == second; });
+    gate->release();
+    const bool bDirectory = waitUntil([&]() { return strip->count() == 2 && strip->currentRow() == 1; });
+    verify(bFirstBeforeScan && bSecond && bDirectory, QString("TEST-60"),
+        QString("目录任务阻塞时仍先显示图片，快速切换后旧目录结果不覆盖最新选择"));
+
+    const QString saved = directory.filePath(QString("快照.png"));
+    const bool bStarted = window.saveResultTo(saved);
+    window.openFile(firstPath);
+    const bool bSnapshot = waitUntil([&]() { return QFileInfo::exists(saved) && view->image() == first; });
+    verify(bStarted && bSnapshot && core::loader::loadImage(saved).image == second,
+        QString("TEST-61"), QString("后台保存期间可继续切图，导出的是开始保存时的不可变快照"));
+    waitUntil([&]() { return strip->count() == 3; });
+
+    // 50,000 条记录无需创建 50,000 个 QListWidgetItem，按需获得名称、序号。
+    ui::ThumbnailBar largeStrip;
+    QStringList paths;
+    paths.reserve(50000);
+    for (int nIndex = 0; nIndex < 50000; ++nIndex) { paths.append(directory.filePath(QString("%1.bmp").arg(nIndex))); }
+    QElapsedTimer timer;
+    timer.start();
+    largeStrip.setFiles(paths, 0);
+    const qint64 nListMs = timer.elapsed();
+    verify(largeStrip.count() == 50000
+            && largeStrip.model()->index(49999, 0).data(Qt::UserRole).toString() == QString("50000/50000"),
+        QString("TEST-62"), QString("五万文件列表按模型提供数据，序号和总数准确"));
+
+    timer.restart();
+    for (int nIndex = 0; nIndex < 200; ++nIndex) {
+        QMetaObject::invokeMethod(&window, "onZoomChanged", Q_ARG(double, 1.0 + nIndex * 0.01));
+    }
+    const qint64 nZoomMs = timer.elapsed();
+    const auto roi = core::analysis::ImageAnalysis::analyze(first, QRect(0, 0, 2, 2));
+    const auto bgr = core::analysis::ImageAnalysis::analyze(second.convertToFormat(QImage::Format_BGR888), QRect(0, 0, 2, 2));
+    verify(roi.ok() && roi.bColor && roi.rgb[0].dMean == 77 && bgr.rgb[0].dMean == 90 && bgr.rgb[2].dMean == 20,
+        QString("TEST-63"), QString("RGB 编码灰图按 RGB 类型分析，BGR 行读取保持通道正确，小 ROI 不依赖整图扫描"));
+    qInfo() << "PERF model_50000_ms" << nListMs << "zoom_metadata_200_ms" << nZoomMs;
+
+    waitUntil([&]() { return window.saveResultTo(directory.filePath(QString("missing/失败.png"))); });
+    verify(waitUntil([&]() { return window.statusBar()->currentMessage().contains(QString("保存失败")); })
+            && core::loader::loadImage(firstPath).image == first,
+        QString("TEST-64"), QString("异步保存失败可见，原始文件不被破坏"));
+    // 保存期间关闭：窗口等原子提交后再退出，期间 UI 仍有事件循环。
+    auto saveGate = std::make_shared<QSemaphore>();
+    auto saveBlocker = QtConcurrent::run(util::workPool(util::WorkPool::Save), [saveGate]() { saveGate->acquire(); });
+    const QString closeSave = directory.filePath(QString("关闭前保存.png"));
+    const bool bCloseSave = window.saveResultTo(closeSave);
+    window.close();
+    const bool bWaitsVisibly = window.isVisible();
+    saveGate->release();
+    verify(bCloseSave && bWaitsVisibly && waitUntil([&]() { return !window.isVisible(); })
+            && core::loader::loadImage(closeSave).image == first,
+        QString("TEST-66"), QString("保存期间关闭保持事件响应，完成原子提交后自动关闭且内容正确"));
+
+    core::cache::ThumbnailCache::prune();
+    const quint64 nScans = core::cache::ThumbnailCache::maintenanceScanCount();
+    for (int nIndex = 0; nIndex < 32; ++nIndex) {
+        core::cache::ThumbnailCache::store(directory.filePath(QString("cache-%1.bmp").arg(nIndex)), QSize(4, 2), transparent);
+    }
+    verify(core::cache::ThumbnailCache::maintenanceScanCount() == nScans,
+        QString("TEST-67"), QString("连续写入 32 张小缩略图使用增量预算，不逐张扫描整个缓存目录"));
+
+    gate = std::make_shared<QSemaphore>();
+    blocker = QtConcurrent::run(util::workPool(util::WorkPool::Directory), [gate]() { gate->acquire(); });
+    auto* closing = new MainWindow;
+    closing->show();
+    closing->openFile(firstPath);
+    waitUntil([&]() { return !closing->findChild<ui::ImageView*>()->image().isNull(); });
+    timer.restart();
+    delete closing;
+    const qint64 nCloseMs = timer.elapsed();
+    gate->release();
+    blocker.waitForFinished();
+    util::workPool(util::WorkPool::Directory)->waitForDone();
+    verify(nCloseMs < 1000, QString("TEST-65"), QString("关闭窗口不等待目录队列，后台任务不访问已销毁的窗口"));
+}
+
+
+void runPerformanceBenchmark(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("benchmark-XXXXXX")));
+    QStringList paths;
+    for (int nIndex = 0; nIndex < 2; ++nIndex) {
+        QDir(directory.path()).mkpath(QString::number(nIndex));
+        const QString path = directory.filePath(QString("%1/sample.bmp").arg(nIndex));
+        QImage image(2448, 2048, QImage::Format_RGB32);
+        image.fill(nIndex == 0 ? QColor(90, 90, 90) : QColor(40, 90, 120));
+        image.save(path);
+        paths.append(path);
+    }
+    MainWindow window;
+    window.resize(1320, 860);
+    window.show();
+    auto* view = window.findChild<ui::ImageView*>();
+    auto* strip = window.findChild<ui::ThumbnailBar*>();
+    QElapsedTimer timer;
+    qint64 nFrameMs = -1;
+    QObject::connect(view, &ui::ImageView::firstFramePainted, &window, [&]() { nFrameMs = timer.elapsed(); });
+    QTimer heartbeat;
+    heartbeat.setInterval(10);
+    QElapsedTimer heartbeatTimer;
+    heartbeatTimer.start();
+    qint64 nMaxHeartbeatGap = 0;
+    QObject::connect(&heartbeat, &QTimer::timeout, &window, [&]() {
+        nMaxHeartbeatGap = std::max(nMaxHeartbeatGap, heartbeatTimer.restart());
+    });
+    heartbeat.start();
+    for (int nMode = 0; nMode < 2; ++nMode) {
+        const auto cache = core::cache::ImageCache::shared();
+        if (nMode == 1) {
+            // 冷阶段最后只保留一张；测量前显式预热两张，避免混入一次冷解码。
+            for (const QString& path : paths) { cache->load(path); }
+            heartbeatTimer.restart();
+        }
+        const quint64 nInitialDecodes = cache->decodeCount();
+        const quint64 nInitialHits = cache->hitCount();
+        QVector<qint64> samples;
+        for (int nIndex = 0; nIndex < 20; ++nIndex) {
+            if (nMode == 0) { core::cache::ImageCache::shared()->clear(); }
+            nFrameMs = -1;
+            timer.restart();
+            window.openFile(paths.at(nIndex % 2));
+            if (!waitUntil([&]() { return nFrameMs >= 0; }, 15000)) {
+                verify(false, QString("BENCH"), QString("首帧等待超时"));
+                return;
+            }
+            samples.append(nFrameMs);
+            waitUntil([&]() { return strip->count() == 1; });
+        }
+        std::sort(samples.begin(), samples.end());
+        qInfo() << "BENCH" << (nMode == 0 ? "application_cache_cold" : "application_cache_warm")
+            << "samples" << samples.size() << "median_ms" << samples.at(10) << "p95_ms" << samples.at(18)
+            << "phase_decodes" << cache->decodeCount() - nInitialDecodes
+            << "phase_cache_hits" << cache->hitCount() - nInitialHits;
+    }
+    PROCESS_MEMORY_COUNTERS_EX memory{};
+    memory.cb = sizeof(memory);
+    GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory), sizeof(memory));
+    qInfo() << "BENCH max_heartbeat_gap_ms" << nMaxHeartbeatGap
+        << "peak_working_set_mib" << memory.PeakWorkingSetSize / (1024.0 * 1024.0)
+        << "private_mib_at_end" << memory.PrivateUsage / (1024.0 * 1024.0)
+        << "decodes" << core::cache::ImageCache::shared()->decodeCount()
+        << "cache_hits" << core::cache::ImageCache::shared()->hitCount();
+    window.close();
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -1084,6 +1322,12 @@ int main(int argc, char* argv[])
     QDir().mkpath(outputRoot);
     qInfo().noquote() << QString("核心测试输出目录：%1").arg(outputRoot);
 
+    if (app.arguments().contains(QString("--benchmark"))) {
+        runPerformanceBenchmark(outputRoot);
+        util::waitForBackgroundWork();
+        return nFailedTests == 0 ? 0 : 1;
+    }
+
     testDirectoryNavigation(outputRoot);
     testProcessorPassThrough();
     testBrightnessSaturation();
@@ -1103,7 +1347,9 @@ int main(int argc, char* argv[])
     testFeedbackWorkflow(outputRoot);
     testForwardedFiles(outputRoot, settingsDirectory.path());
     testViewingPresentation(outputRoot);
+    testPerformanceAndCorrectness(outputRoot);
 
+    util::waitForBackgroundWork();
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;
 }
