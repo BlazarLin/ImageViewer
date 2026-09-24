@@ -99,6 +99,10 @@ MainWindow::MainWindow(QWidget* parent)
     restoreGeometry(settings.value(QString("ui/geometry")).toByteArray());
     restoreState(settings.value(QString("ui/windowState")).toByteArray());
     analysisDock_->hide();
+    // 旧版 saveState 中工具栏默认可见，不覆盖本版独立的显隐设置。
+    mainToolbar_->setVisible(actToggleToolbar_->isChecked());
+    thumbnailContainer_->setVisible(actToggleThumbnails_->isChecked());
+    updateFullScreenLayout();
     view_->setSelectionEnabled(false);
     updateNavigationActions();
     updateResultActions();
@@ -335,7 +339,13 @@ void MainWindow::setupActions()
     actFullScreen_->setShortcut(QKeySequence(Qt::Key_F11));
     actFullScreen_->setToolTip(tr("全屏后按 Esc 或 F11 退出"));
     connect(actFullScreen_, &QAction::toggled, this, [this](bool bFullScreen) {
-        bFullScreen ? showFullScreen() : showNormal();
+        if (bFullScreen) {
+            bWasMaximized_ = isMaximized();
+            showFullScreen();
+        } else {
+            bWasMaximized_ ? showMaximized() : showNormal();
+        }
+        view_->setFocus();
     });
 
     actDeleteFile_ = new QAction(tr("删除"), this);
@@ -409,7 +419,7 @@ void MainWindow::setupActions()
     actToggleThumbnails_->setCheckable(true);
     actToggleThumbnails_->setShortcut(QKeySequence(QString("Ctrl+T")));
     connect(actToggleThumbnails_, &QAction::toggled, this, [this](bool bVisible) {
-        thumbnailContainer_->setVisible(bVisible);
+        thumbnailContainer_->setVisible(bVisible && !isFullScreen());
         QSettings().setValue(QString("ui/thumbnailsVisible"), bVisible);
         view_->setFocus();
     });
@@ -474,7 +484,19 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addAction(actToggleAnalysis_);
     viewMenu->addAction(actCompare_);
     viewMenu->addSeparator();
+    actToggleToolbar_ = new QAction(tr("显示工具栏"), this);
+    actToggleToolbar_->setObjectName(QString("ToggleToolbar"));
+    actToggleToolbar_->setCheckable(true);
+    actToggleToolbar_->setShortcut(QKeySequence(QString("Ctrl+Shift+T")));
+    actToggleToolbar_->setChecked(QSettings().value(QString("ui/toolbarVisible"), false).toBool());
+    connect(actToggleToolbar_, &QAction::toggled, this, [this](bool bVisible) {
+        if (mainToolbar_) { mainToolbar_->setVisible(bVisible && !isFullScreen()); }
+        QSettings().setValue(QString("ui/toolbarVisible"), bVisible);
+        view_->setFocus();
+    });
+    viewMenu->addAction(actToggleToolbar_);
     viewMenu->addAction(actToggleThumbnails_);
+    viewMenu->addAction(actFullScreen_);
     viewMenu->addAction(actLoupe_);
     if (auto* button = titleBar_->menuButton(1)) { button->setMenu(viewMenu); }
     auto* languageMenu = new QMenu(this);
@@ -493,6 +515,7 @@ void MainWindow::setupMenusAndToolbar()
     if (auto* button = titleBar_->menuButton(4)) { button->setMenu(helpMenu); }
 
     auto* toolbar = addToolBar(tr("主工具栏"));
+    mainToolbar_ = toolbar;
     toolbar->setObjectName(QString("MainToolBar"));
     toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
@@ -505,6 +528,46 @@ void MainWindow::setupMenusAndToolbar()
     toolbar->addAction(actTogglePreprocess_);
     toolbar->addAction(actToggleAnalysis_);
     toolbar->addAction(actCompare_);
+    auto* spacer = new QWidget(toolbar);
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    toolbar->addWidget(spacer);
+    auto* collapse = new QToolButton(toolbar);
+    collapse->setObjectName(QString("CollapseToolbarButton"));
+    collapse->setDefaultAction(actToggleToolbar_);
+    collapse->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    collapse->setArrowType(Qt::UpArrow);
+    collapse->setFocusPolicy(Qt::NoFocus);
+    collapse->setToolTip(tr("隐藏工具栏"));
+    toolbar->addWidget(collapse);
+    toolbar->setVisible(actToggleToolbar_->isChecked());
+    view_->setChromeActions(actToggleToolbar_, actToggleThumbnails_);
+    // 菜单托管于标题栏按钮；显式注册快捷键，隐藏工具栏后仍可使用。
+    addActions({ actOpen_, actSaveResult_, actFit_, actActualSize_, actFullScreen_,
+        actToggleToolbar_, actToggleThumbnails_, actTogglePreprocess_, actToggleAnalysis_, actLoupe_, actCompare_ });
+}
+
+void MainWindow::updateFullScreenLayout()
+{
+    if (!mainToolbar_ || !actToggleToolbar_ || bFullScreenLayout_ == isFullScreen()) { return; }
+    bFullScreenLayout_ = isFullScreen();
+    if (bFullScreenLayout_) {
+        bRestorePreprocess_ = !preprocessDock_->isHidden();
+        bRestoreAnalysis_ = !analysisDock_->isHidden();
+        mainToolbar_->hide();
+        thumbnailContainer_->hide();
+        preprocessDock_->hide();
+        analysisDock_->hide();
+    } else {
+        mainToolbar_->setVisible(actToggleToolbar_->isChecked());
+        thumbnailContainer_->setVisible(actToggleThumbnails_->isChecked());
+        preprocessDock_->setVisible(bRestorePreprocess_);
+        analysisDock_->setVisible(bRestoreAnalysis_);
+    }
+    for (auto* action : { actToggleToolbar_, actToggleThumbnails_, actTogglePreprocess_, actToggleAnalysis_, actLoupe_ }) {
+        action->setEnabled(!bFullScreenLayout_);
+    }
+    view_->setLoupeEnabled(!bFullScreenLayout_ && actLoupe_->isChecked());
+    view_->setMinimalMode(bFullScreenLayout_);
 }
 
 void MainWindow::setupStatusBar()
@@ -1227,6 +1290,7 @@ QString MainWindow::formatFileSize(qint64 nBytes) const
 
 void MainWindow::toggleMaximized()
 {
+    if (isFullScreen()) { actFullScreen_->setChecked(false); return; }
     isMaximized() ? showNormal() : showMaximized();
     titleBar_->setMaximized(isMaximized());
 }
@@ -1273,8 +1337,9 @@ void MainWindow::changeEvent(QEvent* event)
 {
     QMainWindow::changeEvent(event);
     if (event->type() == QEvent::WindowStateChange && titleBar_) {
-        titleBar_->setMaximized(isMaximized());
+        titleBar_->setMaximized(isMaximized() || isFullScreen());
         updateWindowShape();
+        updateFullScreenLayout();
         if (actFullScreen_) {
             const QSignalBlocker blocker(actFullScreen_);
             actFullScreen_->setChecked(isFullScreen());
@@ -1287,7 +1352,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, long* r
 {
     Q_UNUSED(eventType)
     MSG* msg = static_cast<MSG*>(message);
-    if (msg && msg->message == WM_NCHITTEST && !isMaximized()) {
+    if (msg && msg->message == WM_NCHITTEST && !isMaximized() && !isFullScreen()) {
         constexpr int nBorder = 6;
         const QPoint cursor = QCursor::pos();
         const QRect frame = frameGeometry();

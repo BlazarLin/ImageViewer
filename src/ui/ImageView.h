@@ -6,6 +6,7 @@
 #include <vector>
 
 class QAction;
+class QLabel;
 class QToolButton;
 class QPainter;
 class QGraphicsPixmapItem;
@@ -46,6 +47,8 @@ public:
     const QImage& image() const { return current_; }
 
     void setNavigationActions(QAction* previous, QAction* next);
+    void setChromeActions(QAction* toolbar, QAction* thumbnails);
+    void setMinimalMode(bool bMinimal);
     double zoomFactor() const;
     QRect selectedRegion() const { return selectedRegion_; }
 
@@ -64,6 +67,7 @@ signals:
     void selectionCleared();
 
 protected:
+    bool viewportEvent(QEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void scrollContentsBy(int nDx, int nDy) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -104,6 +108,10 @@ private:
 
     QToolButton* previousButton_ = nullptr;
     QToolButton* nextButton_ = nullptr;
+    QToolButton* toolbarButton_ = nullptr;
+    QToolButton* thumbnailsButton_ = nullptr;
+    QLabel* pixelHint_ = nullptr;
+    bool bMinimalMode_ = false;
     QGraphicsScene* scene_ = nullptr;
     QGraphicsPixmapItem* pixmapItem_ = nullptr;
     QGraphicsPixmapItem* comparisonItem_ = nullptr;

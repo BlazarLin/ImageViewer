@@ -20,6 +20,7 @@ class QAction;
 class QDockWidget;
 class QLabel;
 class QTimer;
+class QToolBar;
 template <typename T>
 class QFutureWatcher;
 
@@ -89,6 +90,7 @@ private:
     void setupActions();
     void setupMenusAndToolbar();
     void setupStatusBar();
+    void updateFullScreenLayout();
     void updateWindowShape();
     void updatePixelStatus(const QPoint& position, const QColor& color, bool bValid);
     void updateImageInformation();
@@ -109,6 +111,11 @@ private:
     ui::ImageView* view_ = nullptr;
     ui::ThumbnailBar* thumbnailBar_ = nullptr;
     QWidget* thumbnailContainer_ = nullptr;
+    QToolBar* mainToolbar_ = nullptr;
+    bool bFullScreenLayout_ = false;
+    bool bWasMaximized_ = false;
+    bool bRestorePreprocess_ = false;
+    bool bRestoreAnalysis_ = false;
     QStringList pendingFileList_;
     ui::TitleBar* titleBar_ = nullptr;
     ui::PreprocessPanel* preprocessPanel_ = nullptr;
@@ -152,6 +159,7 @@ private:
     QAction* actTogglePreprocess_ = nullptr;
     QAction* actToggleAnalysis_ = nullptr;
     QAction* actToggleThumbnails_ = nullptr;
+    QAction* actToggleToolbar_ = nullptr;
     QAction* actLoupe_ = nullptr;
     QAction* actCopyFile_ = nullptr;
     QAction* actFullScreen_ = nullptr;

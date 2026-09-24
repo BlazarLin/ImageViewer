@@ -99,7 +99,7 @@ void TitleBar::setMaximized(bool bMaximized)
 
 void TitleBar::mousePressEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton && !window()->isMaximized()) {
+    if (event->button() == Qt::LeftButton && !window()->isMaximized() && !window()->isFullScreen()) {
         dragOffset_ = event->globalPos() - window()->frameGeometry().topLeft();
         bDragging_ = true;
         event->accept();
@@ -110,7 +110,7 @@ void TitleBar::mousePressEvent(QMouseEvent* event)
 
 void TitleBar::mouseMoveEvent(QMouseEvent* event)
 {
-    if (bDragging_ && (event->buttons() & Qt::LeftButton) && !window()->isMaximized()) {
+    if (bDragging_ && (event->buttons() & Qt::LeftButton) && !window()->isMaximized() && !window()->isFullScreen()) {
         window()->move(event->globalPos() - dragOffset_);
         event->accept();
         return;

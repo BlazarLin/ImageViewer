@@ -6,6 +6,7 @@
 #include <QCursor>
 #include <QAction>
 #include <QToolButton>
+#include <QLabel>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFileInfo>
@@ -91,6 +92,11 @@ ImageView::ImageView(QWidget* parent)
             "QToolButton:disabled { background:rgba(25,29,35,85); border-color:#34383e; }"));
         button->hide();
     }
+    pixelHint_ = new QLabel(viewport());
+    pixelHint_->setObjectName(QString("CursorPixelHint"));
+    pixelHint_->setAttribute(Qt::WA_TransparentForMouseEvents);
+    pixelHint_->setStyleSheet(QString("QLabel { color:#f4f7fa; background:rgba(24,28,34,235); border:1px solid #647586; border-radius:5px; padding:5px 8px; }"));
+    pixelHint_->hide();
     setRenderHint(QPainter::Antialiasing, true);
     setRenderHint(QPainter::SmoothPixmapTransform, true);
     setDragMode(QGraphicsView::ScrollHandDrag);
@@ -153,12 +159,51 @@ void ImageView::setNavigationActions(QAction* previous, QAction* next)
     updateNavigationButtons();
 }
 
+void ImageView::setChromeActions(QAction* toolbar, QAction* thumbnails)
+{
+    toolbarButton_ = new QToolButton(viewport());
+    thumbnailsButton_ = new QToolButton(viewport());
+    toolbarButton_->setObjectName(QString("ExpandToolbarButton"));
+    thumbnailsButton_->setObjectName(QString("ToggleThumbnailsButton"));
+    toolbarButton_->setDefaultAction(toolbar);
+    thumbnailsButton_->setDefaultAction(thumbnails);
+    for (auto* button : { toolbarButton_, thumbnailsButton_ }) {
+        button->setFixedSize(34, 28);
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setFocusPolicy(Qt::NoFocus);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setStyleSheet(QString("QToolButton { color:#dfe3e8; background:#303840; border:1px solid #647586; border-radius:5px; } QToolButton:hover { background:#176b98; }"));
+    }
+    connect(toolbar, &QAction::toggled, this, [this](bool) { updateNavigationButtons(); });
+    connect(thumbnails, &QAction::toggled, this, [this](bool) { updateNavigationButtons(); });
+    updateNavigationButtons();
+}
+
+void ImageView::setMinimalMode(bool bMinimal)
+{
+    bMinimalMode_ = bMinimal;
+    setHorizontalScrollBarPolicy(bMinimal ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
+    setVerticalScrollBarPolicy(bMinimal ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
+    updateNavigationButtons();
+}
+
 void ImageView::updateNavigationButtons()
 {
     if (!previousButton_ || !nextButton_) {
         return;
     }
-    const bool bVisible = !current_.isNull() && previousButton_->defaultAction();
+    if (toolbarButton_ && thumbnailsButton_) {
+        toolbarButton_->setVisible(!bMinimalMode_ && !toolbarButton_->defaultAction()->isChecked());
+        thumbnailsButton_->setVisible(!bMinimalMode_);
+        toolbarButton_->setArrowType(Qt::DownArrow);
+        thumbnailsButton_->setArrowType(thumbnailsButton_->defaultAction()->isChecked() ? Qt::DownArrow : Qt::UpArrow);
+        const int nRight = std::max(0, viewport()->width() - 42);
+        toolbarButton_->move(nRight, 6);
+        thumbnailsButton_->move(nRight, std::max(0, viewport()->height() - 34));
+        toolbarButton_->raise();
+        thumbnailsButton_->raise();
+    }
+    const bool bVisible = !bMinimalMode_ && !current_.isNull() && previousButton_->defaultAction();
     previousButton_->setVisible(bVisible);
     nextButton_->setVisible(bVisible);
     const int nY = std::max(0, (viewport()->height() - previousButton_->height()) / 2);
@@ -171,6 +216,13 @@ void ImageView::updateNavigationButtons()
 void ImageView::scrollContentsBy(int nDx, int nDy)
 {
     QGraphicsView::scrollContentsBy(nDx, nDy);
+    // 棋盘格固定在视口坐标。仅修复露出的背景区域，保留不透明图像的滚动复用。
+    QRegion background(viewport()->rect());
+    if (!current_.isNull() && !current_.hasAlphaChannel()
+        && (!bComparisonEnabled_ || !original_.hasAlphaChannel())) {
+        background -= mapFromScene(QRectF(current_.rect())).boundingRect().adjusted(2, 2, -2, -2);
+    }
+    if (!background.isEmpty()) { viewport()->update(background); }
     updateNavigationButtons();
     refreshLoupe();
 }
@@ -480,7 +532,11 @@ void ImageView::keyPressEvent(QKeyEvent* event)
     if (event->key() == Qt::Key_Escape) {
         clearSelection();
         if (window() && window()->isFullScreen()) {
-            window()->showNormal();
+            if (auto* action = window()->findChild<QAction*>(QString("ToggleFullScreen"))) {
+                action->setChecked(false);
+            } else {
+                window()->showNormal();
+            }
         }
         event->accept();
         return;
@@ -490,9 +546,21 @@ void ImageView::keyPressEvent(QKeyEvent* event)
 
 void ImageView::leaveEvent(QEvent* event)
 {
+    pixelHint_->hide();
     emit pixelHovered(QPoint(), QColor(), false);
     refreshLoupe();
     QGraphicsView::leaveEvent(event);
+}
+
+bool ImageView::viewportEvent(QEvent* event)
+{
+    const bool bHandled = QGraphicsView::viewportEvent(event);
+    if (event->type() == QEvent::Leave && pixelHint_) {
+        // 从图像区进入工具按钮/滚动条时不一定触发外层视图的 leaveEvent。
+        pixelHint_->hide();
+        emit pixelHovered(QPoint(), QColor(), false);
+    }
+    return bHandled;
 }
 
 void ImageView::dragEnterEvent(QDragEnterEvent* event)
@@ -664,6 +732,7 @@ bool ImageView::pixelUsesOriginal(const QPoint& position) const
 void ImageView::updateHoverPixel(const QPoint& viewportPosition)
 {
     if (current_.isNull() || !viewport()->rect().contains(viewportPosition)) {
+        if (pixelHint_) { pixelHint_->hide(); }
         emit pixelHovered(QPoint(), QColor(), false);
         return;
     }
@@ -672,8 +741,33 @@ void ImageView::updateHoverPixel(const QPoint& viewportPosition)
         static_cast<int>(std::floor(scenePosition.y())));
     const bool bValid = current_.rect().contains(pixelPosition);
     const QImage& sampledImage = pixelUsesOriginal(pixelPosition) && !original_.isNull() ? original_ : current_;
-    emit pixelHovered(pixelPosition,
-        bValid ? sampledImage.pixelColor(pixelPosition) : QColor(), bValid);
+    const QColor color = bValid ? sampledImage.pixelColor(pixelPosition) : QColor();
+    emit pixelHovered(pixelPosition, color, bValid);
+    if (!pixelHint_) { return; }
+    if (!bValid || zoomFactor() < 8.0) {
+        pixelHint_->hide();
+        return;
+    }
+    // 仅检查格式/最多 256 项的调色板，不在鼠标热路径扫描整图。
+    const bool bGray = sampledImage.format() == QImage::Format_Grayscale8
+        || sampledImage.format() == QImage::Format_Grayscale16
+        || (sampledImage.depth() <= 8 && sampledImage.isGrayscale());
+    const QString value = bGray ? tr("灰度: %1").arg(color.red())
+        : tr("BGR: %1, %2, %3").arg(color.blue()).arg(color.green()).arg(color.red());
+    const QString text = tr("X: %1  Y: %2\n%3").arg(pixelPosition.x()).arg(pixelPosition.y()).arg(value);
+    if (pixelHint_->text() != text) { pixelHint_->setText(text); pixelHint_->adjustSize(); }
+    QPoint position = viewportPosition + QPoint(18, 22);
+    if (position.x() + pixelHint_->width() > viewport()->width()) {
+        position.setX(viewportPosition.x() - pixelHint_->width() - 18);
+    }
+    if (position.y() + pixelHint_->height() > viewport()->height()) {
+        position.setY(viewportPosition.y() - pixelHint_->height() - 18);
+    }
+    position.setX(std::max(0, position.x()));
+    position.setY(std::max(0, position.y()));
+    pixelHint_->move(position);
+    pixelHint_->show();
+    pixelHint_->raise();
 }
 
 void ImageView::drawForeground(QPainter* painter, const QRectF& rect)

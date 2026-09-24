@@ -9,6 +9,7 @@
 #include <QGroupBox>
 #include <QElapsedTimer>
 #include <QMouseEvent>
+#include <QPaintEvent>
 #include <QKeyEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -927,6 +928,123 @@ void testForwardedFiles(const QString& outputRoot, const QString& settingsPath)
         QString("TEST-49"), QString("已取消的分析不分配直方图、不发布部分统计"));
 }
 
+
+// 2026-09-24：验证光标取样、简洁布局恢复和固定背景的滚动重绘。
+void testViewingPresentation(const QString& outputRoot)
+{
+    QSettings().remove(QString("ui/toolbarVisible"));
+    QSettings().setValue(QString("ui/thumbnailsVisible"), true);
+    MainWindow window;
+    window.show();
+    QCoreApplication::processEvents();
+    auto* view = window.findChild<ui::ImageView*>();
+    auto* toolbar = window.findChild<QToolBar*>(QString("MainToolBar"));
+    auto* thumbs = window.findChild<QWidget*>(QString("ThumbnailContainer"));
+    auto* expand = view->findChild<QToolButton*>(QString("ExpandToolbarButton"));
+    auto* collapse = window.findChild<QToolButton*>(QString("CollapseToolbarButton"));
+    auto* thumbButton = view->findChild<QToolButton*>(QString("ToggleThumbnailsButton"));
+    bool bControls = toolbar->isHidden() && thumbs->isVisible() && expand->isVisible();
+    expand->click();
+    bControls = bControls && toolbar->isVisible() && expand->isHidden();
+    collapse->click();
+    thumbButton->click();
+    bControls = bControls && toolbar->isHidden() && thumbs->isHidden() && thumbButton->isVisible();
+    thumbButton->click();
+    verify(bControls && thumbs->isVisible(), QString("TEST-53"),
+        QString("工具栏默认隐藏、缩略图默认显示，边缘按钮可反复收起和展开且入口不丢失"));
+
+    QImage color(80, 80, QImage::Format_RGB32);
+    color.fill(QColor(12, 34, 56));
+    view->setImage(color, true);
+    view->actualSize();
+    view->setTransform(QTransform::fromScale(12, 12));
+    view->centerOn(40, 40);
+    const auto hover = [view](QPointF point) {
+        QMouseEvent event(QEvent::MouseMove, view->mapFromScene(point), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(view->viewport(), &event);
+    };
+    auto* hint = view->findChild<QLabel*>(QString("CursorPixelHint"));
+    hover(QPointF(40.5, 40.5));
+    bool bHint = hint->isVisible() && hint->text().contains(QString("BGR: 56, 34, 12"));
+    QImage gray(80, 80, QImage::Format_Grayscale8);
+    gray.fill(97);
+    view->setComparisonImages(gray, color, true);
+    view->centerOn(39, 40);
+    hover(QPointF(38.5, 40.5));
+    bHint = bHint && hint->text().contains(QString("灰度: 97"));
+    hover(QPointF(41.5, 40.5));
+    bHint = bHint && hint->text().contains(QString("BGR: 56, 34, 12"));
+    view->actualSize();
+    hover(QPointF(40.5, 40.5));
+    bHint = bHint && hint->isHidden();
+    view->setTransform(QTransform::fromScale(12, 12));
+    hover(QPointF(40.5, 40.5));
+    QEvent leave(QEvent::Leave);
+    QCoreApplication::sendEvent(view->viewport(), &leave);
+    verify(bHint && hint->isHidden(), QString("TEST-52"),
+        QString("像素格下跟随显示 BGR 或灰度，对比分割按实际来源取样，缩小和移出时隐藏"));
+
+    auto* full = window.findChild<QAction*>(QString("ToggleFullScreen"));
+    auto* analysis = window.findChild<ui::AnalysisPanel*>()->parentWidget();
+    expand->click();
+    analysis->show();
+    window.showMaximized();
+    QCoreApplication::processEvents();
+    full->setChecked(true);
+    QCoreApplication::processEvents();
+    bool bFull = window.isFullScreen() && toolbar->isHidden() && thumbs->isHidden()
+        && analysis->isHidden() && expand->isHidden() && thumbButton->isHidden()
+        && view->findChild<QToolButton*>(QString("NextImageButton"))->isHidden()
+        && window.statusBar()->isVisible() && window.findChild<QWidget*>(QString("CustomTitleBar"))->isVisible();
+    QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QCoreApplication::sendEvent(view, &escape);
+    QCoreApplication::processEvents();
+    verify(bFull && window.isMaximized() && !full->isChecked() && toolbar->isVisible()
+        && thumbs->isVisible() && analysis->isVisible(), QString("TEST-55"),
+        QString("全屏只保留标题栏状态栏和图像，Esc 恢复最大化及进入前各面板显隐"));
+    analysis->hide();
+    collapse->click();
+    view->setComparisonEnabled(false);
+    view->setImage(color, true);
+    view->setTransform(QTransform::fromScale(12, 12));
+    view->centerOn(40, 40);
+    hover(QPointF(40.5, 40.5));
+    window.grab().save(QDir(outputRoot).filePath(QString("260924像素提示与显隐.png")));
+    window.close();
+
+    class PaintProbe : public ui::ImageView {
+    public:
+        QRect lastPaint;
+    protected:
+        void paintEvent(QPaintEvent* event) override
+        {
+            lastPaint = lastPaint.united(event->rect());
+            ui::ImageView::paintEvent(event);
+        }
+    } probe;
+    probe.resize(460, 320);
+    probe.show();
+    QImage narrow(8, 240, QImage::Format_RGB32);
+    narrow.fill(Qt::red);
+    probe.setImage(narrow, true);
+    probe.actualSize();
+    probe.setTransform(QTransform::fromScale(10, 10));
+    probe.centerOn(4, 100);
+    QCoreApplication::processEvents();
+    bool bRepaint = true;
+    for (int nDelta : { 7, -3, 11, -8 }) {
+        probe.lastPaint = QRect();
+        probe.verticalScrollBar()->setValue(probe.verticalScrollBar()->value() + nDelta);
+        const bool bPainted = waitUntil([&]() { return probe.lastPaint.contains(probe.viewport()->rect()); });
+        bRepaint = bRepaint && bPainted;
+    }
+    verify(bRepaint, QString("TEST-54"),
+        QString("非整格距离反复上下平移时完整重绘背景区域，避免复用错位的棋盘格"));
+    probe.viewport()->grab().save(QDir(outputRoot).filePath(QString("260924背景格平移.png")));
+    probe.close();
+    QSettings().remove(QString("ui/toolbarVisible"));
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -984,6 +1102,7 @@ int main(int argc, char* argv[])
     testColorHistograms(outputRoot);
     testFeedbackWorkflow(outputRoot);
     testForwardedFiles(outputRoot, settingsDirectory.path());
+    testViewingPresentation(outputRoot);
 
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
     return nFailedTests == 0 ? 0 : 1;

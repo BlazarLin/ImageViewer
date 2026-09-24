@@ -400,7 +400,7 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
     <message>
         <source>滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区</source>
-        <translation>Wheel to zoom; double-click for fit / 100%; show Analysis then Shift-drag for ROI; Esc to clear</translation>
+        <translation type="vanished">Wheel to zoom; double-click for fit / 100%; show Analysis then Shift-drag for ROI; Esc to clear</translation>
     </message>
     <message>
         <source>滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单</source>
@@ -491,6 +491,14 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     <message>
         <source>搜索缩略图</source>
         <translation type="vanished">Search thumbnails</translation>
+    </message>
+    <message>
+        <source>显示工具栏</source>
+        <translation>Show toolbar</translation>
+    </message>
+    <message>
+        <source>隐藏工具栏</source>
+        <translation>Hide toolbar</translation>
     </message>
 </context>
 <context>
@@ -685,6 +693,20 @@ Hover shows raw counts; smoothing affects curves only</translation>
     <message>
         <source>支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O</source>
         <translation>PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O</translation>
+    </message>
+    <message>
+        <source>灰度: %1</source>
+        <translation>Gray: %1</translation>
+    </message>
+    <message>
+        <source>BGR: %1, %2, %3</source>
+        <translation>BGR: %1, %2, %3</translation>
+    </message>
+    <message>
+        <source>X: %1  Y: %2
+%3</source>
+        <translation>X: %1  Y: %2
+%3</translation>
     </message>
 </context>
 <context>
