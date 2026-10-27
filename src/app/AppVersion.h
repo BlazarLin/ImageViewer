@@ -1,4 +1,4 @@
-// 2026-09-07
+﻿// 2026-09-07
 // 功能：集中定义 ImageViewer 的对外版本号。
 // 目的：确保标题栏、关于窗口和运行时元数据使用同一版本。
 #pragma once
@@ -9,7 +9,7 @@ namespace app {
 
 inline QString version()
 {
-    return QString("2.3.0");
+    return QString("2.4.0");
 }
 
 } // namespace app

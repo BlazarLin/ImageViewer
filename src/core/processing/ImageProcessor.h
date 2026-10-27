@@ -43,10 +43,35 @@ struct ProcessingResult {
     bool ok() const { return error.isEmpty() && !image.isNull(); }
 };
 
+// 2026-10-27：六个通道的缩略图按 R/G/B/H/S/V 顺序存放。
+struct ChannelSplitResult {
+    QImage images[6];
+    QString error;
+
+    bool ok() const
+    {
+        if (!error.isEmpty()) { return false; }
+        for (const QImage& image : images) {
+            if (image.isNull()) { return false; }
+        }
+        return true;
+    }
+};
+
 class ImageProcessor {
 public:
     static ProcessingResult process(const QImage& source,
         const ProcessingParameters& parameters, const util::Cancellation& canceled = {});
+
+    // 旋转后执行镜像；角度为顺时针 90 度的倍数。
+    static ProcessingResult orient(const QImage& source, int nQuarterTurns,
+        bool bMirrorHorizontal, bool bMirrorVertical,
+        const util::Cancellation& canceled = {});
+
+    // 后台生成 RGB/HSV 六通道小图，限制返回结果的内存规模。
+    static ChannelSplitResult splitChannels(const QImage& source,
+        const QSize& maximumSize = QSize(640, 480),
+        const util::Cancellation& canceled = {});
 };
 
 } // namespace core::processing

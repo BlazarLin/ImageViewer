@@ -48,7 +48,7 @@ public:
     const QImage& image() const { return current_; }
 
     void setNavigationActions(QAction* previous, QAction* next);
-    void setChromeActions(QAction* toolbar, QAction* thumbnails);
+    void setChromeActions(QAction* toolbar);
     void setMinimalMode(bool bMinimal);
     double zoomFactor() const;
     QRect selectedRegion() const { return selectedRegion_; }
@@ -107,11 +107,13 @@ private:
     void applyPyramidLevel();
     void drawLoupe(QPainter& painter);
     void refreshLoupe();
+    QRect navigationOverviewRect() const;
+    void drawNavigationOverview(QPainter& painter);
+    void requestNavigationOverview();
 
     QToolButton* previousButton_ = nullptr;
     QToolButton* nextButton_ = nullptr;
     QToolButton* toolbarButton_ = nullptr;
-    QToolButton* thumbnailsButton_ = nullptr;
     QLabel* pixelHint_ = nullptr;
     bool bMinimalMode_ = false;
     bool bAwaitingFirstFrame_ = false;
@@ -123,6 +125,11 @@ private:
     QImage processed_;
     std::vector<QImage> pyramid_;
     QFutureWatcher<std::vector<QImage>>* pyramidWatcher_ = nullptr;
+    QFutureWatcher<QImage>* overviewWatcher_ = nullptr;
+    QImage overviewImage_;
+    util::Cancellation overviewCanceled_;
+    quint64 nOverviewGeneration_ = 0;
+    quint64 nRunningOverviewGeneration_ = 0;
     ViewMode viewMode_ = ViewMode::FitWindow;
     double lastEmittedZoom_ = -1.0;
     double dComparisonSplit_ = 0.5;

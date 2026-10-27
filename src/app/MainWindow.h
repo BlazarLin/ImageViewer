@@ -9,6 +9,7 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QMainWindow>
+#include <QString>
 
 #include <memory>
 #include <QVector>
@@ -20,10 +21,14 @@ struct AsyncSaveResult {
 };
 
 class QAction;
+class QDialog;
+class QShowEvent;
 class QDockWidget;
 class QLabel;
 class QTimer;
 class QToolBar;
+class QToolButton;
+class WindowFrameOverlay;
 template <typename T>
 class QFutureWatcher;
 
@@ -55,6 +60,8 @@ protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    bool event(QEvent* event) override;
     bool nativeEvent(const QByteArray& eventType, void* message, long* result) override;
 
 private slots:
@@ -77,6 +84,12 @@ private slots:
         const core::processing::ProcessingParameters& parameters);
     void startPreprocess();
     void onPreprocessFinished();
+    void onOrientationChanged();
+    void startOrientation();
+    void onOrientationFinished();
+    void setChannelSplitEnabled(bool bEnabled);
+    void refreshChannelSplit();
+    void onChannelSplitFinished();
     void startRoiAnalysis(const QRect& region);
     void onRoiAnalysisFinished();
     void toggleComparison(bool bEnabled);
@@ -99,6 +112,9 @@ private:
     void setupStatusBar();
     void updateFullScreenLayout();
     void updateWindowShape();
+    QWidget* buildChannelPanel(QWidget* parent, bool bHsv);
+    void updateChannelPanels();
+    void updateChannelSource();
     void updatePixelStatus(const QPoint& position, const QColor& color, bool bValid);
     void updateImageInformation();
     void updateNavigationActions();
@@ -119,6 +135,15 @@ private:
     ui::ThumbnailBar* thumbnailBar_ = nullptr;
     QWidget* thumbnailContainer_ = nullptr;
     QToolBar* mainToolbar_ = nullptr;
+    QToolButton* thumbnailCollapseButton_ = nullptr;
+    WindowFrameOverlay* frameOverlay_ = nullptr;
+    QWidget* channelLeftPanel_ = nullptr;
+    QWidget* channelRightPanel_ = nullptr;
+    QLabel* channelCardImages_[6] = {};
+    QString channelTitles_[6];
+    QString channelRanges_[6];
+    QImage channelImages_[6];
+    bool bChannelSplitEnabled_ = false;
     bool bFullScreenLayout_ = false;
     bool bWasMaximized_ = false;
     bool bRestorePreprocess_ = false;
@@ -132,12 +157,16 @@ private:
 
     std::unique_ptr<core::navigation::DirectoryModel> directoryModel_;
     QFutureWatcher<core::processing::ProcessingResult>* processingWatcher_ = nullptr;
+    QFutureWatcher<core::processing::ProcessingResult>* orientationWatcher_ = nullptr;
+    QFutureWatcher<core::processing::ChannelSplitResult>* channelWatcher_ = nullptr;
     QFutureWatcher<core::analysis::AnalysisResult>* analysisWatcher_ = nullptr;
     QFutureWatcher<int>* preloadWatcher_ = nullptr;
     QFutureWatcher<core::navigation::DirectoryModel>* directoryWatcher_ = nullptr;
     QFutureWatcher<AsyncSaveResult>* saveWatcher_ = nullptr;
     util::Cancellation loadCanceled_;
     util::Cancellation processingCanceled_;
+    util::Cancellation orientationCanceled_;
+    util::Cancellation channelCanceled_;
     util::Cancellation preloadCanceled_;
     util::Cancellation directoryCanceled_;
     QStringList scanFiles_;
@@ -158,12 +187,23 @@ private:
     bool bPerformanceTrace_ = qEnvironmentVariableIsSet("IMAGEVIEWER_PERF_TRACE");
     QTimer* processingTimer_ = nullptr;
     core::processing::ProcessingParameters processingParameters_;
+    QImage rawOriginalImage_;
     QImage originalImage_;
     QImage processedImage_;
     QImage displayedImage_;
     quint64 nProcessingGeneration_ = 0;
     quint64 nRunningGeneration_ = 0;
     bool bProcessingPending_ = false;
+    quint64 nOrientationGeneration_ = 0;
+    quint64 nRunningOrientationGeneration_ = 0;
+    int nQuarterTurns_ = 0;
+    bool bMirrorHorizontal_ = false;
+    bool bMirrorVertical_ = false;
+    bool bOrienting_ = false;
+    bool bOrientationPending_ = false;
+    quint64 nChannelGeneration_ = 0;
+    quint64 nRunningChannelGeneration_ = 0;
+    bool bChannelPending_ = false;
     quint64 nAnalysisGeneration_ = 0;
     quint64 nRunningAnalysisGeneration_ = 0;
     QRect pendingAnalysisRegion_;
@@ -185,6 +225,11 @@ private:
     QAction* actFitWidth_ = nullptr;
     QAction* actFitHeight_ = nullptr;
     QAction* actActualSize_ = nullptr;
+    QAction* actRotateLeft_ = nullptr;
+    QAction* actRotateRight_ = nullptr;
+    QAction* actMirrorHorizontal_ = nullptr;
+    QAction* actMirrorVertical_ = nullptr;
+    QAction* actSplitChannels_ = nullptr;
     QAction* actTogglePreprocess_ = nullptr;
     QAction* actToggleAnalysis_ = nullptr;
     QAction* actToggleThumbnails_ = nullptr;
@@ -195,7 +240,6 @@ private:
     QAction* actDeleteFile_ = nullptr;
     QAction* actCompare_ = nullptr;
     QAction* actShowConsole_ = nullptr;
-    QAction* actMultiInstance_ = nullptr;
     QAction* actAbout_ = nullptr;
     QAction* actExit_ = nullptr;
 

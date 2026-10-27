@@ -460,16 +460,20 @@ void testWindowWorkflow(const QString& outputRoot)
     verify(folderAction && folderAction->isEnabled()
             && view->contextMenuPolicy() == Qt::CustomContextMenu, QString("TEST-26"),
         QString("成功打开本地图片后启用图像右键菜单的所在文件夹操作"));
+    window.showNormal();
     window.resize(1100, 750);
-    const bool bRounded = !window.mask().contains(QPoint(0, 0))
-        && window.mask().contains(window.rect().center());
+    QCoreApplication::processEvents();
+    auto* frame = window.findChild<QWidget*>(QString("WindowFrameOverlay"));
+    const bool bFramed = frame && frame->isVisible() && frame->geometry() == window.rect()
+        && !window.mask().isEmpty();
     window.showMaximized();
     QCoreApplication::processEvents();
-    const bool bMaximized = window.mask().isEmpty();
+    const bool bMaximized = !frame->isVisible() && window.mask().isEmpty();
     window.showNormal();
     QCoreApplication::processEvents();
-    verify(bRounded && bMaximized && !window.mask().isEmpty(), QString("TEST-27"),
-        QString("普通窗口四角裁切，最大化解除裁切，还原后恢复圆角"));
+    verify(bFramed && bMaximized && frame->isVisible() && frame->geometry() == window.rect()
+            && !window.mask().isEmpty(),
+        QString("TEST-27"), QString("普通窗口显示圆角边框与裁切遮罩，最大化隐藏边框并解除遮罩，还原后恢复"));
     view->fitToWindow();
     QMouseEvent finalHover(QEvent::MouseMove, view->mapFromScene(QPointF(12, 18)),
         Qt::NoButton, Qt::NoButton, Qt::NoModifier);
@@ -863,8 +867,9 @@ void testFeedbackWorkflow(const QString& outputRoot)
     QSettings().setValue(QString("analysis/statisticsExpanded"), true);
 }
 
-void testForwardedFiles(const QString& outputRoot, const QString& settingsPath)
+void testIndependentProcesses(const QString& outputRoot, const QString& settingsPath)
 {
+    Q_UNUSED(settingsPath)
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("多文件-XXXXXX")));
     QTemporaryDir other(QDir(outputRoot).filePath(QString("其他目录-XXXXXX")));
     QImage image(16, 16, QImage::Format_RGB32); image.fill(Qt::red);
@@ -872,28 +877,14 @@ void testForwardedFiles(const QString& outputRoot, const QString& settingsPath)
     const QString second = other.filePath(QString("中文 空格 2.png"));
     image.save(first); image.save(second);
     auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
-    const QString oldName = QCoreApplication::applicationName();
-    const QString name = oldName + QString::number(QCoreApplication::applicationPid());
-    QCoreApplication::setApplicationName(name);
-    qputenv("IMAGEVIEWER_TEST_INSTANCE", name.toUtf8());
     Application instance(app);
     const bool bPrimary = instance.startup();
-    QStringList received;
-    int nRequests = 0;
-    QObject::connect(&instance, &Application::filesRequested, &instance, [&](const QStringList& paths) {
-        received = paths; ++nRequests;
-    });
     QProcess child;
     child.start(QCoreApplication::applicationFilePath(), { QString("--ipc-client"), first, second, first });
     const bool bFinished = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
-    const bool bFiles = bPrimary && bFinished && child.exitCode() == 0 && received == QStringList({ first, second });
-    child.start(QCoreApplication::applicationFilePath(), { QString("--ipc-client") });
-    const bool bActivated = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
-    verify(bFiles && bActivated && child.exitCode() == 0 && nRequests == 2 && received.isEmpty(),
-        QString("TEST-47"), QString("真实子进程转发中文空格及多文件参数并确认接收，重复路径去重，无参数请求也通知激活"));
-    // TEST-51：--new-window 与多实例设置下子进程独立成窗不转发，关闭设置后恢复转发。
-    qputenv("IMAGEVIEWER_TEST_SETTINGS", settingsPath.toUtf8());
-    qputenv("IMAGEVIEWER_TEST_ORG", QByteArray("ImageViewerTests"));
+    verify(bPrimary && bFinished && child.exitCode() == 23 && instance.pendingFiles().isEmpty(),
+        QString("TEST-47"), QString("每次启动均保留独立进程，中文空格及多文件参数由各自窗口读取并去重"));
+    // TEST-51：默认启动和兼容参数都不转发，旧的多实例设置也不再激活已有窗口。
     child.start(QCoreApplication::applicationFilePath(),
         { QString("--ipc-client"), QString("--new-window"), first });
     const bool bStandaloneFlag = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
@@ -904,16 +895,10 @@ void testForwardedFiles(const QString& outputRoot, const QString& settingsPath)
     const int nExitSetting = child.exitCode();
     QSettings().setValue(QString("ui/multiInstance"), false);
     child.start(QCoreApplication::applicationFilePath(), { QString("--ipc-client"), first });
-    const bool bForwardResumed = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
+    const bool bStillStandalone = waitUntil([&]() { return child.state() == QProcess::NotRunning; });
     verify(bStandaloneFlag && nExitFlag == 23 && bStandaloneSetting && nExitSetting == 23
-        && bForwardResumed && child.exitCode() == 0 && nRequests == 3,
-        QString("TEST-51"),
-        QString("--new-window 与允许多实例设置下子进程独立成窗不转发，关闭设置后恢复转发"));
-    QSettings().setValue(QString("ui/multiInstance"), false);
-    qunsetenv("IMAGEVIEWER_TEST_SETTINGS");
-    qunsetenv("IMAGEVIEWER_TEST_ORG");
-    QCoreApplication::setApplicationName(oldName);
-    qunsetenv("IMAGEVIEWER_TEST_INSTANCE");
+        && bStillStandalone && child.exitCode() == 23,
+        QString("TEST-51"), QString("默认、新窗口参数及旧设置下均独立运行，不转发文件、不顶起已有窗口"));
     core::navigation::DirectoryModel model;
     model.setFileList({ first, second }, first);
     bool bBatch = model.count() == 2 && model.moveNext() && model.currentPath() == second;
@@ -945,16 +930,21 @@ void testViewingPresentation(const QString& outputRoot)
     auto* thumbs = window.findChild<QWidget*>(QString("ThumbnailContainer"));
     auto* expand = view->findChild<QToolButton*>(QString("ExpandToolbarButton"));
     auto* collapse = window.findChild<QToolButton*>(QString("CollapseToolbarButton"));
-    auto* thumbButton = view->findChild<QToolButton*>(QString("ToggleThumbnailsButton"));
-    bool bControls = toolbar->isHidden() && thumbs->isVisible() && expand->isVisible();
+    auto* thumbToggle = window.findChild<QToolButton*>(QString("CollapseThumbnailsButton"));
+    auto* strip = window.findChild<ui::ThumbnailBar*>();
+    bool bControls = toolbar->isHidden() && thumbs->isVisible() && expand->isVisible()
+        && thumbToggle && strip->isVisible();
     expand->click();
     bControls = bControls && toolbar->isVisible() && expand->isHidden();
     collapse->click();
-    thumbButton->click();
-    bControls = bControls && toolbar->isHidden() && thumbs->isHidden() && thumbButton->isVisible();
-    thumbButton->click();
-    verify(bControls && thumbs->isVisible(), QString("TEST-53"),
-        QString("工具栏默认隐藏、缩略图默认显示，边缘按钮可反复收起和展开且入口不丢失"));
+    thumbToggle->click();
+    // 收起后标题栏常驻，入口不丢失；只隐藏缩略图列表。
+    bControls = bControls && toolbar->isHidden() && thumbs->isVisible()
+        && !strip->isVisible() && thumbToggle->isVisible()
+        && thumbToggle->arrowType() == Qt::RightArrow;
+    thumbToggle->click();
+    verify(bControls && strip->isVisible() && thumbToggle->arrowType() == Qt::DownArrow,
+        QString("TEST-53"), QString("工具栏默认隐藏、缩略图默认显示，标题栏按钮可反复收起和展开列表且入口常驻"));
 
     QImage color(80, 80, QImage::Format_RGB32);
     color.fill(QColor(12, 34, 56));
@@ -996,7 +986,7 @@ void testViewingPresentation(const QString& outputRoot)
     full->setChecked(true);
     QCoreApplication::processEvents();
     bool bFull = window.isFullScreen() && toolbar->isHidden() && thumbs->isHidden()
-        && analysis->isHidden() && expand->isHidden() && thumbButton->isHidden()
+        && analysis->isHidden() && expand->isHidden()
         && view->findChild<QToolButton*>(QString("NextImageButton"))->isHidden()
         && window.statusBar()->isVisible() && window.findChild<QWidget*>(QString("CustomTitleBar"))->isVisible();
     QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
@@ -1215,6 +1205,172 @@ void testPerformanceAndCorrectness(const QString& outputRoot)
 }
 
 
+void testOrientationChannelsAndStableView(const QString& outputRoot)
+{
+    QImage source(2, 1, QImage::Format_RGB888);
+    source.setPixelColor(0, 0, QColor(255, 0, 0));
+    source.setPixelColor(1, 0, QColor(0, 255, 0));
+    const auto rotated = core::processing::ImageProcessor::orient(source, 1, false, false);
+    const auto mirrored = core::processing::ImageProcessor::orient(source, 0, true, false);
+    const auto turnedBack = core::processing::ImageProcessor::orient(source, -1, false, false);
+    verify(rotated.ok() && rotated.image.size() == QSize(1, 2)
+            && rotated.image.pixelColor(0, 0) == QColor(255, 0, 0)
+            && rotated.image.pixelColor(0, 1) == QColor(0, 255, 0)
+            && mirrored.image.pixelColor(0, 0) == QColor(0, 255, 0)
+            && turnedBack.image.size() == QSize(1, 2)
+            && turnedBack.image.pixelColor(0, 1) == QColor(255, 0, 0),
+        QString("TEST-68"), QString("顺/逆时针 90 度与水平镜像直接生成正确像素和尺寸"));
+
+    const auto channels = core::processing::ImageProcessor::splitChannels(source, QSize(640, 480));
+    verify(channels.ok() && channels.images[0].pixelColor(0, 0).red() == 255
+            && channels.images[0].pixelColor(1, 0).red() == 0
+            && channels.images[1].pixelColor(1, 0).red() == 255
+            && channels.images[2].pixelColor(0, 0).red() == 0
+            && channels.images[3].pixelColor(1, 0).red() == 60
+            && channels.images[4].pixelColor(0, 0).red() == 255
+            && channels.images[5].pixelColor(1, 0).red() == 255,
+        QString("TEST-69"), QString("RGB 与 HSV 六通道按固定顺序拆分，OpenCV 色相和通道值准确"));
+
+    ui::ImageView stable;
+    stable.resize(400, 300);
+    stable.show();
+    QImage first(2000, 1200, QImage::Format_RGB32); first.fill(Qt::red);
+    QImage second(1600, 1000, QImage::Format_RGB32); second.fill(Qt::blue);
+    stable.setImage(first, true);
+    stable.actualSize();
+    stable.setTransform(QTransform::fromScale(4, 4));
+    stable.centerOn(800, 600);
+    QCoreApplication::processEvents();
+    stable.setImage(second);
+    const QPointF center = stable.mapToScene(stable.viewport()->rect().center());
+    verify(std::abs(center.x() - 800.0) < 2.0 && std::abs(center.y() - 600.0) < 2.0
+            && std::abs(stable.zoomFactor() - 4.0) < 0.001,
+        QString("TEST-70"), QString("不同尺寸图片切换保留绝对图像中心坐标和缩放比，不按相对百分比跳动"));
+    QElapsedTimer overviewDelay;
+    overviewDelay.start();
+    waitUntil([&]() { return overviewDelay.elapsed() > 100; });
+    stable.viewport()->grab().save(QDir(outputRoot).filePath(QString("放大导航示意图.png")));
+    stable.close();
+
+    const QString path = QDir(outputRoot).filePath(QString("方向操作.png"));
+    source.save(path);
+    MainWindow window;
+    window.show();
+    window.showNormal();
+    window.resize(1280, 860);
+    QCoreApplication::processEvents();
+    window.openFile(path);
+    auto* view = window.findChild<ui::ImageView*>();
+    const bool bLoaded = waitUntil([&]() {
+        return view->image().size() == source.size()
+            && view->image().pixelColor(0, 0) == QColor(255, 0, 0)
+            && view->image().pixelColor(1, 0) == QColor(0, 255, 0);
+    });
+    window.findChild<QAction*>(QString("RotateRight"))->trigger();
+    const bool bRotated = waitUntil([&]() { return view->image().size() == QSize(1, 2); });
+    window.findChild<QAction*>(QString("MirrorVertical"))->trigger();
+    const bool bMirrored = waitUntil([&]() {
+        return view->image().size() == QSize(1, 2)
+            && view->image().pixelColor(0, 0) == QColor(0, 255, 0);
+    });
+    auto* collapse = window.findChild<QToolButton*>(QString("CollapseThumbnailsButton"));
+    collapse->click();
+    const bool bCollapsed = !window.findChild<ui::ThumbnailBar*>()->isVisible()
+        && window.findChild<QWidget*>(QString("ThumbnailContainer"))->isVisible();
+    window.findChild<QAction*>(QString("ToggleThumbnails"))->setChecked(true);
+    auto* split = window.findChild<QAction*>(QString("SplitChannels"));
+    auto* leftPanel = window.findChild<QWidget*>(QString("ChannelPanelLeft"));
+    auto* rightPanel = window.findChild<QWidget*>(QString("ChannelPanelRight"));
+    auto* frameOverlay = window.findChild<QWidget*>(QString("WindowFrameOverlay"));
+    split->setChecked(true);
+    const auto panelReady = [](QWidget* panel) {
+        int nReady = 0;
+        for (QLabel* label : panel->findChildren<QLabel*>()) {
+            if (label->objectName().startsWith(QString("ChannelThumbnail")) && label->pixmap()) { ++nReady; }
+        }
+        return nReady == 3;
+    };
+    bool bSideChannels = split->isCheckable() && leftPanel && rightPanel
+        && leftPanel->isVisible() && rightPanel->isVisible() && view->isVisible()
+        && frameOverlay && frameOverlay->isVisible();
+    bSideChannels = bSideChannels && waitUntil([&]() {
+        return panelReady(leftPanel) && panelReady(rightPanel);
+    });
+    // 左侧 RGB、右侧 HSV 均为竖向排列，中间主图仍保持可缩放。
+    auto* rLabel = leftPanel->findChild<QLabel*>(QString("ChannelThumbnail0"));
+    auto* gLabel = leftPanel->findChild<QLabel*>(QString("ChannelThumbnail1"));
+    auto* bLabel = leftPanel->findChild<QLabel*>(QString("ChannelThumbnail2"));
+    auto* hLabel = rightPanel->findChild<QLabel*>(QString("ChannelThumbnail3"));
+    auto* sLabel = rightPanel->findChild<QLabel*>(QString("ChannelThumbnail4"));
+    auto* vLabel = rightPanel->findChild<QLabel*>(QString("ChannelThumbnail5"));
+    const auto topOf = [&window](QWidget* widget) {
+        return widget ? widget->mapTo(&window, QPoint(0, 0)).y() : -1;
+    };
+    const auto leftOf = [&window](QWidget* widget) {
+        return widget ? widget->mapTo(&window, QPoint(0, 0)).x() : -1;
+    };
+    const bool bVerticalLayout = rLabel && gLabel && bLabel && hLabel && sLabel && vLabel
+        && topOf(rLabel) < topOf(gLabel) && topOf(gLabel) < topOf(bLabel)
+        && topOf(hLabel) < topOf(sLabel) && topOf(sLabel) < topOf(vLabel)
+        && leftOf(bLabel) < leftOf(hLabel);
+    const double dBeforeZoom = view->zoomFactor();
+    view->actualSize();
+    const bool bCenterZoom = std::abs(view->zoomFactor() - 1.0) < 0.001;
+    view->fitToWindow();
+    if (bSideChannels && bVerticalLayout) {
+        window.grab().save(QDir(outputRoot).filePath(QString("主界面视觉复核.png")));
+    }
+    // 换图后两侧通道保持开启并自动刷新为新图内容。
+    QImage green(60, 40, QImage::Format_RGB888);
+    green.fill(QColor(0, 255, 0));
+    const QString greenPath = QDir(outputRoot).filePath(QString("绿色通道图.png"));
+    green.save(greenPath);
+    window.openFile(greenPath);
+    const bool bAutoRefresh = waitUntil([&]() {
+        auto* greenChannel = leftPanel->findChild<QLabel*>(QString("ChannelThumbnail1"));
+        return greenChannel && greenChannel->pixmap()
+            && greenChannel->pixmap()->toImage().pixelColor(4, 4).red() > 200;
+    }) && leftPanel->isVisible() && rightPanel->isVisible()
+        && QSettings().value(QString("ui/channelSplit"), false).toBool();
+    // 全屏时隐藏两侧通道，退出全屏恢复。
+    auto* fullScreenAction = window.findChild<QAction*>(QString("ToggleFullScreen"));
+    fullScreenAction->setChecked(true);
+    QCoreApplication::processEvents();
+    const bool bFullScreenHides = !leftPanel->isVisible() && !rightPanel->isVisible();
+    fullScreenAction->setChecked(false);
+    QCoreApplication::processEvents();
+    const bool bRestorePanels = leftPanel->isVisible() && rightPanel->isVisible();
+    split->setChecked(false);
+    const bool bExitChannels = !leftPanel->isVisible() && !rightPanel->isVisible()
+        && !QSettings().value(QString("ui/channelSplit"), true).toBool();
+    if (!(bLoaded && bRotated && bMirrored && bCollapsed && bSideChannels && bVerticalLayout
+            && bCenterZoom && bAutoRefresh && bFullScreenHides && bRestorePanels && bExitChannels)) {
+        qInfo() << "workflow diagnostic" << bLoaded << bRotated << bMirrored << bCollapsed
+            << bSideChannels << bVerticalLayout << bCenterZoom << bAutoRefresh
+            << bFullScreenHides << bRestorePanels << bExitChannels << dBeforeZoom;
+    }
+    verify(bLoaded && bRotated && bMirrored && bCollapsed && bSideChannels && bVerticalLayout
+            && bCenterZoom && bAutoRefresh && bFullScreenHides && bRestorePanels && bExitChannels,
+        QString("TEST-71"), QString("中间主图可缩放，左侧 RGB、右侧 HSV 竖向卡片随换图刷新，全屏隐藏、退出恢复"));
+
+    // 重新创建窗口后仍保持通道视图设置。
+    QSettings().setValue(QString("ui/channelSplit"), true);
+    MainWindow persisted;
+    persisted.show();
+    persisted.openFile(greenPath);
+    auto* persistedLeft = persisted.findChild<QWidget*>(QString("ChannelPanelLeft"));
+    auto* persistedRight = persisted.findChild<QWidget*>(QString("ChannelPanelRight"));
+    const bool bPersisted = waitUntil([&]() {
+        return persistedLeft && persistedRight && persistedLeft->isVisible()
+            && persistedRight->isVisible();
+    });
+    persisted.findChild<QAction*>(QString("SplitChannels"))->setChecked(false);
+    verify(bPersisted, QString("TEST-72"), QString("通道视图作为持久化参数，重启后打开图片自动恢复两侧通道"));
+    persisted.close();
+    QSettings().setValue(QString("ui/channelSplit"), false);
+    window.close();
+}
+
 void runPerformanceBenchmark(const QString& outputRoot)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("benchmark-XXXXXX")));
@@ -1345,9 +1501,10 @@ int main(int argc, char* argv[])
     testHistogramSmoothing();
     testColorHistograms(outputRoot);
     testFeedbackWorkflow(outputRoot);
-    testForwardedFiles(outputRoot, settingsDirectory.path());
+    testIndependentProcesses(outputRoot, settingsDirectory.path());
     testViewingPresentation(outputRoot);
     testPerformanceAndCorrectness(outputRoot);
+    testOrientationChannelsAndStableView(outputRoot);
 
     util::waitForBackgroundWork();
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);

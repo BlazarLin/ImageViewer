@@ -63,20 +63,13 @@ int main(int argc, char* argv[])
             QMessageBox::warning(nullptr, QString("ImageViewer"), appl.startupError());
             return 1;
         }
-        // 已有实例确认接管,本进程退出
+        // 保留启动失败出口，便于后续增加启动期校验。
         return 0;
     }
 
     int nExitCode = 0;
     {
         MainWindow w;
-        QObject::connect(&appl, &Application::filesRequested, &w, [&w](const QStringList& paths) {
-            if (w.isMinimized()) { w.setWindowState(w.windowState() & ~Qt::WindowMinimized); }
-            w.show();
-            w.raise();
-            w.activateWindow();
-            w.openFiles(paths);
-        });
         w.show();
 
         // 命令行传入的文件

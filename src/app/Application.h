@@ -4,9 +4,8 @@
 #include <QStringList>
 
 class QApplication;
-class QLocalServer;
 
-// 2026-09-08：按用户/会话建立单实例本地管道，可靠转发文件并等待接收确认。
+// 2026-10-27：解析启动文件；每次启动均使用独立进程和独立看图窗口。
 class Application : public QObject {
     Q_OBJECT
 public:
@@ -16,15 +15,12 @@ public:
     // 解析命令行,返回待打开的图片路径列表。
     QStringList pendingFiles() const { return pendingFiles_; }
 
-    // 是否要求以独立新窗口运行（--new-window）。
+    // 保留 --new-window 参数兼容旧快捷方式；当前所有启动均独立运行。
     bool isNewWindow() const { return bNewWindow_; }
 
-    // 应用启动入口。返回 true 表示应继续运行, false 应退出(已有实例接管)。
+    // 应用启动入口。多进程模式下始终继续运行当前进程。
     bool startup();
     QString startupError() const { return startupError_; }
-
-signals:
-    void filesRequested(const QStringList& paths);
 
 private:
     void parseArgs();
@@ -32,10 +28,5 @@ private:
     QApplication* app_ = nullptr;
     QStringList pendingFiles_;
     bool bNewWindow_ = false;
-    bool bMultiInstance_ = false;
-
-    QLocalServer* server_ = nullptr;
     QString startupError_;
-    // 互斥避免 Windows 允许同名管道多服务端的启动竞争。
-    void* hMutex_ = nullptr; // HANDLE
 };

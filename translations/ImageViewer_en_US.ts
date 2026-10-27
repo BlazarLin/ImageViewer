@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
@@ -302,7 +302,59 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
     <message>
         <source>%1  |  %2/%3 个文件  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10</source>
-        <translation>%1  |  %2/%3 files  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10</translation>
+        <translation type="vanished">%1  |  %2/%3 files  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10</translation>
+    </message>
+    <message>
+        <source>%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8</source>
+        <translation>%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8</translation>
+    </message>
+    <message>
+        <source>通道视图</source>
+        <translation type="vanished">Channel view</translation>
+    </message>
+    <message>
+        <source>在主视图两侧显示 RGB / HSV 通道卡片；中间图像仍可缩放，设置会保留并跟随换图刷新</source>
+        <translation>Show RGB / HSV channel cards beside the main view; the center image can still be zoomed, and the setting is kept and refreshed when the image changes</translation>
+    </message>
+    <message>
+        <source>RGB 通道</source>
+        <translation>RGB channels</translation>
+    </message>
+    <message>
+        <source>HSV 通道</source>
+        <translation>HSV channels</translation>
+    </message>
+    <message>
+        <source>0–179 / 0–255</source>
+        <translation>0–179 / 0–255</translation>
+    </message>
+    <message>
+        <source>0–255</source>
+        <translation>0–255</translation>
+    </message>
+    <message>
+        <source>红色通道</source>
+        <translation>Red channel</translation>
+    </message>
+    <message>
+        <source>绿色通道</source>
+        <translation>Green channel</translation>
+    </message>
+    <message>
+        <source>蓝色通道</source>
+        <translation>Blue channel</translation>
+    </message>
+    <message>
+        <source>色相</source>
+        <translation>Hue</translation>
+    </message>
+    <message>
+        <source>饱和度</source>
+        <translation>Saturation</translation>
+    </message>
+    <message>
+        <source>明度</source>
+        <translation>Value</translation>
     </message>
     <message>
         <source>设置失败</source>
@@ -470,11 +522,11 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
     <message>
         <source>允许多实例</source>
-        <translation>Allow multiple instances</translation>
+        <translation type="vanished">Allow multiple instances</translation>
     </message>
     <message>
         <source>开启后，每次从系统打开图片都会启动独立窗口，可同时查看不同文件夹</source>
-        <translation>When enabled, each image opened from the system launches an independent window, so different folders can be viewed at the same time</translation>
+        <translation type="vanished">When enabled, each image opened from the system launches an independent window, so different folders can be viewed at the same time</translation>
     </message>
     <message>
         <source>启动失败</source>
@@ -515,6 +567,148 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     <message>
         <source> | 取样/统计/处理：8 位</source>
         <translation> | Sampling/statistics/processing: 8-bit</translation>
+    </message>
+    <message>
+        <source>缩略图导航</source>
+        <translation>Thumbnail navigation</translation>
+    </message>
+    <message>
+        <source>折叠缩略图（Ctrl+T）</source>
+        <translation>Collapse thumbnails (Ctrl+T)</translation>
+    </message>
+    <message>
+        <source>展开缩略图（Ctrl+T）</source>
+        <translation>Expand thumbnails (Ctrl+T)</translation>
+    </message>
+    <message>
+        <source>向左旋转 90°</source>
+        <translation>Rotate 90° left</translation>
+    </message>
+    <message>
+        <source>向右旋转 90°</source>
+        <translation>Rotate 90° right</translation>
+    </message>
+    <message>
+        <source>水平镜像</source>
+        <translation>Mirror horizontally</translation>
+    </message>
+    <message>
+        <source>垂直镜像</source>
+        <translation>Mirror vertically</translation>
+    </message>
+    <message>
+        <source>拆分通道看图（RGB / HSV）…</source>
+        <translation type="vanished">Split channels (RGB / HSV)…</translation>
+    </message>
+    <message>
+        <source>拆分通道看图（RGB / HSV）</source>
+        <translation>Split channels (RGB / HSV)</translation>
+    </message>
+    <message>
+        <source>在同一窗口内切换 RGB / HSV 六通道视图，设置会保留并跟随换图刷新</source>
+        <translation>Switch the RGB / HSV six-channel view inside the same window; the setting is kept and refreshed when the image changes</translation>
+    </message>
+    <message>
+        <source>RGB / HSV 通道视图</source>
+        <translation type="vanished">RGB / HSV channel view</translation>
+    </message>
+    <message>
+        <source>返回大图</source>
+        <translation type="vanished">Back to image</translation>
+    </message>
+    <message>
+        <source>各通道以灰度显示；点击放大，再次点击返回</source>
+        <translation type="vanished">Channels are shown in grayscale; click to enlarge and click again to return</translation>
+    </message>
+    <message>
+        <source>点击放大 %1</source>
+        <translation type="vanished">Click to enlarge %1</translation>
+    </message>
+    <message>
+        <source>点击返回六宫格</source>
+        <translation type="vanished">Click to return to the six-panel grid</translation>
+    </message>
+    <message>
+        <source>点击图像返回六宫格</source>
+        <translation type="vanished">Click the image to return to the six-panel grid</translation>
+    </message>
+    <message>
+        <source>等待计算…</source>
+        <translation type="vanished">Waiting to compute…</translation>
+    </message>
+    <message>
+        <source>计算失败</source>
+        <translation type="vanished">Computation failed</translation>
+    </message>
+    <message>
+        <source>通道</source>
+        <translation>Channels</translation>
+    </message>
+    <message>
+        <source>通道视图：RGB / HSV</source>
+        <translation type="vanished">Channel view: RGB / HSV</translation>
+    </message>
+    <message>
+        <source> · 处理结果</source>
+        <translation> · Processed</translation>
+    </message>
+    <message>
+        <source> · 已调整方向</source>
+        <translation> · Orientation adjusted</translation>
+    </message>
+    <message>
+        <source>%1
+修改时间：%2</source>
+        <translation>%1
+Modified: %2</translation>
+    </message>
+    <message>
+        <source>正在调整方向…</source>
+        <translation>Adjusting orientation…</translation>
+    </message>
+    <message>
+        <source>方向调整失败：%1</source>
+        <translation>Failed to adjust orientation: %1</translation>
+    </message>
+    <message>
+        <source>RGB / HSV 通道 - %1</source>
+        <translation type="vanished">RGB / HSV channels - %1</translation>
+    </message>
+    <message>
+        <source>R · 红色通道</source>
+        <translation>R · Red channel</translation>
+    </message>
+    <message>
+        <source>G · 绿色通道</source>
+        <translation>G · Green channel</translation>
+    </message>
+    <message>
+        <source>B · 蓝色通道</source>
+        <translation>B · Blue channel</translation>
+    </message>
+    <message>
+        <source>H · 色相</source>
+        <translation>H · Hue</translation>
+    </message>
+    <message>
+        <source>S · 饱和度</source>
+        <translation>S · Saturation</translation>
+    </message>
+    <message>
+        <source>V · 明度</source>
+        <translation>V · Value</translation>
+    </message>
+    <message>
+        <source>正在计算…</source>
+        <translation>Computing…</translation>
+    </message>
+    <message>
+        <source>各通道以灰度显示；H 为 OpenCV 色相范围 0–179，其余通道为 0–255。</source>
+        <translation type="vanished">Channels are shown in grayscale. OpenCV hue ranges from 0–179; the other channels range from 0–255.</translation>
+    </message>
+    <message>
+        <source>通道拆分失败</source>
+        <translation>Channel splitting failed</translation>
     </message>
 </context>
 <context>

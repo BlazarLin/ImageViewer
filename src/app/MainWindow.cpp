@@ -18,6 +18,7 @@
 #include <QClipboard>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QPainter>
 #include <QPainterPath>
 #include <QRegion>
 #include <QResizeEvent>
@@ -33,6 +34,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFrame>
 #include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QKeySequence>
@@ -45,6 +47,7 @@
 #include <QMimeData>
 #include <QSettings>
 #include <QScreen>
+#include <QShowEvent>
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QStyle>
@@ -61,7 +64,99 @@
 #include <QSet>
 #include <algorithm>
 
+// 2026-10-27：无边框窗口顶层描边层。子控件会覆盖主窗口自身绘制的边框，
+// 因此用透明且不接收鼠标的覆盖层统一绘制外框，保证四边一致可见。
+class WindowFrameOverlay final : public QWidget {
+public:
+    explicit WindowFrameOverlay(QWidget* parent) : QWidget(parent)
+    {
+        setObjectName(QString("WindowFrameOverlay"));
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_NoSystemBackground);
+        setFocusPolicy(Qt::NoFocus);
+    }
+
+    void setActive(bool bActive)
+    {
+        bActive_ = bActive;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        if (!bActive_) { return; }
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        // 用内外圆角路径相减生成 1px 描边环：直边落在整像素上保持清晰，
+        // 圆角由抗锯齿平滑；描边整体内缩 1px，不会被窗口圆角遮罩裁掉。
+        constexpr qreal dRadius = 12.0;
+        const auto ring = [](const QRectF& outerRect, qreal dOuterRadius,
+                             const QRectF& innerRect, qreal dInnerRadius) {
+            QPainterPath outerPath;
+            outerPath.addRoundedRect(outerRect, dOuterRadius, dOuterRadius);
+            QPainterPath innerPath;
+            innerPath.addRoundedRect(innerRect, dInnerRadius, dInnerRadius);
+            return outerPath.subtracted(innerPath);
+        };
+        painter.fillPath(ring(QRectF(rect()).adjusted(1, 1, -1, -1), dRadius - 1,
+            QRectF(rect()).adjusted(2, 2, -2, -2), dRadius - 2),
+            QColor(124, 141, 156));
+        painter.fillPath(ring(QRectF(rect()).adjusted(2, 2, -2, -2), dRadius - 2,
+            QRectF(rect()).adjusted(3, 3, -3, -3), dRadius - 3),
+            QColor(12, 16, 20));
+    }
+
+private:
+    bool bActive_ = true;
+};
+
 namespace {
+
+// 六通道卡片只保存有界缩略图，尺寸变化时保持宽高比。
+class ChannelThumbnailLabel final : public QLabel {
+public:
+    explicit ChannelThumbnailLabel(QWidget* parent = nullptr) : QLabel(parent)
+    {
+        setAlignment(Qt::AlignCenter);
+        setMinimumSize(80, 60);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        setTextInteractionFlags(Qt::NoTextInteraction);
+    }
+
+    void setImage(const QImage& image)
+    {
+        image_ = image;
+        updatePixmap();
+    }
+
+    void setMessage(const QString& message)
+    {
+        image_ = QImage();
+        setPixmap(QPixmap());
+        setText(message);
+    }
+
+    const QImage& image() const { return image_; }
+
+protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QLabel::resizeEvent(event);
+        updatePixmap();
+    }
+
+private:
+    void updatePixmap()
+    {
+        if (image_.isNull() || width() <= 0 || height() <= 0) { return; }
+        if (!text().isEmpty()) { setText(QString()); }
+        setPixmap(QPixmap::fromImage(image_).scaled(size(), Qt::KeepAspectRatio,
+            Qt::SmoothTransformation));
+    }
+
+    QImage image_;
+};
 
 } // namespace
 
@@ -70,6 +165,8 @@ MainWindow::MainWindow(QWidget* parent)
     , loadWatcher_(new QFutureWatcher<core::loader::LoadResult>(this))
     , directoryModel_(std::make_unique<core::navigation::DirectoryModel>())
     , processingWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
+    , orientationWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
+    , channelWatcher_(new QFutureWatcher<core::processing::ChannelSplitResult>(this))
     , analysisWatcher_(new QFutureWatcher<core::analysis::AnalysisResult>(this))
     , preloadWatcher_(new QFutureWatcher<int>(this))
     , directoryWatcher_(new QFutureWatcher<core::navigation::DirectoryModel>(this))
@@ -99,6 +196,10 @@ MainWindow::MainWindow(QWidget* parent)
     connect(processingTimer_, &QTimer::timeout, this, &MainWindow::startPreprocess);
     connect(processingWatcher_, &QFutureWatcher<core::processing::ProcessingResult>::finished,
         this, &MainWindow::onPreprocessFinished);
+    connect(orientationWatcher_, &QFutureWatcher<core::processing::ProcessingResult>::finished,
+        this, &MainWindow::onOrientationFinished);
+    connect(channelWatcher_, &QFutureWatcher<core::processing::ChannelSplitResult>::finished,
+        this, &MainWindow::onChannelSplitFinished);
     connect(analysisWatcher_, &QFutureWatcher<core::analysis::AnalysisResult>::finished,
         this, &MainWindow::onRoiAnalysisFinished);
     connect(preloadWatcher_, &QFutureWatcher<int>::finished,
@@ -112,9 +213,12 @@ MainWindow::MainWindow(QWidget* parent)
     restoreGeometry(settings.value(QString("ui/geometry")).toByteArray());
     restoreState(settings.value(QString("ui/windowState")).toByteArray());
     analysisDock_->hide();
+    bChannelSplitEnabled_ = actSplitChannels_->isChecked();
+    updateChannelPanels();
     // 旧版 saveState 中工具栏默认可见，不覆盖本版独立的显隐设置。
     mainToolbar_->setVisible(actToggleToolbar_->isChecked());
-    thumbnailContainer_->setVisible(actToggleThumbnails_->isChecked());
+    thumbnailContainer_->show();
+    thumbnailBar_->setVisible(actToggleThumbnails_->isChecked());
     updateFullScreenLayout();
     view_->setSelectionEnabled(false);
     updateNavigationActions();
@@ -127,6 +231,8 @@ MainWindow::~MainWindow()
     // 任务只持有值对象/共享缓存；销毁观察者不会让后台访问已释放的窗口。
     util::cancel(loadCanceled_);
     util::cancel(processingCanceled_);
+    util::cancel(orientationCanceled_);
+    util::cancel(channelCanceled_);
     util::cancel(analysisCanceled_);
     util::cancel(preloadCanceled_);
     util::cancel(directoryCanceled_);
@@ -153,16 +259,43 @@ void MainWindow::setupUi()
     centralLayout->setContentsMargins(0, 0, 0, 0);
     centralLayout->setSpacing(0);
     view_ = new ui::ImageView(central);
+    channelLeftPanel_ = buildChannelPanel(central, false);
+    channelRightPanel_ = buildChannelPanel(central, true);
+    auto* contentLayout = new QHBoxLayout();
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(0);
+    contentLayout->addWidget(channelLeftPanel_);
+    contentLayout->addWidget(view_, 1);
+    contentLayout->addWidget(channelRightPanel_);
     thumbnailBar_ = new ui::ThumbnailBar(central);
-    centralLayout->addWidget(view_, 1);
+    centralLayout->addLayout(contentLayout, 1);
     thumbnailContainer_ = new QWidget(central);
     thumbnailContainer_->setObjectName(QString("ThumbnailContainer"));
     auto* thumbnailLayout = new QVBoxLayout(thumbnailContainer_);
     thumbnailLayout->setContentsMargins(0, 0, 0, 0);
     thumbnailLayout->setSpacing(0);
+    auto* thumbnailHeader = new QWidget(thumbnailContainer_);
+    thumbnailHeader->setObjectName(QString("ThumbnailHeader"));
+    thumbnailHeader->setFixedHeight(28);
+    auto* thumbnailHeaderLayout = new QHBoxLayout(thumbnailHeader);
+    thumbnailHeaderLayout->setContentsMargins(10, 0, 6, 0);
+    thumbnailHeaderLayout->setSpacing(4);
+    auto* thumbnailTitle = new QLabel(tr("缩略图导航"), thumbnailHeader);
+    thumbnailCollapseButton_ = new QToolButton(thumbnailHeader);
+    thumbnailCollapseButton_->setObjectName(QString("CollapseThumbnailsButton"));
+    thumbnailCollapseButton_->setArrowType(Qt::DownArrow);
+    thumbnailCollapseButton_->setFixedSize(30, 24);
+    thumbnailCollapseButton_->setFocusPolicy(Qt::NoFocus);
+    thumbnailHeaderLayout->addWidget(thumbnailTitle);
+    thumbnailHeaderLayout->addStretch();
+    thumbnailHeaderLayout->addWidget(thumbnailCollapseButton_);
+    thumbnailLayout->addWidget(thumbnailHeader);
     thumbnailLayout->addWidget(thumbnailBar_);
     centralLayout->addWidget(thumbnailContainer_);
     setCentralWidget(central);
+    frameOverlay_ = new WindowFrameOverlay(this);
+    frameOverlay_->setGeometry(rect());
+    frameOverlay_->raise();
 
     const auto installDockTitleBar = [this](QDockWidget* dock, const QString& title) {
         auto* titleBar = new QWidget(dock);
@@ -273,6 +406,20 @@ void MainWindow::setupUi()
         "QSlider::handle:horizontal:disabled { background:#626870; border-color:#484d54; }"
         "QPushButton#AnalyzeFullImage, QDialog#AboutDialog QPushButton, QPushButton#SecondaryButton { color:#cfd5dc; background:#30343a; border:1px solid #50565f; border-radius:5px; padding:6px 12px; }"
         "QPushButton#AnalyzeFullImage:hover, QDialog#AboutDialog QPushButton:hover, QPushButton#SecondaryButton:hover { color:white; background:#393e45; border-color:#69727d; }"
+        "QWidget#ChannelPanelLeft { background:#1c1f24; border-right:1px solid #3b434c; }"
+        "QWidget#ChannelPanelRight { background:#1c1f24; border-left:1px solid #3b434c; }"
+        "QWidget#ChannelPanelHeader { background:#23282e; border-bottom:1px solid #3b434c; }"
+        "QLabel#ChannelPanelTitle { color:#e6edf4; font-weight:600; }"
+        "QLabel#ChannelPanelRange { color:#8ea0af; font-size:12px; }"
+        "QWidget#ChannelCards { background:#1c1f24; }"
+        "QFrame#ChannelCard { background:#23282e; border:1px solid #3b444e; border-radius:7px; }"
+        "QLabel#ChannelCardTitle { color:#e8eef4; font-weight:600; }"
+        "QLabel#ChannelCardRange { color:#8ea0af; font-size:11px; }"
+        "QLabel#ChannelThumbnail { color:#8d9aa6; background:#14171a; border:1px solid #2c343c; border-radius:5px; }"
+        "QWidget#ThumbnailHeader { background:#292d32; border-top:1px solid #505963; }"
+        "QWidget#ThumbnailHeader QLabel { color:#cbd3da; }"
+        "QWidget#ThumbnailHeader QToolButton { background:transparent; border:0; padding:2px; }"
+        "QWidget#ThumbnailHeader QToolButton:hover { background:#3c454e; }"
         "QListView#ThumbnailBar { background:#222428; color:#d7dce2; border:0; border-top:1px solid #34383e; padding:6px; outline:0; }"
         "QListView#ThumbnailBar::item { background:#292c31; color:#c8ced5; border:2px solid transparent; border-radius:6px; padding:3px; }"
         "QListView#ThumbnailBar::item:hover { background:#31363d; border-color:#4d555f; }"
@@ -359,6 +506,44 @@ void MainWindow::setupActions()
         view_->setFocus();
     });
 
+    actRotateLeft_ = new QAction(tr("向左旋转 90°"), this);
+    actRotateLeft_->setObjectName(QString("RotateLeft"));
+    actRotateLeft_->setShortcut(QKeySequence(QString("Ctrl+Shift+Left")));
+    connect(actRotateLeft_, &QAction::triggered, this, [this]() {
+        nQuarterTurns_ = (nQuarterTurns_ + 3) % 4;
+        onOrientationChanged();
+    });
+    actRotateRight_ = new QAction(tr("向右旋转 90°"), this);
+    actRotateRight_->setObjectName(QString("RotateRight"));
+    actRotateRight_->setShortcut(QKeySequence(QString("Ctrl+Shift+Right")));
+    connect(actRotateRight_, &QAction::triggered, this, [this]() {
+        nQuarterTurns_ = (nQuarterTurns_ + 1) % 4;
+        onOrientationChanged();
+    });
+    actMirrorHorizontal_ = new QAction(tr("水平镜像"), this);
+    actMirrorHorizontal_->setObjectName(QString("MirrorHorizontal"));
+    actMirrorHorizontal_->setCheckable(true);
+    actMirrorHorizontal_->setShortcut(QKeySequence(QString("Ctrl+H")));
+    connect(actMirrorHorizontal_, &QAction::triggered, this, [this]() {
+        bMirrorHorizontal_ = actMirrorHorizontal_->isChecked();
+        onOrientationChanged();
+    });
+    actMirrorVertical_ = new QAction(tr("垂直镜像"), this);
+    actMirrorVertical_->setObjectName(QString("MirrorVertical"));
+    actMirrorVertical_->setCheckable(true);
+    actMirrorVertical_->setShortcut(QKeySequence(QString("Ctrl+J")));
+    connect(actMirrorVertical_, &QAction::triggered, this, [this]() {
+        bMirrorVertical_ = actMirrorVertical_->isChecked();
+        onOrientationChanged();
+    });
+    actSplitChannels_ = new QAction(tr("拆分通道看图（RGB / HSV）"), this);
+    actSplitChannels_->setObjectName(QString("SplitChannels"));
+    actSplitChannels_->setCheckable(true);
+    actSplitChannels_->setShortcut(QKeySequence(QString("Ctrl+Shift+C")));
+    actSplitChannels_->setToolTip(tr("在主视图两侧显示 RGB / HSV 通道卡片；中间图像仍可缩放，设置会保留并跟随换图刷新"));
+    actSplitChannels_->setChecked(QSettings().value(QString("ui/channelSplit"), false).toBool());
+    connect(actSplitChannels_, &QAction::toggled, this, &MainWindow::setChannelSplitEnabled);
+
     actDeleteFile_ = new QAction(tr("删除"), this);
     actDeleteFile_->setObjectName(QString("DeleteImageFile"));
     actDeleteFile_->setShortcut(QKeySequence(Qt::Key_Delete));
@@ -373,6 +558,12 @@ void MainWindow::setupActions()
         QMenu menu(this);
         menu.addAction(actOpenFolder_);
         menu.addAction(actCopyFile_);
+        menu.addSeparator();
+        menu.addAction(actRotateLeft_);
+        menu.addAction(actRotateRight_);
+        menu.addAction(actMirrorHorizontal_);
+        menu.addAction(actMirrorVertical_);
+        menu.addAction(actSplitChannels_);
         menu.addSeparator();
         menu.addAction(actFullScreen_);
         menu.addSeparator();
@@ -430,13 +621,25 @@ void MainWindow::setupActions()
     actToggleThumbnails_->setCheckable(true);
     actToggleThumbnails_->setShortcut(QKeySequence(QString("Ctrl+T")));
     connect(actToggleThumbnails_, &QAction::toggled, this, [this](bool bVisible) {
-        thumbnailContainer_->setVisible(bVisible && !isFullScreen());
+        // 标题栏常驻，只收起缩略图列表，保证折叠后仍有固定入口。
+        if (thumbnailContainer_) { thumbnailContainer_->setVisible(!isFullScreen()); }
+        if (thumbnailBar_) { thumbnailBar_->setVisible(bVisible && !isFullScreen()); }
+        if (thumbnailCollapseButton_) {
+            thumbnailCollapseButton_->setArrowType(bVisible ? Qt::DownArrow : Qt::RightArrow);
+        }
         QSettings().setValue(QString("ui/thumbnailsVisible"), bVisible);
         view_->setFocus();
     });
     const bool bThumbnails = QSettings().value(QString("ui/thumbnailsVisible"), true).toBool();
     actToggleThumbnails_->setChecked(bThumbnails);
-    thumbnailContainer_->setVisible(bThumbnails);
+    thumbnailBar_->setVisible(bThumbnails);
+    thumbnailCollapseButton_->setArrowType(bThumbnails ? Qt::DownArrow : Qt::RightArrow);
+    thumbnailCollapseButton_->setDefaultAction(actToggleThumbnails_);
+    thumbnailCollapseButton_->setToolTip(tr("折叠缩略图（Ctrl+T）"));
+    connect(actToggleThumbnails_, &QAction::toggled, this, [this](bool bVisible) {
+        thumbnailCollapseButton_->setToolTip(bVisible
+            ? tr("折叠缩略图（Ctrl+T）") : tr("展开缩略图（Ctrl+T）"));
+    });
     actLoupe_ = new QAction(tr("局部放大图"), this);
     actLoupe_->setObjectName(QString("ToggleLoupe"));
     actLoupe_->setCheckable(true);
@@ -456,14 +659,6 @@ void MainWindow::setupActions()
     actShowConsole_->setCheckable(true);
     actShowConsole_->setChecked(QSettings().value(QString("ui/showDebugConsole"), false).toBool());
     connect(actShowConsole_, &QAction::toggled, this, &MainWindow::setDebugConsoleVisible);
-    actMultiInstance_ = new QAction(tr("允许多实例"), this);
-    actMultiInstance_->setObjectName(QString("MultiInstance"));
-    actMultiInstance_->setCheckable(true);
-    actMultiInstance_->setChecked(QSettings().value(QString("ui/multiInstance"), false).toBool());
-    actMultiInstance_->setToolTip(tr("开启后，每次从系统打开图片都会启动独立窗口，可同时查看不同文件夹"));
-    connect(actMultiInstance_, &QAction::toggled, this, [](bool bEnabled) {
-        QSettings().setValue(QString("ui/multiInstance"), bEnabled);
-    });
     actAbout_ = new QAction(tr("关于"), this);
     connect(actAbout_, &QAction::triggered, this, &MainWindow::onAbout);
     actExit_ = new QAction(tr("退出"), this);
@@ -490,6 +685,12 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addAction(actFitWidth_);
     viewMenu->addAction(actFitHeight_);
     viewMenu->addAction(actActualSize_);
+    viewMenu->addSeparator();
+    viewMenu->addAction(actRotateLeft_);
+    viewMenu->addAction(actRotateRight_);
+    viewMenu->addAction(actMirrorHorizontal_);
+    viewMenu->addAction(actMirrorVertical_);
+    viewMenu->addAction(actSplitChannels_);
     viewMenu->addSeparator();
     viewMenu->addAction(actTogglePreprocess_);
     viewMenu->addAction(actToggleAnalysis_);
@@ -518,8 +719,6 @@ void MainWindow::setupMenusAndToolbar()
     if (auto* button = titleBar_->menuButton(2)) { button->setMenu(languageMenu); }
     auto* settingsMenu = new QMenu(this);
     settingsMenu->addAction(actShowConsole_);
-    settingsMenu->addSeparator();
-    settingsMenu->addAction(actMultiInstance_);
     if (auto* button = titleBar_->menuButton(3)) { button->setMenu(settingsMenu); }
     auto* helpMenu = new QMenu(this);
     helpMenu->addAction(actAbout_);
@@ -536,6 +735,12 @@ void MainWindow::setupMenusAndToolbar()
     toolbar->addAction(actFit_);
     toolbar->addAction(actActualSize_);
     toolbar->addSeparator();
+    toolbar->addAction(actRotateLeft_);
+    toolbar->addAction(actRotateRight_);
+    toolbar->addAction(actMirrorHorizontal_);
+    toolbar->addAction(actMirrorVertical_);
+    toolbar->addAction(actSplitChannels_);
+    toolbar->addSeparator();
     toolbar->addAction(actTogglePreprocess_);
     toolbar->addAction(actToggleAnalysis_);
     toolbar->addAction(actCompare_);
@@ -551,9 +756,10 @@ void MainWindow::setupMenusAndToolbar()
     collapse->setToolTip(tr("隐藏工具栏"));
     toolbar->addWidget(collapse);
     toolbar->setVisible(actToggleToolbar_->isChecked());
-    view_->setChromeActions(actToggleToolbar_, actToggleThumbnails_);
+    view_->setChromeActions(actToggleToolbar_);
     // 菜单托管于标题栏按钮；显式注册快捷键，隐藏工具栏后仍可使用。
     addActions({ actOpen_, actSaveResult_, actFit_, actActualSize_, actFullScreen_,
+        actRotateLeft_, actRotateRight_, actMirrorHorizontal_, actMirrorVertical_, actSplitChannels_,
         actToggleToolbar_, actToggleThumbnails_, actTogglePreprocess_, actToggleAnalysis_, actLoupe_, actCompare_ });
 }
 
@@ -570,13 +776,20 @@ void MainWindow::updateFullScreenLayout()
         analysisDock_->hide();
     } else {
         mainToolbar_->setVisible(actToggleToolbar_->isChecked());
-        thumbnailContainer_->setVisible(actToggleThumbnails_->isChecked());
+        thumbnailContainer_->show();
+        thumbnailBar_->setVisible(actToggleThumbnails_->isChecked());
         preprocessDock_->setVisible(bRestorePreprocess_);
         analysisDock_->setVisible(bRestoreAnalysis_);
     }
+    if (frameOverlay_ && !isMaximized() && !isFullScreen()) { frameOverlay_->raise(); }
     for (auto* action : { actToggleToolbar_, actToggleThumbnails_, actTogglePreprocess_, actToggleAnalysis_, actLoupe_ }) {
         action->setEnabled(!bFullScreenLayout_);
     }
+    if (actSplitChannels_) {
+        actSplitChannels_->setEnabled(!bFullScreenLayout_ && !displayedImage_.isNull()
+            && !bLoading_ && !bOrienting_);
+    }
+    updateChannelPanels();
     view_->setLoupeEnabled(!bFullScreenLayout_ && actLoupe_->isChecked());
     view_->setMinimalMode(bFullScreenLayout_);
 }
@@ -700,6 +913,7 @@ void MainWindow::onDeleteImageFile()
     } else {
         clearAnalysis();
         currentPath_.clear();
+        rawOriginalImage_ = QImage();
         originalImage_ = QImage();
         processedImage_ = QImage();
         displayedImage_ = QImage();
@@ -709,6 +923,16 @@ void MainWindow::onDeleteImageFile()
         actCompare_->setChecked(false);
         actCompare_->setEnabled(false);
         view_->setImage(QImage());
+        util::cancel(channelCanceled_);
+        ++nChannelGeneration_;
+        bChannelPending_ = false;
+        for (int nChannel = 0; nChannel < 6; ++nChannel) {
+            channelImages_[nChannel] = QImage();
+            if (auto* label = static_cast<ChannelThumbnailLabel*>(channelCardImages_[nChannel])) {
+                label->setMessage(tr("等待计算…"));
+            }
+        }
+        updateChannelPanels();
         *directoryModel_ = core::navigation::DirectoryModel();
         util::cancel(directoryCanceled_);
         ++nDirectoryGeneration_;
@@ -729,13 +953,38 @@ void MainWindow::resizeEvent(QResizeEvent* event)
 
 void MainWindow::updateWindowShape()
 {
-    if (isMaximized() || isFullScreen()) {
+    const bool bFramed = !isMaximized() && !isFullScreen();
+    if (frameOverlay_) {
+        frameOverlay_->setGeometry(rect());
+        frameOverlay_->setActive(bFramed);
+        frameOverlay_->setVisible(bFramed);
+        if (bFramed) { frameOverlay_->raise(); }
+    }
+    if (!bFramed) {
         clearMask();
         return;
     }
+    // 圆角遮罩半径与描边一致，描边层已内缩，不会被遮罩裁掉。
     QPainterPath outline;
     outline.addRoundedRect(QRectF(rect()), 12.0, 12.0);
     setMask(QRegion(outline.toFillPolygon().toPolygon()));
+}
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+    updateWindowShape();
+}
+
+bool MainWindow::event(QEvent* event)
+{
+    const bool bHandled = QMainWindow::event(event);
+    // 布局变化（工具栏/面板/缩略图显隐）可能把新控件抬到描边层之上。
+    if (frameOverlay_ && event->type() == QEvent::LayoutRequest) {
+        frameOverlay_->setGeometry(rect());
+        if (!isMaximized() && !isFullScreen()) { frameOverlay_->raise(); }
+    }
+    return bHandled;
 }
 
 void MainWindow::openFiles(const QStringList& paths)
@@ -763,8 +1012,22 @@ void MainWindow::openFile(const QString& path)
     util::cancel(loadCanceled_);
     util::cancel(preloadCanceled_);
     util::cancel(processingCanceled_);
+    util::cancel(orientationCanceled_);
+    util::cancel(channelCanceled_);
     ++nProcessingGeneration_;
+    ++nOrientationGeneration_;
+    ++nChannelGeneration_;
+    bChannelPending_ = false;
     bProcessingPending_ = false;
+    bOrienting_ = false;
+    bOrientationPending_ = false;
+    nQuarterTurns_ = 0;
+    bMirrorHorizontal_ = false;
+    bMirrorVertical_ = false;
+    for (QAction* action : { actMirrorHorizontal_, actMirrorVertical_ }) {
+        const QSignalBlocker blocker(action);
+        action->setChecked(false);
+    }
     processingTimer_->stop();
     util::cancel(directoryCanceled_);
     ++nDirectoryGeneration_;
@@ -834,7 +1097,8 @@ void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
         thumbnailBar_->setFiles({}, -1);
     }
     currentPath_ = QFileInfo(path).absoluteFilePath();
-    originalImage_ = image;
+    rawOriginalImage_ = image;
+    originalImage_ = rawOriginalImage_;
     processedImage_ = QImage();
     displayedImage_ = originalImage_;
     ++nProcessingGeneration_;
@@ -845,6 +1109,10 @@ void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
     actCompare_->setChecked(false);
     actCompare_->setEnabled(false);
     view_->setImage(originalImage_);
+    updateChannelPanels();
+    if (bChannelSplitEnabled_) {
+        refreshChannelSplit();
+    }
     view_->setFocus();
     statusProcessing_->clear();
     QSettings().setValue(QString("files/lastDirectory"), QFileInfo(path).absolutePath());
@@ -1158,6 +1426,7 @@ void MainWindow::onPreprocessFinished()
             actCompare_->setEnabled(true);
             view_->setComparisonImages(originalImage_, processedImage_, actCompare_->isChecked());
             statusProcessing_->setText(tr("预处理 %1 ms").arg(result.nElapsedMs));
+            if (bChannelSplitEnabled_) { refreshChannelSplit(); }
         } else {
             showOriginalImage();
             statusProcessing_->setText(tr("预处理失败"));
@@ -1168,6 +1437,247 @@ void MainWindow::onPreprocessFinished()
     if (bProcessingPending_) {
         processingTimer_->start();
     }
+    updateResultActions();
+}
+
+void MainWindow::onOrientationChanged()
+{
+    if (rawOriginalImage_.isNull() || bLoading_) { return; }
+    util::cancel(processingCanceled_);
+    util::cancel(channelCanceled_);
+    ++nProcessingGeneration_;
+    bProcessingPending_ = false;
+    processingTimer_->stop();
+    clearAnalysis();
+    actCompare_->setChecked(false);
+    actCompare_->setEnabled(false);
+    util::cancel(orientationCanceled_);
+    ++nOrientationGeneration_;
+    bOrienting_ = true;
+    startOrientation();
+    updateResultActions();
+}
+
+void MainWindow::startOrientation()
+{
+    if (rawOriginalImage_.isNull() || bLoading_) { return; }
+    if (orientationWatcher_->isRunning()) {
+        bOrientationPending_ = true;
+        return;
+    }
+    bOrientationPending_ = false;
+    bOrienting_ = true;
+    nRunningOrientationGeneration_ = nOrientationGeneration_;
+    const QImage source = rawOriginalImage_;
+    const int nTurns = nQuarterTurns_;
+    const bool bHorizontal = bMirrorHorizontal_;
+    const bool bVertical = bMirrorVertical_;
+    orientationCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = orientationCanceled_;
+    statusProcessing_->setText(tr("正在调整方向…"));
+    orientationWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Compute),
+        [source, nTurns, bHorizontal, bVertical, canceled]() {
+            return core::processing::ImageProcessor::orient(
+                source, nTurns, bHorizontal, bVertical, canceled);
+        }));
+}
+
+void MainWindow::onOrientationFinished()
+{
+    const auto result = orientationWatcher_->result();
+    if (nRunningOrientationGeneration_ == nOrientationGeneration_) {
+        bOrienting_ = false;
+        if (result.ok()) {
+            originalImage_ = result.image;
+            processedImage_ = QImage();
+            displayedImage_ = originalImage_;
+            if (processingParameters_.bEnabled) {
+                bProcessingPending_ = true;
+                statusProcessing_->setText(tr("等待预处理…"));
+                processingTimer_->start();
+            } else {
+                view_->setImage(originalImage_, false);
+                statusProcessing_->clear();
+            }
+            if (bChannelSplitEnabled_) { refreshChannelSplit(); }
+        } else {
+            statusProcessing_->clear();
+            if (!result.error.isEmpty()) {
+                statusBar()->showMessage(tr("方向调整失败：%1").arg(result.error), 8000);
+            }
+        }
+        updateChannelPanels();
+        updateImageInformation();
+    }
+    if (bOrientationPending_) { startOrientation(); }
+    updateResultActions();
+}
+
+QWidget* MainWindow::buildChannelPanel(QWidget* parent, bool bHsv)
+{
+    auto* panel = new QWidget(parent);
+    panel->setObjectName(bHsv ? QString("ChannelPanelRight") : QString("ChannelPanelLeft"));
+    panel->setFixedWidth(228);
+    panel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    auto* header = new QWidget(panel);
+    header->setObjectName(QString("ChannelPanelHeader"));
+    header->setFixedHeight(34);
+    auto* headerLayout = new QHBoxLayout(header);
+    headerLayout->setContentsMargins(12, 0, 10, 0);
+    headerLayout->setSpacing(6);
+    auto* title = new QLabel(bHsv ? tr("HSV 通道") : tr("RGB 通道"), header);
+    title->setObjectName(QString("ChannelPanelTitle"));
+    auto* range = new QLabel(bHsv ? tr("0–179 / 0–255") : tr("0–255"), header);
+    range->setObjectName(QString("ChannelPanelRange"));
+    headerLayout->addWidget(title);
+    headerLayout->addStretch();
+    headerLayout->addWidget(range);
+    layout->addWidget(header);
+
+    auto* cards = new QWidget(panel);
+    cards->setObjectName(QString("ChannelCards"));
+    auto* cardLayout = new QVBoxLayout(cards);
+    cardLayout->setContentsMargins(8, 8, 8, 8);
+    cardLayout->setSpacing(8);
+    static const char* accentColors[6] = {
+        "#ef6b6b", "#68cf7a", "#6aa6ff", "#e8c06a", "#6fc3d4", "#c8d2dc"
+    };
+    channelTitles_[0] = tr("红色通道");
+    channelTitles_[1] = tr("绿色通道");
+    channelTitles_[2] = tr("蓝色通道");
+    channelTitles_[3] = tr("色相");
+    channelTitles_[4] = tr("饱和度");
+    channelTitles_[5] = tr("明度");
+    channelRanges_[0] = channelRanges_[1] = channelRanges_[2] = QString("0–255");
+    channelRanges_[3] = QString("0–179");
+    channelRanges_[4] = channelRanges_[5] = QString("0–255");
+    const int nBase = bHsv ? 3 : 0;
+    for (int nOffset = 0; nOffset < 3; ++nOffset) {
+        const int nIndex = nBase + nOffset;
+        auto* card = new QFrame(cards);
+        card->setObjectName(QString("ChannelCard"));
+        card->setProperty("channelIndex", nIndex);
+        auto* cardBody = new QVBoxLayout(card);
+        cardBody->setContentsMargins(7, 5, 7, 7);
+        cardBody->setSpacing(4);
+        auto* cardHeader = new QHBoxLayout();
+        cardHeader->setSpacing(6);
+        auto* cardTitle = new QLabel(card);
+        cardTitle->setObjectName(QString("ChannelCardTitle"));
+        cardTitle->setTextFormat(Qt::RichText);
+        const QString letter = QString::fromLatin1("RGBHSV").mid(nIndex, 1);
+        cardTitle->setText(QString("<span style=\"color:%1;font-weight:700\">%2</span>  %3")
+            .arg(QString::fromLatin1(accentColors[nIndex]), letter, channelTitles_[nIndex]));
+        auto* cardRange = new QLabel(channelRanges_[nIndex], card);
+        cardRange->setObjectName(QString("ChannelCardRange"));
+        cardHeader->addWidget(cardTitle);
+        cardHeader->addStretch();
+        cardHeader->addWidget(cardRange);
+        auto* image = new ChannelThumbnailLabel(card);
+        image->setObjectName(QString("ChannelThumbnail%1").arg(nIndex));
+        image->setMessage(tr("等待计算…"));
+        cardBody->addLayout(cardHeader);
+        cardBody->addWidget(image, 1);
+        cardLayout->addWidget(card, 1);
+        channelCardImages_[nIndex] = image;
+    }
+    layout->addWidget(cards, 1);
+    panel->hide();
+    return panel;
+}
+
+void MainWindow::updateChannelPanels()
+{
+    const bool bVisible = bChannelSplitEnabled_ && !displayedImage_.isNull() && !isFullScreen();
+    if (channelLeftPanel_) { channelLeftPanel_->setVisible(bVisible); }
+    if (channelRightPanel_) { channelRightPanel_->setVisible(bVisible); }
+    if (bVisible) { updateChannelSource(); }
+}
+
+void MainWindow::updateChannelSource()
+{
+    if (!channelLeftPanel_ || !channelRightPanel_) { return; }
+    if (currentPath_.isEmpty() || displayedImage_.isNull()) {
+        channelLeftPanel_->setToolTip(QString());
+        channelRightPanel_->setToolTip(QString());
+        return;
+    }
+    QString text = QFileInfo(currentPath_).fileName();
+    if (!processedImage_.isNull()) { text += tr(" · 处理结果"); }
+    if (nQuarterTurns_ != 0 || bMirrorHorizontal_ || bMirrorVertical_) { text += tr(" · 已调整方向"); }
+    channelLeftPanel_->setToolTip(text);
+    channelRightPanel_->setToolTip(text);
+}
+
+void MainWindow::setChannelSplitEnabled(bool bEnabled)
+{
+    bChannelSplitEnabled_ = bEnabled;
+    QSettings().setValue(QString("ui/channelSplit"), bEnabled);
+    if (!bEnabled) {
+        util::cancel(channelCanceled_);
+        ++nChannelGeneration_;
+        bChannelPending_ = false;
+    }
+    updateChannelPanels();
+    if (bEnabled && !displayedImage_.isNull()) {
+        refreshChannelSplit();
+    }
+    view_->setFocus();
+    updateResultActions();
+}
+
+void MainWindow::refreshChannelSplit()
+{
+    if (!bChannelSplitEnabled_ || displayedImage_.isNull() || bLoading_ || bOrienting_) { return; }
+    ++nChannelGeneration_;
+    util::cancel(channelCanceled_);
+    if (channelWatcher_->isRunning()) {
+        bChannelPending_ = true;
+        return;
+    }
+    bChannelPending_ = false;
+    nRunningChannelGeneration_ = nChannelGeneration_;
+    updateChannelSource();
+    for (int nIndex = 0; nIndex < 6; ++nIndex) {
+        channelImages_[nIndex] = QImage();
+        if (auto* label = static_cast<ChannelThumbnailLabel*>(channelCardImages_[nIndex])) {
+            label->setMessage(tr("正在计算…"));
+        }
+    }
+    const QImage source = displayedImage_;
+    channelCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = channelCanceled_;
+    channelWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Compute),
+        [source, canceled]() {
+            return core::processing::ImageProcessor::splitChannels(source, QSize(512, 384), canceled);
+        }));
+}
+
+void MainWindow::onChannelSplitFinished()
+{
+    const auto result = channelWatcher_->result();
+    if (nRunningChannelGeneration_ == nChannelGeneration_ && bChannelSplitEnabled_) {
+        if (result.ok()) {
+            for (int nIndex = 0; nIndex < 6; ++nIndex) {
+                channelImages_[nIndex] = result.images[nIndex];
+                if (auto* label = static_cast<ChannelThumbnailLabel*>(channelCardImages_[nIndex])) {
+                    label->setImage(channelImages_[nIndex]);
+                }
+            }
+        } else {
+            for (auto* label : channelCardImages_) {
+                if (auto* thumbnail = static_cast<ChannelThumbnailLabel*>(label)) {
+                    thumbnail->setMessage(tr("计算失败"));
+                }
+            }
+            if (!result.error.isEmpty()) { statusBar()->showMessage(result.error, 8000); }
+        }
+    }
+    if (bChannelPending_) { refreshChannelSplit(); }
     updateResultActions();
 }
 
@@ -1272,6 +1782,8 @@ void MainWindow::showOriginalImage()
     if (statusProcessing_) {
         statusProcessing_->clear();
     }
+    updateChannelPanels();
+    if (bChannelSplitEnabled_) { refreshChannelSplit(); }
     updateResultActions();
 }
 
@@ -1286,18 +1798,23 @@ void MainWindow::clearAnalysis()
 
 void MainWindow::updateResultActions()
 {
-    const bool bReady = !bLoading_ && !displayedImage_.isNull()
+    const bool bReady = !bLoading_ && !bOrienting_ && !displayedImage_.isNull()
         && (!processingParameters_.bEnabled || (!bProcessingPending_
             && !processingTimer_->isActive() && !processingWatcher_->isRunning()));
     analysisPanel_->setImageState(bReady, !processedImage_.isNull());
     actSaveResult_->setEnabled(bReady && !bSaving_);
     actCompare_->setEnabled(bReady && !processedImage_.isNull());
     actRefresh_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
-    actOpenFolder_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
-    actCopyFile_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
-    actDeleteFile_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
+    actOpenFolder_->setEnabled(!currentPath_.isEmpty() && !bLoading_ && !bOrienting_);
+    actCopyFile_->setEnabled(!currentPath_.isEmpty() && !bLoading_ && !bOrienting_);
+    actDeleteFile_->setEnabled(!currentPath_.isEmpty() && !bLoading_ && !bOrienting_);
+    for (QAction* action : { actRotateLeft_, actRotateRight_, actMirrorHorizontal_, actMirrorVertical_ }) {
+        action->setEnabled(!bLoading_ && !bOrienting_ && !rawOriginalImage_.isNull());
+    }
+    // 通道计算期间仍允许关闭通道视图，否则用户无法退出等待状态。
+    actSplitChannels_->setEnabled(!displayedImage_.isNull() && !bLoading_ && !bOrienting_);
     for (QAction* action : { actFit_, actFitWidth_, actFitHeight_, actActualSize_ }) {
-        action->setEnabled(!displayedImage_.isNull());
+        action->setEnabled(!displayedImage_.isNull() && !bOrienting_);
     }
 }
 
@@ -1311,6 +1828,8 @@ void MainWindow::closeEvent(QCloseEvent* event)
     }
     util::cancel(loadCanceled_);
     util::cancel(processingCanceled_);
+    util::cancel(orientationCanceled_);
+    util::cancel(channelCanceled_);
     util::cancel(analysisCanceled_);
     util::cancel(preloadCanceled_);
     util::cancel(directoryCanceled_);
@@ -1343,7 +1862,8 @@ void MainWindow::updateImageInformation()
         return;
     }
     statusFile_->setText(QFileInfo(currentPath_).fileName());
-    statusFile_->setToolTip(currentPath_);
+    statusFile_->setToolTip(tr("%1\n修改时间：%2").arg(currentPath_,
+        fileModified_.toString(QString("yyyy/MM/dd HH:mm"))));
     statusSize_->setText(QString("%1 × %2").arg(originalImage_.width()).arg(originalImage_.height())
         + (util::highDepth(originalImage_) ? tr(" | 取样/统计/处理：8 位") : QString()));
     titleBar_->setInfoText(formatTitleText(), currentPath_);
@@ -1353,16 +1873,17 @@ void MainWindow::updateImageInformation()
 QString MainWindow::formatTitleText() const
 {
     const int nIndex = directoryModel_->currentIndex();
-    return tr("%1  |  %2/%3 个文件  |  %4%  |  %5×%6  |  %7  |  %8  |  %9  |  ImageViewer v%10")
+    // 标题栏保持紧凑：版本号在“关于”中展示，避免长文本被窗口宽度裁切。
+    const QString zoomText = QString("%1%").arg(QString::number(
+        view_->zoomFactor() * 100.0, 'f', view_->zoomFactor() < 0.1 ? 1 : 0));
+    return tr("%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8")
         .arg(QFileInfo(currentPath_).fileName())
         .arg(nIndex >= 0 ? nIndex + 1 : 0)
         .arg(directoryModel_->count())
-        .arg(QString::number(view_->zoomFactor() * 100.0, 'f', view_->zoomFactor() < 0.1 ? 1 : 0))
+        .arg(zoomText)
         .arg(originalImage_.width()).arg(originalImage_.height())
         .arg(formatFileSize(nFileBytes_))
-        .arg(pixelFormatText(originalImage_))
-        .arg(fileModified_.toString(QString("yyyy/MM/dd HH:mm:ss")))
-        .arg(app::version());
+        .arg(pixelFormatText(originalImage_));
 }
 
 QString MainWindow::pixelFormatText(const QImage& image) const

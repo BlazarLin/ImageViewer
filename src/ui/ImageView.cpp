@@ -73,6 +73,7 @@ QString firstLocalFilePath(const QMimeData* mimeData)
 ImageView::ImageView(QWidget* parent)
     : QGraphicsView(parent)
     , pyramidWatcher_(new QFutureWatcher<std::vector<QImage>>(this))
+    , overviewWatcher_(new QFutureWatcher<QImage>(this))
 {
     setupScene();
     previousButton_ = new QToolButton(viewport());
@@ -115,13 +116,22 @@ ImageView::ImageView(QWidget* parent)
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, refreshPixel);
     connect(pyramidWatcher_, &QFutureWatcher<std::vector<QImage>>::finished,
         this, &ImageView::onPyramidFinished);
+    connect(overviewWatcher_, &QFutureWatcher<QImage>::finished, this, [this]() {
+        if (nRunningOverviewGeneration_ == nOverviewGeneration_) {
+            overviewImage_ = overviewWatcher_->result();
+            if (!navigationOverviewRect().isEmpty()) { viewport()->update(navigationOverviewRect()); }
+        } else {
+            requestNavigationOverview();
+        }
+    });
 }
 
 ImageView::~ImageView()
 {
     util::cancel(pyramidCanceled_);
+    util::cancel(overviewCanceled_);
     ++nPyramidGeneration_;
-    util::cancel(pyramidCanceled_);
+    ++nOverviewGeneration_;
 }
 
 void ImageView::setNavigationActions(QAction* previous, QAction* next)
@@ -160,23 +170,17 @@ void ImageView::setNavigationActions(QAction* previous, QAction* next)
     updateNavigationButtons();
 }
 
-void ImageView::setChromeActions(QAction* toolbar, QAction* thumbnails)
+void ImageView::setChromeActions(QAction* toolbar)
 {
     toolbarButton_ = new QToolButton(viewport());
-    thumbnailsButton_ = new QToolButton(viewport());
     toolbarButton_->setObjectName(QString("ExpandToolbarButton"));
-    thumbnailsButton_->setObjectName(QString("ToggleThumbnailsButton"));
     toolbarButton_->setDefaultAction(toolbar);
-    thumbnailsButton_->setDefaultAction(thumbnails);
-    for (auto* button : { toolbarButton_, thumbnailsButton_ }) {
-        button->setFixedSize(34, 28);
-        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        button->setFocusPolicy(Qt::NoFocus);
-        button->setCursor(Qt::PointingHandCursor);
-        button->setStyleSheet(QString("QToolButton { color:#dfe3e8; background:#303840; border:1px solid #647586; border-radius:5px; } QToolButton:hover { background:#176b98; }"));
-    }
+    toolbarButton_->setFixedSize(34, 28);
+    toolbarButton_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    toolbarButton_->setFocusPolicy(Qt::NoFocus);
+    toolbarButton_->setCursor(Qt::PointingHandCursor);
+    toolbarButton_->setStyleSheet(QString("QToolButton { color:#dfe3e8; background:#303840; border:1px solid #647586; border-radius:5px; } QToolButton:hover { background:#176b98; }"));
     connect(toolbar, &QAction::toggled, this, [this](bool) { updateNavigationButtons(); });
-    connect(thumbnails, &QAction::toggled, this, [this](bool) { updateNavigationButtons(); });
     updateNavigationButtons();
 }
 
@@ -193,16 +197,11 @@ void ImageView::updateNavigationButtons()
     if (!previousButton_ || !nextButton_) {
         return;
     }
-    if (toolbarButton_ && thumbnailsButton_) {
+    if (toolbarButton_) {
         toolbarButton_->setVisible(!bMinimalMode_ && !toolbarButton_->defaultAction()->isChecked());
-        thumbnailsButton_->setVisible(!bMinimalMode_);
         toolbarButton_->setArrowType(Qt::DownArrow);
-        thumbnailsButton_->setArrowType(thumbnailsButton_->defaultAction()->isChecked() ? Qt::DownArrow : Qt::UpArrow);
-        const int nRight = std::max(0, viewport()->width() - 42);
-        toolbarButton_->move(nRight, 6);
-        thumbnailsButton_->move(nRight, std::max(0, viewport()->height() - 34));
+        toolbarButton_->move(std::max(0, viewport()->width() - 42), 6);
         toolbarButton_->raise();
-        thumbnailsButton_->raise();
     }
     const bool bVisible = !bMinimalMode_ && !current_.isNull() && previousButton_->defaultAction();
     previousButton_->setVisible(bVisible);
@@ -226,6 +225,7 @@ void ImageView::scrollContentsBy(int nDx, int nDy)
     if (!background.isEmpty()) { viewport()->update(background); }
     updateNavigationButtons();
     refreshLoupe();
+    if (!navigationOverviewRect().isEmpty()) { viewport()->update(navigationOverviewRect()); }
 }
 
 void ImageView::setupScene()
@@ -243,13 +243,10 @@ void ImageView::setImage(const QImage& img)
 void ImageView::setImage(const QImage& img, bool bResetView)
 {
     const QRectF oldRect = scene_->sceneRect();
-    // 记录当前视口中心在图像中的相对位置，切图后恢复到同样的相对位置。
-    QPointF relativeCenter(0.5, 0.5);
-    if (!oldRect.isEmpty() && viewMode_ == ViewMode::Manual) {
-        const QPointF center = mapToScene(viewport()->rect().center());
-        relativeCenter.setX(std::clamp((center.x() - oldRect.left()) / oldRect.width(), 0.0, 1.0));
-        relativeCenter.setY(std::clamp((center.y() - oldRect.top()) / oldRect.height(), 0.0, 1.0));
-    }
+    // 手动缩放时记录绝对图像坐标。不同尺寸的图片不能按相对百分比恢复，
+    // 否则同一像素位置会随宽高比变化而产生“图像被移动”的跳动。
+    const QPointF oldImageCenter = mapToScene(viewport()->rect().center());
+    const bool bRestoreImageCenter = !oldRect.isEmpty() && viewMode_ == ViewMode::Manual;
     clearSelection();
     current_ = img;
     bAwaitingFirstFrame_ = !img.isNull();
@@ -257,28 +254,26 @@ void ImageView::setImage(const QImage& img, bool bResetView)
     original_ = QImage();
     processed_ = QImage();
     bComparisonEnabled_ = false;
+    requestNavigationOverview();
     util::cancel(pyramidCanceled_);
     ++nPyramidGeneration_;
     pyramid_.clear();
     nDisplayedPyramidLevel_ = -1;
     rebuildPixmapItems();
-    if (!current_.isNull()) {
-        scene_->setSceneRect(QRectF(current_.rect()));
-    } else {
-        scene_->setSceneRect(QRectF());
-    }
+    scene_->setSceneRect(current_.isNull() ? QRectF() : QRectF(current_.rect()));
     requestPyramid();
     if (bResetView) {
         viewMode_ = ViewMode::FitWindow;
         applyViewMode();
     } else if (viewMode_ != ViewMode::Manual) {
-        // 适配模式重算适配比例；同一视口下缩放比不变。
         applyViewMode();
     } else {
-        // 手动缩放：保留当前缩放比，并恢复到切图前查看的相对位置。
         const QRectF bounds = scene_->sceneRect();
-        centerOn(bounds.left() + bounds.width() * relativeCenter.x(),
-            bounds.top() + bounds.height() * relativeCenter.y());
+        const QPointF center = bRestoreImageCenter
+            ? QPointF(std::clamp(oldImageCenter.x(), bounds.left(), bounds.right()),
+                std::clamp(oldImageCenter.y(), bounds.top(), bounds.bottom()))
+            : bounds.center();
+        centerOn(center);
         updateRenderMode();
         viewport()->update();
     }
@@ -296,6 +291,7 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
     updateNavigationButtons();
     bComparisonEnabled_ = bEnabled && !original_.isNull() && !processed_.isNull()
         && original_.size() == processed_.size();
+    requestNavigationOverview();
     util::cancel(pyramidCanceled_);
     ++nPyramidGeneration_;
     pyramid_.clear();
@@ -600,11 +596,10 @@ void ImageView::paintEvent(QPaintEvent* event)
 {
     QGraphicsView::paintEvent(event);
     if (bAwaitingFirstFrame_) { bAwaitingFirstFrame_ = false; emit firstFramePainted(); }
-    if (bLoupeEnabled_ && !current_.isNull()) {
-        QPainter loupePainter(viewport());
-        drawLoupe(loupePainter);
-    }
     if (!current_.isNull()) {
+        QPainter overlayPainter(viewport());
+        if (bLoupeEnabled_) { drawLoupe(overlayPainter); }
+        drawNavigationOverview(overlayPainter);
         return;
     }
 
@@ -707,6 +702,61 @@ void ImageView::drawLoupe(QPainter& painter)
     painter.setBrush(Qt::NoBrush);
     painter.drawRoundedRect(target.adjusted(-1, -1, 1, 1), 6, 6);
     painter.restore();
+}
+
+QRect ImageView::navigationOverviewRect() const
+{
+    if (current_.isNull() || zoomFactor() <= 1.0 || viewport()->width() < 100
+        || viewport()->height() < 100) {
+        return {};
+    }
+    const QRectF visible = mapToScene(viewport()->rect()).boundingRect().intersected(QRectF(current_.rect()));
+    if (visible.contains(QRectF(current_.rect()))) { return {}; }
+    const QSize size = current_.size().scaled(QSize(168, 120), Qt::KeepAspectRatio);
+    return QRect(QPoint(12, std::max(0, viewport()->height() - size.height() - 12)), size);
+}
+
+void ImageView::drawNavigationOverview(QPainter& painter)
+{
+    const QRect target = navigationOverviewRect();
+    if (target.isEmpty()) { return; }
+    painter.save();
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.fillRect(target.adjusted(-5, -5, 5, 5), QColor(20, 24, 29, 225));
+    if (!overviewImage_.isNull()) { painter.drawImage(target, overviewImage_); }
+    painter.setPen(QPen(QColor(125, 143, 158), 1));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(target);
+
+    const QRectF visible = mapToScene(viewport()->rect()).boundingRect().intersected(QRectF(current_.rect()));
+    if (!visible.isEmpty()) {
+        const qreal dX = target.width() / static_cast<qreal>(current_.width());
+        const qreal dY = target.height() / static_cast<qreal>(current_.height());
+        QRectF region(target.left() + visible.left() * dX,
+            target.top() + visible.top() * dY,
+            visible.width() * dX, visible.height() * dY);
+        painter.fillRect(region, QColor(45, 155, 211, 35));
+        painter.setPen(QPen(QColor(76, 190, 255), 2));
+        painter.drawRect(region);
+    }
+    painter.restore();
+}
+
+void ImageView::requestNavigationOverview()
+{
+    util::cancel(overviewCanceled_);
+    ++nOverviewGeneration_;
+    overviewImage_ = QImage();
+    // 若上一任务尚未结束，完成信号会按最新代数重新请求。
+    if (current_.isNull() || overviewWatcher_->isRunning()) { return; }
+    nRunningOverviewGeneration_ = nOverviewGeneration_;
+    overviewCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const QImage source = current_;
+    overviewWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Compute), [source]() {
+        return source.size().width() > 168 || source.size().height() > 120
+            ? source.scaled(QSize(168, 120), Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            : source;
+    }));
 }
 
 void ImageView::drawBackground(QPainter* painter, const QRectF& rect)

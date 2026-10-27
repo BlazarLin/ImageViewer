@@ -5,6 +5,7 @@
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QTransform>
 
 #include <opencv2/imgproc.hpp>
 
@@ -12,6 +13,7 @@
 #include <array>
 #include <cmath>
 #include <exception>
+#include <vector>
 
 namespace core::processing {
 namespace {
@@ -269,6 +271,99 @@ ProcessingResult ImageProcessor::process(const QImage& source,
             .arg(QString::fromLocal8Bit(error.what()));
     }
     result.nElapsedMs = timer.elapsed();
+    return result;
+}
+
+ProcessingResult ImageProcessor::orient(const QImage& source, int nQuarterTurns,
+    bool bMirrorHorizontal, bool bMirrorVertical, const util::Cancellation& canceled)
+{
+    ProcessingResult result;
+    QElapsedTimer timer;
+    timer.start();
+    if (source.isNull()) {
+        result.error = QCoreApplication::translate("ImageProcessor", "没有可处理的图像");
+        return result;
+    }
+    if (util::canceled(canceled)) { return {}; }
+    int nTurns = nQuarterTurns % 4;
+    if (nTurns < 0) { nTurns += 4; }
+    if (nTurns == 0 && !bMirrorHorizontal && !bMirrorVertical) {
+        result.image = source;
+        result.nElapsedMs = timer.elapsed();
+        return result;
+    }
+    result.image = source;
+    if (nTurns != 0) {
+        result.image = result.image.transformed(QTransform().rotate(nTurns * 90.0),
+            Qt::FastTransformation);
+    }
+    if (util::canceled(canceled)) { return {}; }
+    if (bMirrorHorizontal || bMirrorVertical) {
+        result.image = result.image.mirrored(bMirrorHorizontal, bMirrorVertical);
+    }
+    result.nElapsedMs = timer.elapsed();
+    return result;
+}
+
+ChannelSplitResult ImageProcessor::splitChannels(const QImage& source,
+    const QSize& maximumSize, const util::Cancellation& canceled)
+{
+    ChannelSplitResult result;
+    if (source.isNull()) {
+        result.error = QCoreApplication::translate("ImageProcessor", "没有可处理的图像");
+        return result;
+    }
+    if (util::canceled(canceled)) { return {}; }
+    try {
+        const cv::Mat bgr = qImageToWorkingMat(source);
+        if (bgr.empty()) {
+            result.error = QCoreApplication::translate("ImageProcessor", "不支持当前图像格式");
+            return result;
+        }
+        std::vector<cv::Mat> bgrChannels;
+        std::vector<cv::Mat> hsvChannels;
+        cv::split(bgr, bgrChannels);
+        if (util::canceled(canceled)) { return {}; }
+        cv::Mat hsv;
+        if (bgr.channels() == 3) {
+            cv::cvtColor(bgr, hsv, cv::COLOR_BGR2HSV);
+            cv::split(hsv, hsvChannels);
+        } else {
+            // 灰度图没有色相和饱和度；V 使用原灰度，H/S 明确显示为零。
+            hsvChannels = {
+                cv::Mat::zeros(bgr.rows, bgr.cols, CV_8UC1),
+                cv::Mat::zeros(bgr.rows, bgr.cols, CV_8UC1),
+                bgrChannels.front()
+            };
+        }
+        if (util::canceled(canceled)) { return {}; }
+        const cv::Mat ordered[6] = {
+            bgrChannels[std::min<size_t>(2, bgrChannels.size() - 1)],
+            bgrChannels[std::min<size_t>(1, bgrChannels.size() - 1)],
+            bgrChannels.front(), hsvChannels[0], hsvChannels[1], hsvChannels[2]
+        };
+        const QSize bounded = maximumSize.isValid() && !maximumSize.isEmpty()
+            ? maximumSize : QSize(640, 480);
+        const QSize fitted = source.width() > bounded.width() || source.height() > bounded.height()
+            ? source.size().scaled(bounded, Qt::KeepAspectRatio) : source.size();
+        for (int nIndex = 0; nIndex < 6; ++nIndex) {
+            if (util::canceled(canceled)) { return {}; }
+            cv::Mat thumbnail;
+            if (fitted != source.size()) {
+                cv::resize(ordered[nIndex], thumbnail,
+                    cv::Size(fitted.width(), fitted.height()), 0.0, 0.0, cv::INTER_AREA);
+            } else {
+                thumbnail = ordered[nIndex];
+            }
+            result.images[nIndex] = workingMatToQImage(thumbnail);
+        }
+    } catch (const cv::Exception& error) {
+        result.error = QCoreApplication::translate("ImageProcessor", "OpenCV 处理失败：%1")
+            .arg(QString::fromLocal8Bit(error.what()));
+    } catch (const std::exception& error) {
+        result.error = QCoreApplication::translate("ImageProcessor", "图像处理失败：%1")
+            .arg(QString::fromLocal8Bit(error.what()));
+    }
     return result;
 }
 
