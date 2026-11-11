@@ -1,10 +1,10 @@
-# Windows 便携版发布流程
+﻿# Windows 便携版发布流程
 
 首个公开版本为 v2.2.0。维护者按本流程构建、核验并发布；CI 上传的产物需核验后再放入 GitHub Releases。
 
 ## 构建与验收
 
-1. 在 `src/app/AppVersion.h` 更新版本，补充 `CHANGELOG.md`。标签应为同版本 `vX.Y.Z`。首版为 `2.2.0`。
+1. 在 `src/app/AppVersion.h` 更新版本，并在 `CHANGELOG.md` 增加对应 `## X.Y.Z` 段落。标签应为同版本 `vX.Y.Z`。该段落会被发布工作流自动提取为 GitHub Release 公告，请写成面向用户的新增功能与修复清单。
 2. 使用干净检出和受支持的依赖执行 Debug、Release 构建、回归以及编码检查。Windows Actions 从官方固定 OpenCV 提交构建共享库，使用 Qt 5.15.2；发布时核对远端工作流状态与提交 SHA。
 3. 人工检查 100%、150%、200% Windows 缩放及多屏切换，确认字体、圆角、窗口边缘缩放、两侧箭头、像素坐标、RGB/灰度切换和 ROI 计数。
 4. 核对真实图片拖放、损坏文件恢复、保存、中文路径、语言切换及空白/小窗口。自动 offscreen 回归不能替代这些桌面检查。

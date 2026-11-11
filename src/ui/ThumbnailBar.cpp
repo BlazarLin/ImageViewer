@@ -38,9 +38,10 @@ public:
     {
     }
 
-    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex&) const override
+    QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override
     {
-        return QSize(option.decorationSize.width() + 62, option.decorationSize.height() + 48);
+        // 固定为设计尺寸，避免高 DPI 下装饰尺寸变化导致卡片与文字错位。
+        return QSize(kItemWidth, kItemHeight);
     }
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option,
@@ -49,10 +50,15 @@ public:
         const bool bSelected = option.state.testFlag(QStyle::State_Selected);
         const bool bHovered = option.state.testFlag(QStyle::State_MouseOver);
         const QRect cardRect = option.rect.adjusted(3, 3, -3, -3);
-        const QRect imageRect(cardRect.left() + 7, cardRect.top() + 5,
-            cardRect.width() - 14, option.decorationSize.height() + 4);
-        const QRect textRect(cardRect.left() + 7, imageRect.bottom() + 4,
-            cardRect.width() - 14, 28);
+        // 文字区固定在卡片底部，图片区取剩余高度，任何 DPI/字体下都不会越过边框。
+        const QFontMetrics metrics(option.font);
+        const int nTextHeight = metrics.height() + 4;
+        const QRect textRect(cardRect.left() + 7, cardRect.bottom() - nTextHeight - 3,
+            cardRect.width() - 14, nTextHeight);
+        const int nImageTop = cardRect.top() + 5;
+        const int nImageBottom = std::max(nImageTop + 24, textRect.top() - 3);
+        const QRect imageRect(cardRect.left() + 7, nImageTop, cardRect.width() - 14,
+            std::min(kThumbnailHeight + 8, nImageBottom - nImageTop));
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, true);
@@ -67,12 +73,8 @@ public:
 
         const QIcon icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
         if (!icon.isNull()) {
-            const QSize pixmapSize = icon.actualSize(option.decorationSize);
-            const QPixmap pixmap = icon.pixmap(pixmapSize, QIcon::Normal, QIcon::Off);
-            const QPoint pixmapTopLeft(
-                imageRect.center().x() - pixmap.width() / 2,
-                imageRect.center().y() - pixmap.height() / 2);
-            painter->drawPixmap(pixmapTopLeft, pixmap);
+            // QIcon::paint 按目标矩形保持比例并处理高 DPI，不依赖装饰尺寸。
+            icon.paint(painter, imageRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
         }
 
         const QString position = index.data(Qt::UserRole).toString();

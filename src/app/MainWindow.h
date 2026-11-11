@@ -79,6 +79,7 @@ private slots:
     void onPrevious();
     void onNext();
     void onAbout();
+    void onOperationTips();
     void onZoomChanged(double factor);
     void onPreprocessParametersChanged(
         const core::processing::ProcessingParameters& parameters);
@@ -240,6 +241,7 @@ private:
     QAction* actDeleteFile_ = nullptr;
     QAction* actCompare_ = nullptr;
     QAction* actShowConsole_ = nullptr;
+    QAction* actOperationTips_ = nullptr;
     QAction* actAbout_ = nullptr;
     QAction* actExit_ = nullptr;
 

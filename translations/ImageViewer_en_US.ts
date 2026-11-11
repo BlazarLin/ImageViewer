@@ -129,6 +129,14 @@
         <translation>Simplified Chinese</translation>
     </message>
     <message>
+        <source>操作提示…</source>
+        <translation>Operation tips…</translation>
+    </message>
+    <message>
+        <source>操作提示</source>
+        <translation>Operation tips</translation>
+    </message>
+    <message>
         <source>帮助(&amp;H)</source>
         <translation>&amp;Help</translation>
     </message>

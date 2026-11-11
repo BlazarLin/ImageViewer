@@ -14,6 +14,7 @@
 #include <QElapsedTimer>
 #include <QMouseEvent>
 #include <QPaintEvent>
+#include <QPainter>
 #include <QKeyEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -21,6 +22,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStatusBar>
+#include <QStyleOptionViewItem>
 #include <QScrollBar>
 #include <QSlider>
 #include <QSpinBox>
@@ -28,6 +30,7 @@
 #include <QProcess>
 #include "app/Application.h"
 #include <QToolBar>
+#include <QAbstractItemDelegate>
 #include <QToolButton>
 #include <QTabWidget>
 #include <QComboBox>
@@ -1371,6 +1374,90 @@ void testOrientationChannelsAndStableView(const QString& outputRoot)
     window.close();
 }
 
+void testThumbnailCardLayout(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("thumb-card-XXXXXX")));
+    QImage dark(160, 120, QImage::Format_RGB32);
+    dark.fill(QColor(40, 40, 40));
+    const QString path = directory.filePath(QString("C1_2610000000_很长很长的文件名.bmp"));
+    dark.save(path);
+    ui::ThumbnailBar bar;
+    // 大字号 + 放大的装饰尺寸，模拟高 DPI 下的布局压力。
+    bar.setFont(QFont(QString("Microsoft YaHei UI"), 20));
+    bar.setIconSize(QSize(100, 67));
+    bar.resize(340, bar.height());
+    bar.show();
+    bar.setFiles({ path }, 0);
+    const bool bLoaded = waitUntil([&]() {
+        return !qvariant_cast<QIcon>(bar.model()->index(0, 0).data(Qt::DecorationRole)).isNull();
+    });
+    QCoreApplication::processEvents();
+    QStyleOptionViewItem option;
+    option.initFrom(&bar);
+    option.rect = QRect(0, 0, 142, 102);
+    option.font = bar.font();
+    option.decorationSize = bar.iconSize();
+    option.state |= QStyle::State_Selected;
+    option.showDecorationSelected = true;
+    const QModelIndex item = bar.model()->index(0, 0);
+    QImage canvas(option.rect.size(), QImage::Format_RGB32);
+    canvas.fill(Qt::black);
+    {
+        QPainter painter(&canvas);
+        bar.itemDelegate()->paint(&painter, option, item);
+    }
+    int nBorderBottom = -1;
+    int nTextBottom = -1;
+    for (int nY = 0; nY < canvas.height(); ++nY) {
+        for (int nX = 0; nX < canvas.width(); ++nX) {
+            const QRgb pixel = canvas.pixel(nX, nY);
+            if (qBlue(pixel) > 180 && qRed(pixel) < 90 && qGreen(pixel) > 110 && qGreen(pixel) < 190) {
+                nBorderBottom = std::max(nBorderBottom, nY);
+            }
+            if (qRed(pixel) > 210 && qGreen(pixel) > 210 && qBlue(pixel) > 210) {
+                nTextBottom = std::max(nTextBottom, nY);
+            }
+        }
+    }
+    const bool bHintSize = bar.itemDelegate()->sizeHint(option, item) == QSize(142, 102);
+    bar.close();
+    verify(bLoaded && bHintSize && nBorderBottom > 0 && nTextBottom > 0
+            && nTextBottom < nBorderBottom,
+        QString("TEST-73"), QString("缩略图文件名保持在卡片边框内，高 DPI/大字号不会把文字挤到边框上"));
+}
+
+void testWindowChrome(const QString& outputRoot)
+{
+    Q_UNUSED(outputRoot)
+    MainWindow window;
+    window.show();
+    window.showNormal();
+    QCoreApplication::processEvents();
+    auto* view = window.findChild<ui::ImageView*>();
+    auto* titleBar = window.findChild<QWidget*>(QString("CustomTitleBar"));
+    auto* close = window.findChild<QToolButton*>(QString("CloseButton"));
+    auto* tips = window.findChild<QAction*>(QString("OperationTips"));
+    bool bInside = close && titleBar && close->geometry().right() <= titleBar->width() - 6
+        && close->height() <= titleBar->height() - 4;
+    for (QToolButton* button : titleBar->findChildren<QToolButton*>()) {
+        if (button->parentWidget() != titleBar || button->objectName() == QString("MenuButton")) { continue; }
+        bInside = bInside && button->geometry().right() <= titleBar->width() - 6
+            && button->geometry().top() >= 3 && button->geometry().bottom() <= titleBar->height() - 4;
+    }
+    QEvent enter(QEvent::Enter);
+    QCoreApplication::sendEvent(close, &enter);
+    QCoreApplication::processEvents();
+    const QImage hoverShot = close->grab().toImage();
+    // 悬停底色应为圆角：角落透明，按钮内左侧（避开 × 字形）为红色。
+    const QColor hoverFill = hoverShot.pixelColor(8, hoverShot.height() / 2);
+    const bool bRoundedHover = hoverShot.pixelColor(0, 0).alpha() < 40
+        && hoverFill.red() > 150 && hoverFill.green() < 90 && hoverFill.blue() < 80;
+    verify(bInside && bRoundedHover && view && view->toolTip().isEmpty() && tips,
+        QString("TEST-74"),
+        QString("窗口按钮内缩在圆角边框内，关闭按钮悬停底色为圆角，图像区不再自动弹出提示"));
+    window.close();
+}
+
 void runPerformanceBenchmark(const QString& outputRoot)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("benchmark-XXXXXX")));
@@ -1505,6 +1592,8 @@ int main(int argc, char* argv[])
     testViewingPresentation(outputRoot);
     testPerformanceAndCorrectness(outputRoot);
     testOrientationChannelsAndStableView(outputRoot);
+    testThumbnailCardLayout(outputRoot);
+    testWindowChrome(outputRoot);
 
     util::waitForBackgroundWork();
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);

@@ -38,9 +38,11 @@ TitleBar::TitleBar(QWidget* parent)
     const QList<QToolButton*> buttons = { minimizeButton_, maximizeButton_, closeButton_ };
     for (QToolButton* button : buttons) {
         button->setAutoRaise(true);
-        button->setFixedSize(46, 38);
+        // 窗口内缩：悬停底色不进入圆角边框区域。
+        button->setFixedSize(44, 30);
         button->setIconSize(QSize(13, 13));
         button->setFocusPolicy(Qt::NoFocus);
+        button->setCursor(Qt::ArrowCursor);
     }
     minimizeButton_->setText(QString("—"));
     minimizeButton_->setToolTip(tr("最小化"));
@@ -50,13 +52,14 @@ TitleBar::TitleBar(QWidget* parent)
     setMaximized(false);
 
     auto* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(10, 0, 0, 0);
-    layout->setSpacing(8);
+    layout->setContentsMargins(10, 0, 8, 0);
+    layout->setSpacing(6);
     layout->addWidget(iconLabel_);
     layout->addWidget(infoLabel_, 1);
-    layout->addWidget(minimizeButton_);
-    layout->addWidget(maximizeButton_);
-    layout->addWidget(closeButton_);
+    layout->addSpacing(4);
+    layout->addWidget(minimizeButton_, 0, Qt::AlignVCenter);
+    layout->addWidget(maximizeButton_, 0, Qt::AlignVCenter);
+    layout->addWidget(closeButton_, 0, Qt::AlignVCenter);
 
     connect(minimizeButton_, &QToolButton::clicked, this, &TitleBar::minimizeRequested);
     connect(maximizeButton_, &QToolButton::clicked, this, &TitleBar::maximizeRestoreRequested);

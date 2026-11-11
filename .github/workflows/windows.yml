@@ -110,7 +110,29 @@ jobs:
           $setupSha = "$setup.sha256"
           if (!(Test-Path $zip) -or !(Test-Path $sha)) { throw '便携包或 SHA-256 文件与版本号不一致。' }
           if (!(Test-Path $setup) -or !(Test-Path $setupSha)) { throw '安装版或 SHA-256 文件与版本号不一致。' }
+          # 发布说明取 CHANGELOG.md 中与版本号匹配的段落，确保远端公告包含功能日志。
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $heading = '## ' + $env:APP_VERSION
+          $start = $changelog.IndexOf($heading)
+          if ($start -ge 0 -and [char]::IsDigit($changelog[$start + $heading.Length])) { $start = -1 }
+          if ($start -lt 0) { throw "CHANGELOG.md 缺少 $env:APP_VERSION 的发布说明。" }
+          $next = $changelog.IndexOf("`n## ", $start + $heading.Length)
+          $body = if ($next -ge 0) { $changelog.Substring($start, $next - $start) } else { $changelog.Substring($start) }
+          $body = $body.Trim()
+          $previous = git describe --tags --abbrev=0 "$env:GITHUB_REF_NAME^" 2>$null
+          if ($LASTEXITCODE -ne 0) { $previous = $null }
+          if ($previous) {
+            $body += "`n`n完整变更：https://github.com/$env:GITHUB_REPOSITORY/compare/$previous...$env:GITHUB_REF_NAME"
+          }
+          $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          Set-Content -LiteralPath $notes -Value $body -Encoding utf8
           # 显式传入压缩包与校验文件，避免 dist 下的 stage-* 临时目录被当作资产上传。
-          gh release create "$env:GITHUB_REF_NAME" --verify-tag --generate-notes $zip $sha $setup $setupSha `
-            || gh release upload "$env:GITHUB_REF_NAME" --clobber $zip $sha $setup $setupSha
+          gh release view "$env:GITHUB_REF_NAME" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release edit "$env:GITHUB_REF_NAME" --notes-file $notes
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            gh release upload "$env:GITHUB_REF_NAME" --clobber $zip $sha $setup $setupSha
+          } else {
+            gh release create "$env:GITHUB_REF_NAME" --verify-tag --notes-file $notes $zip $sha $setup $setupSha
+          }
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

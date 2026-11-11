@@ -345,7 +345,7 @@ void MainWindow::setupUi()
         "QWidget#CustomTitleBar { background:#1d1f22; border-bottom:1px solid #30343a; }"
         "QLabel#TitleInfo { color:#dce1e7; font-size:13px; }"
         "QLabel#AppIcon { background:#1479ad; color:white; border-radius:4px; font-weight:600; }"
-        "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:13px; }"
+        "QWidget#CustomTitleBar QToolButton { border:0; background:transparent; color:#e7ebef; font-size:13px; border-radius:6px; }"
         "QWidget#CustomTitleBar QToolButton:hover { background:#33373d; }"
         "QWidget#CustomTitleBar QToolButton#CloseButton:hover { background:#c42b1c; }"
         "QWidget#CustomTitleBar QToolButton#MenuButton { border:0; background:transparent; color:#dfe3e8; font-size:13px; padding:4px 10px; border-radius:4px; }"
@@ -466,7 +466,6 @@ void MainWindow::setupUi()
         else { view_->clearSelection(); clearAnalysis(); }
     });
     connect(view_, &ui::ImageView::selectionCleared, this, &MainWindow::clearAnalysis);
-    view_->setToolTip(tr("滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单"));
 }
 
 void MainWindow::setupActions()
@@ -659,6 +658,9 @@ void MainWindow::setupActions()
     actShowConsole_->setCheckable(true);
     actShowConsole_->setChecked(QSettings().value(QString("ui/showDebugConsole"), false).toBool());
     connect(actShowConsole_, &QAction::toggled, this, &MainWindow::setDebugConsoleVisible);
+    actOperationTips_ = new QAction(tr("操作提示…"), this);
+    actOperationTips_->setObjectName(QString("OperationTips"));
+    connect(actOperationTips_, &QAction::triggered, this, &MainWindow::onOperationTips);
     actAbout_ = new QAction(tr("关于"), this);
     connect(actAbout_, &QAction::triggered, this, &MainWindow::onAbout);
     actExit_ = new QAction(tr("退出"), this);
@@ -721,6 +723,8 @@ void MainWindow::setupMenusAndToolbar()
     settingsMenu->addAction(actShowConsole_);
     if (auto* button = titleBar_->menuButton(3)) { button->setMenu(settingsMenu); }
     auto* helpMenu = new QMenu(this);
+    helpMenu->addAction(actOperationTips_);
+    helpMenu->addSeparator();
     helpMenu->addAction(actAbout_);
     if (auto* button = titleBar_->menuButton(4)) { button->setMenu(helpMenu); }
 
@@ -1328,6 +1332,12 @@ void MainWindow::onRefresh()
     nRefreshIndex_ = directoryModel_->currentIndex();
     bReloadAfterDirectory_ = true;
     startDirectoryScan(true);
+}
+
+void MainWindow::onOperationTips()
+{
+    QMessageBox::information(this, tr("操作提示"),
+        tr("滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单"));
 }
 
 void MainWindow::onAbout()
