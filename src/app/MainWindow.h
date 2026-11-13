@@ -64,6 +64,7 @@ protected:
     void showEvent(QShowEvent* event) override;
     bool event(QEvent* event) override;
     bool nativeEvent(const QByteArray& eventType, void* message, long* result) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onOpen();
@@ -95,6 +96,11 @@ private slots:
     void setChannelSplitEnabled(bool bEnabled);
     void refreshChannelSplit();
     void onChannelSplitFinished();
+    void onChannelCardClicked(int nIndex);
+    void showChannelImage(int nIndex);
+    void startChannelImage();
+    void onChannelImageFinished();
+    void resetChannelFocus(bool bRestoreView);
     void startRoiAnalysis(const QRect& region);
     void onRoiAnalysisFinished();
     void toggleComparison(bool bEnabled);
@@ -119,6 +125,7 @@ private:
     void updateWindowShape();
     QWidget* buildChannelPanel(QWidget* parent, bool bHsv);
     void updateChannelPanels();
+    void updateChannelCardHighlight();
     void updateThumbnailVisibility();
     void updateChannelSource();
     void updatePixelStatus(const QPoint& position, const QColor& color, bool bValid);
@@ -170,6 +177,7 @@ private:
     QFutureWatcher<core::processing::ProcessingResult>* processingWatcher_ = nullptr;
     QFutureWatcher<core::processing::ProcessingResult>* orientationWatcher_ = nullptr;
     QFutureWatcher<core::processing::ChannelSplitResult>* channelWatcher_ = nullptr;
+    QFutureWatcher<core::processing::ProcessingResult>* channelImageWatcher_ = nullptr;
     QFutureWatcher<core::analysis::AnalysisResult>* analysisWatcher_ = nullptr;
     QFutureWatcher<int>* preloadWatcher_ = nullptr;
     QFutureWatcher<core::navigation::DirectoryModel>* directoryWatcher_ = nullptr;
@@ -178,6 +186,7 @@ private:
     util::Cancellation processingCanceled_;
     util::Cancellation orientationCanceled_;
     util::Cancellation channelCanceled_;
+    util::Cancellation channelImageCanceled_;
     util::Cancellation preloadCanceled_;
     util::Cancellation directoryCanceled_;
     QStringList scanFiles_;
@@ -215,6 +224,10 @@ private:
     quint64 nChannelGeneration_ = 0;
     quint64 nRunningChannelGeneration_ = 0;
     bool bChannelPending_ = false;
+    QWidget* channelCards_[6] = {};
+    int nActiveChannel_ = -1;
+    quint64 nChannelImageGeneration_ = 0;
+    quint64 nRunningChannelImageGeneration_ = 0;
     quint64 nAnalysisGeneration_ = 0;
     quint64 nRunningAnalysisGeneration_ = 0;
     QRect pendingAnalysisRegion_;

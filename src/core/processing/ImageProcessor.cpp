@@ -274,6 +274,59 @@ ProcessingResult ImageProcessor::process(const QImage& source,
     return result;
 }
 
+ProcessingResult ImageProcessor::channelImage(const QImage& source, int nChannelIndex,
+    const util::Cancellation& canceled)
+{
+    ProcessingResult result;
+    QElapsedTimer timer;
+    timer.start();
+    if (source.isNull()) {
+        result.error = QCoreApplication::translate("ImageProcessor", "没有可处理的图像");
+        return result;
+    }
+    if (nChannelIndex < 0 || nChannelIndex > 5) {
+        result.error = QCoreApplication::translate("ImageProcessor", "无效的通道编号");
+        return result;
+    }
+    if (util::canceled(canceled)) { return {}; }
+    try {
+        const cv::Mat bgr = qImageToWorkingMat(source);
+        if (bgr.empty()) {
+            result.error = QCoreApplication::translate("ImageProcessor", "不支持当前图像格式");
+            return result;
+        }
+        cv::Mat single;
+        if (nChannelIndex < 3) {
+            const int nBgrIndex = 2 - nChannelIndex;
+            if (bgr.channels() == 1) {
+                single = bgr;
+            } else {
+                cv::extractChannel(bgr, single, nBgrIndex);
+            }
+        } else if (bgr.channels() == 1) {
+            single = nChannelIndex == 5 ? bgr
+                : cv::Mat::zeros(bgr.rows, bgr.cols, CV_8UC1);
+        } else {
+            cv::Mat hsv;
+            cv::cvtColor(bgr, hsv, cv::COLOR_BGR2HSV);
+            if (util::canceled(canceled)) { return {}; }
+            cv::extractChannel(hsv, single, nChannelIndex - 3);
+        }
+        result.image = workingMatToQImage(single);
+        if (result.image.isNull()) {
+            result.error = QCoreApplication::translate("ImageProcessor", "处理结果无法转换为显示图像");
+        }
+    } catch (const cv::Exception& error) {
+        result.error = QCoreApplication::translate("ImageProcessor", "OpenCV 处理失败：%1")
+            .arg(QString::fromLocal8Bit(error.what()));
+    } catch (const std::exception& error) {
+        result.error = QCoreApplication::translate("ImageProcessor", "图像处理失败：%1")
+            .arg(QString::fromLocal8Bit(error.what()));
+    }
+    result.nElapsedMs = timer.elapsed();
+    return result;
+}
+
 ProcessingResult ImageProcessor::orient(const QImage& source, int nQuarterTurns,
     bool bMirrorHorizontal, bool bMirrorVertical, const util::Cancellation& canceled)
 {

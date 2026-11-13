@@ -72,6 +72,10 @@ public:
     static ChannelSplitResult splitChannels(const QImage& source,
         const QSize& maximumSize = QSize(640, 480),
         const util::Cancellation& canceled = {});
+
+    // 提取指定通道的原分辨率灰度图（0=R,1=G,2=B,3=H,4=S,5=V）。
+    static ProcessingResult channelImage(const QImage& source, int nChannelIndex,
+        const util::Cancellation& canceled = {});
 };
 
 } // namespace core::processing

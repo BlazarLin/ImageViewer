@@ -51,6 +51,8 @@ public:
     void setNavigationActions(QAction* previous, QAction* next);
     void setChromeActions(QAction* toolbar);
     void setMinimalMode(bool bMinimal);
+    // 通道大图模式下显示“返回原图”悬浮按钮，空字符串隐藏。
+    void setChannelChip(const QString& text);
     double zoomFactor() const;
     QRect selectedRegion() const { return selectedRegion_; }
 
@@ -67,6 +69,7 @@ public slots:
 signals:
     void zoomChanged(double factor);
     void openRequested();
+    void channelChipClicked();
     void firstFramePainted();
     void pixelHovered(const QPoint& position, const QColor& color, bool bValid);
     void roiSelected(const QRect& region);
@@ -122,6 +125,7 @@ private:
     QToolButton* toolbarButton_ = nullptr;
     QLabel* pixelHint_ = nullptr;
     QPushButton* openButton_ = nullptr;
+    QToolButton* channelChip_ = nullptr;
     bool bMinimalMode_ = false;
     bool bAwaitingFirstFrame_ = false;
     QGraphicsScene* scene_ = nullptr;

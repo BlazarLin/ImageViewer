@@ -45,6 +45,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QSettings>
 #include <QScreen>
 #include <QShowEvent>
@@ -167,6 +168,7 @@ MainWindow::MainWindow(QWidget* parent)
     , processingWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
     , orientationWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
     , channelWatcher_(new QFutureWatcher<core::processing::ChannelSplitResult>(this))
+    , channelImageWatcher_(new QFutureWatcher<core::processing::ProcessingResult>(this))
     , analysisWatcher_(new QFutureWatcher<core::analysis::AnalysisResult>(this))
     , preloadWatcher_(new QFutureWatcher<int>(this))
     , directoryWatcher_(new QFutureWatcher<core::navigation::DirectoryModel>(this))
@@ -202,6 +204,11 @@ MainWindow::MainWindow(QWidget* parent)
         this, &MainWindow::onOrientationFinished);
     connect(channelWatcher_, &QFutureWatcher<core::processing::ChannelSplitResult>::finished,
         this, &MainWindow::onChannelSplitFinished);
+    connect(channelImageWatcher_, &QFutureWatcher<core::processing::ProcessingResult>::finished,
+        this, &MainWindow::onChannelImageFinished);
+    connect(view_, &ui::ImageView::channelChipClicked, this, [this]() {
+        resetChannelFocus(true);
+    });
     connect(analysisWatcher_, &QFutureWatcher<core::analysis::AnalysisResult>::finished,
         this, &MainWindow::onRoiAnalysisFinished);
     connect(preloadWatcher_, &QFutureWatcher<int>::finished,
@@ -234,6 +241,7 @@ MainWindow::~MainWindow()
     util::cancel(processingCanceled_);
     util::cancel(orientationCanceled_);
     util::cancel(channelCanceled_);
+    util::cancel(channelImageCanceled_);
     util::cancel(analysisCanceled_);
     util::cancel(preloadCanceled_);
     util::cancel(directoryCanceled_);
@@ -414,6 +422,7 @@ void MainWindow::setupUi()
         "QLabel#ChannelPanelRange { color:#8ea0af; font-size:12px; }"
         "QWidget#ChannelCards { background:#1c1f24; }"
         "QFrame#ChannelCard { background:#23282e; border:1px solid #3b444e; border-radius:7px; }"
+        "QFrame#ChannelCard[active=\"true\"] { background:#263f50; border:1px solid #2d9bd3; }"
         "QLabel#ChannelCardTitle { color:#e8eef4; font-weight:600; }"
         "QLabel#ChannelCardRange { color:#8ea0af; font-size:11px; }"
         "QLabel#ChannelThumbnail { color:#8d9aa6; background:#14171a; border:1px solid #2c343c; border-radius:5px; }"
@@ -1090,6 +1099,7 @@ void MainWindow::onDeleteImageFile()
         bProcessingPending_ = false;
         actCompare_->setChecked(false);
         actCompare_->setEnabled(false);
+        resetChannelFocus(false);
         view_->setImage(QImage());
         util::cancel(channelCanceled_);
         ++nChannelGeneration_;
@@ -1277,6 +1287,7 @@ void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
     analysisPanel_->clear();
     actCompare_->setChecked(false);
     actCompare_->setEnabled(false);
+    resetChannelFocus(false);
     view_->setImage(originalImage_);
     updateChannelPanels();
     if (bChannelSplitEnabled_) {
@@ -1602,9 +1613,12 @@ void MainWindow::onPreprocessFinished()
             displayedImage_ = processedImage_;
             clearAnalysis();
             actCompare_->setEnabled(true);
-            view_->setComparisonImages(originalImage_, processedImage_, actCompare_->isChecked());
+            if (nActiveChannel_ < 0) {
+                view_->setComparisonImages(originalImage_, processedImage_, actCompare_->isChecked());
+            }
             statusProcessing_->setText(tr("预处理 %1 ms").arg(result.nElapsedMs));
             if (bChannelSplitEnabled_) { refreshChannelSplit(); }
+            if (nActiveChannel_ >= 0) { startChannelImage(); }
         } else {
             showOriginalImage();
             statusProcessing_->setText(tr("预处理失败"));
@@ -1673,11 +1687,14 @@ void MainWindow::onOrientationFinished()
                 bProcessingPending_ = true;
                 statusProcessing_->setText(tr("等待预处理…"));
                 processingTimer_->start();
-            } else {
+            } else if (nActiveChannel_ < 0) {
                 view_->setImage(originalImage_, false);
+                statusProcessing_->clear();
+            } else {
                 statusProcessing_->clear();
             }
             if (bChannelSplitEnabled_) { refreshChannelSplit(); }
+            if (nActiveChannel_ >= 0) { startChannelImage(); }
         } else {
             statusProcessing_->clear();
             if (!result.error.isEmpty()) {
@@ -1739,6 +1756,9 @@ QWidget* MainWindow::buildChannelPanel(QWidget* parent, bool bHsv)
         auto* card = new QFrame(cards);
         card->setObjectName(QString("ChannelCard"));
         card->setProperty("channelIndex", nIndex);
+        card->setCursor(Qt::PointingHandCursor);
+        card->setToolTip(tr("点击在主图查看 %1；再次点击返回原图").arg(channelTitles_[nIndex]));
+        card->installEventFilter(this);
         auto* cardBody = new QVBoxLayout(card);
         cardBody->setContentsMargins(7, 5, 7, 7);
         cardBody->setSpacing(4);
@@ -1747,21 +1767,25 @@ QWidget* MainWindow::buildChannelPanel(QWidget* parent, bool bHsv)
         auto* cardTitle = new QLabel(card);
         cardTitle->setObjectName(QString("ChannelCardTitle"));
         cardTitle->setTextFormat(Qt::RichText);
+        cardTitle->setAttribute(Qt::WA_TransparentForMouseEvents);
         const QString letter = QString::fromLatin1("RGBHSV").mid(nIndex, 1);
         cardTitle->setText(QString("<span style=\"color:%1;font-weight:700\">%2</span>  %3")
             .arg(QString::fromLatin1(accentColors[nIndex]), letter, channelTitles_[nIndex]));
         auto* cardRange = new QLabel(channelRanges_[nIndex], card);
         cardRange->setObjectName(QString("ChannelCardRange"));
+        cardRange->setAttribute(Qt::WA_TransparentForMouseEvents);
         cardHeader->addWidget(cardTitle);
         cardHeader->addStretch();
         cardHeader->addWidget(cardRange);
         auto* image = new ChannelThumbnailLabel(card);
         image->setObjectName(QString("ChannelThumbnail%1").arg(nIndex));
+        image->setAttribute(Qt::WA_TransparentForMouseEvents);
         image->setMessage(tr("等待计算…"));
         cardBody->addLayout(cardHeader);
         cardBody->addWidget(image, 1);
         cardLayout->addWidget(card, 1);
         channelCardImages_[nIndex] = image;
+        channelCards_[nIndex] = card;
     }
     layout->addWidget(cards, 1);
     panel->hide();
@@ -1780,10 +1804,25 @@ void MainWindow::updateThumbnailVisibility()
 
 void MainWindow::updateChannelPanels()
 {
+    if (nActiveChannel_ >= 0 && (!bChannelSplitEnabled_ || displayedImage_.isNull())) {
+        resetChannelFocus(true);
+    }
     const bool bVisible = bChannelSplitEnabled_ && !displayedImage_.isNull() && !isFullScreen();
     if (channelLeftPanel_) { channelLeftPanel_->setVisible(bVisible); }
     if (channelRightPanel_) { channelRightPanel_->setVisible(bVisible); }
     if (bVisible) { updateChannelSource(); }
+}
+
+void MainWindow::updateChannelCardHighlight()
+{
+    for (int nIndex = 0; nIndex < 6; ++nIndex) {
+        QWidget* card = channelCards_[nIndex];
+        if (!card) { continue; }
+        card->setProperty("active", nIndex == nActiveChannel_);
+        card->style()->unpolish(card);
+        card->style()->polish(card);
+        card->update();
+    }
 }
 
 void MainWindow::updateChannelSource()
@@ -1809,6 +1848,7 @@ void MainWindow::setChannelSplitEnabled(bool bEnabled)
         util::cancel(channelCanceled_);
         ++nChannelGeneration_;
         bChannelPending_ = false;
+        resetChannelFocus(true);
     }
     updateChannelPanels();
     if (bEnabled && !displayedImage_.isNull()) {
@@ -1816,6 +1856,94 @@ void MainWindow::setChannelSplitEnabled(bool bEnabled)
     }
     view_->setFocus();
     updateResultActions();
+}
+
+void MainWindow::onChannelCardClicked(int nIndex)
+{
+    showChannelImage(nIndex);
+}
+
+void MainWindow::showChannelImage(int nIndex)
+{
+    if (displayedImage_.isNull() || !bChannelSplitEnabled_) { return; }
+    if (nIndex < 0 || nIndex == nActiveChannel_) {
+        resetChannelFocus(true);
+        return;
+    }
+    if (actCompare_ && actCompare_->isChecked()) { actCompare_->setChecked(false); }
+    nActiveChannel_ = nIndex;
+    updateChannelCardHighlight();
+    view_->setChannelChip(tr("%1 · 返回原图").arg(channelTitles_[nIndex]));
+    view_->setSelectionEnabled(false);
+    startChannelImage();
+    updateImageInformation();
+    updateResultActions();
+}
+
+void MainWindow::startChannelImage()
+{
+    if (nActiveChannel_ < 0 || displayedImage_.isNull()) { return; }
+    ++nChannelImageGeneration_;
+    util::cancel(channelImageCanceled_);
+    if (channelImageWatcher_->isRunning()) { return; }
+    nRunningChannelImageGeneration_ = nChannelImageGeneration_;
+    const QImage source = displayedImage_;
+    const int nIndex = nActiveChannel_;
+    channelImageCanceled_ = std::make_shared<std::atomic_bool>(false);
+    const auto canceled = channelImageCanceled_;
+    channelImageWatcher_->setFuture(QtConcurrent::run(util::workPool(util::WorkPool::Compute),
+        [source, nIndex, canceled]() {
+            return core::processing::ImageProcessor::channelImage(source, nIndex, canceled);
+        }));
+}
+
+void MainWindow::onChannelImageFinished()
+{
+    const auto result = channelImageWatcher_->result();
+    if (nRunningChannelImageGeneration_ == nChannelImageGeneration_ && nActiveChannel_ >= 0) {
+        if (result.ok()) {
+            view_->setImage(result.image, false);
+            view_->setChannelChip(tr("%1 · 返回原图").arg(channelTitles_[nActiveChannel_]));
+        } else {
+            if (!result.error.isEmpty()) { statusBar()->showMessage(result.error, 8000); }
+            resetChannelFocus(true);
+        }
+    } else if (nActiveChannel_ >= 0) {
+        startChannelImage();
+    }
+    updateResultActions();
+}
+
+void MainWindow::resetChannelFocus(bool bRestoreView)
+{
+    util::cancel(channelImageCanceled_);
+    ++nChannelImageGeneration_;
+    const bool bWasActive = nActiveChannel_ >= 0;
+    nActiveChannel_ = -1;
+    view_->setChannelChip(QString());
+    updateChannelCardHighlight();
+    if (bRestoreView && !displayedImage_.isNull()) {
+        view_->setImage(displayedImage_, false);
+    }
+    view_->setSelectionEnabled(analysisDock_ && analysisDock_->isVisible());
+    if (bWasActive) {
+        updateImageInformation();
+        updateResultActions();
+    }
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonRelease
+        && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+        for (int nIndex = 0; nIndex < 6; ++nIndex) {
+            if (watched == channelCards_[nIndex]) {
+                onChannelCardClicked(nIndex);
+                return true;
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::refreshChannelSplit()
@@ -1871,6 +1999,7 @@ void MainWindow::onChannelSplitFinished()
 
 void MainWindow::startRoiAnalysis(const QRect& region)
 {
+    if (nActiveChannel_ >= 0) { return; }
     if (!analysisDock_->isVisible() || displayedImage_.isNull() || region.isEmpty() || bLoading_
         || bProcessingPending_ || processingTimer_->isActive()
         || (processingParameters_.bEnabled && processingWatcher_->isRunning())) {
@@ -1961,7 +2090,11 @@ void MainWindow::showOriginalImage()
     if (!originalImage_.isNull()) {
         displayedImage_ = originalImage_;
         processedImage_ = QImage();
-        view_->setImage(originalImage_, false);
+        if (nActiveChannel_ < 0) {
+            view_->setImage(originalImage_, false);
+        } else {
+            startChannelImage();
+        }
     }
     if (actCompare_) {
         actCompare_->setChecked(false);
@@ -1990,8 +2123,8 @@ void MainWindow::updateResultActions()
         && (!processingParameters_.bEnabled || (!bProcessingPending_
             && !processingTimer_->isActive() && !processingWatcher_->isRunning()));
     analysisPanel_->setImageState(bReady, !processedImage_.isNull());
-    actSaveResult_->setEnabled(bReady && !bSaving_);
-    actCompare_->setEnabled(bReady && !processedImage_.isNull());
+    actSaveResult_->setEnabled(bReady && !bSaving_ && nActiveChannel_ < 0);
+    actCompare_->setEnabled(bReady && !processedImage_.isNull() && nActiveChannel_ < 0);
     actRefresh_->setEnabled(!currentPath_.isEmpty() && !bLoading_);
     actOpenFolder_->setEnabled(!currentPath_.isEmpty() && !bLoading_ && !bOrienting_);
     actCopyFile_->setEnabled(!currentPath_.isEmpty() && !bLoading_ && !bOrienting_);
@@ -2067,14 +2200,17 @@ QString MainWindow::formatTitleText() const
     // 标题栏保持紧凑：版本号在“关于”中展示，避免长文本被窗口宽度裁切。
     const QString zoomText = QString("%1%").arg(QString::number(
         view_->zoomFactor() * 100.0, 'f', view_->zoomFactor() < 0.1 ? 1 : 0));
-    return tr("%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8")
+    const QString channelText = nActiveChannel_ >= 0
+        ? QString("  |  %1").arg(channelTitles_[nActiveChannel_]) : QString();
+    return tr("%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8%9")
         .arg(QFileInfo(currentPath_).fileName())
         .arg(nIndex >= 0 ? nIndex + 1 : 0)
         .arg(directoryModel_->count())
         .arg(zoomText)
         .arg(originalImage_.width()).arg(originalImage_.height())
         .arg(formatFileSize(nFileBytes_))
-        .arg(pixelFormatText(originalImage_));
+        .arg(pixelFormatText(originalImage_))
+        .arg(channelText);
 }
 
 QString MainWindow::pixelFormatText(const QImage& image) const

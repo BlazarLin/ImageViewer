@@ -1596,6 +1596,95 @@ void testZoomNavigationAndChrome(const QString& outputRoot)
     window.close();
 }
 
+void testChannelMainImage(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("channel-main-XXXXXX")));
+    QImage first(8, 4, QImage::Format_RGB888);
+    first.fill(QColor(200, 30, 40));
+    QImage second(8, 4, QImage::Format_RGB888);
+    second.fill(QColor(20, 210, 60));
+    const QString firstPath = directory.filePath(QString("通道主图 1.png"));
+    const QString secondPath = directory.filePath(QString("通道主图 2.png"));
+    first.save(firstPath);
+    second.save(secondPath);
+    MainWindow window;
+    window.show();
+    window.showNormal();
+    QCoreApplication::processEvents();
+    auto* view = window.findChild<ui::ImageView*>();
+    window.openFile(firstPath);
+    const bool bLoaded = waitUntil([&]() {
+        return view->image().pixelColor(0, 0) == QColor(200, 30, 40);
+    });
+    auto* split = window.findChild<QAction*>(QString("SplitChannels"));
+    split->setChecked(true);
+    const bool bPanelsReady = waitUntil([&]() {
+        for (QLabel* label : window.findChildren<QLabel*>()) {
+            if (label->objectName() == QString("ChannelThumbnail1") && label->pixmap()) { return true; }
+        }
+        return false;
+    });
+    QAction* save = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->shortcut() == QKeySequence(QString("Ctrl+Shift+S"))) { save = action; }
+    }
+    const auto findCard = [&window](int nIndex) -> QWidget* {
+        for (QWidget* widget : window.findChildren<QWidget*>(QString("ChannelCard"))) {
+            if (widget->property("channelIndex").toInt() == nIndex) { return widget; }
+        }
+        return nullptr;
+    };
+    const auto clickCard = [&findCard](int nIndex) {
+        QWidget* card = findCard(nIndex);
+        if (!card) { return false; }
+        QMouseEvent release(QEvent::MouseButtonRelease, QPoint(6, 6), Qt::LeftButton,
+            Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(card, &release);
+        return true;
+    };
+    auto* chip = view->findChild<QToolButton*>(QString("ChannelChipButton"));
+    bool bRed = clickCard(0);
+    bRed = bRed && waitUntil([&]() {
+        return view->image().isGrayscale() && view->image().pixelColor(0, 0).red() == 200;
+    });
+    const bool bChip = chip && chip->isVisible() && chip->text().contains(QString("返回原图"));
+    window.grab().save(QDir(outputRoot).filePath(QString("通道主图查看.png")));
+    const bool bSaveDisabled = save && !save->isEnabled();
+    view->setZoomPercent(200);
+    const bool bZoom = std::abs(view->zoomFactor() - 2.0) < 0.001;
+    // 切换到 G 通道，缩放保持；再次点击当前通道返回原图。
+    bool bGreen = clickCard(1);
+    bGreen = bGreen && waitUntil([&]() {
+        return view->image().isGrayscale() && view->image().pixelColor(0, 0).red() == 30;
+    }) && std::abs(view->zoomFactor() - 2.0) < 0.001;
+    clickCard(1);
+    const bool bBack = waitUntil([&]() {
+        return !view->image().isGrayscale() && view->image().pixelColor(0, 0) == QColor(200, 30, 40);
+    }) && chip && !chip->isVisible();
+    // 通过顶部按钮返回原图。
+    bool bBlue = clickCard(2);
+    bBlue = bBlue && waitUntil([&]() {
+        return view->image().isGrayscale() && view->image().pixelColor(0, 0).red() == 40;
+    });
+    if (chip) { chip->click(); }
+    const bool bChipBack = waitUntil([&]() {
+        return !view->image().isGrayscale() && view->image().pixelColor(0, 0) == QColor(200, 30, 40);
+    });
+    // 通道大图状态下换图会回到新图原图显示。
+    clickCard(0);
+    waitUntil([&]() { return view->image().isGrayscale(); });
+    window.openFile(secondPath);
+    const bool bSwitchBack = waitUntil([&]() {
+        return view->image().pixelColor(0, 0) == QColor(20, 210, 60) && chip && !chip->isVisible();
+    });
+    split->setChecked(false);
+    verify(bLoaded && bPanelsReady && bRed && bChip && bSaveDisabled && bZoom && bGreen
+            && bBack && bBlue && bChipBack && bSwitchBack,
+        QString("TEST-77"),
+        QString("点击通道在主图显示全分辨率灰度图并保持缩放，再次点击/顶部按钮/换图均可回到原图"));
+    window.close();
+}
+
 void runPerformanceBenchmark(const QString& outputRoot)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("benchmark-XXXXXX")));
@@ -1734,6 +1823,7 @@ int main(int argc, char* argv[])
     testWindowChrome(outputRoot);
     testRecentFiles(outputRoot);
     testZoomNavigationAndChrome(outputRoot);
+    testChannelMainImage(outputRoot);
 
     util::waitForBackgroundWork();
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);

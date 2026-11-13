@@ -110,6 +110,18 @@ ImageView::ImageView(QWidget* parent)
         "QPushButton:pressed { background:#125374; }"));
     connect(openButton_, &QPushButton::clicked, this, &ImageView::openRequested);
     openButton_->hide();
+    channelChip_ = new QToolButton(viewport());
+    channelChip_->setObjectName(QString("ChannelChipButton"));
+    channelChip_->setCursor(Qt::PointingHandCursor);
+    channelChip_->setFocusPolicy(Qt::NoFocus);
+    channelChip_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    channelChip_->setStyleSheet(QString(
+        "QToolButton { color:#f2f7fb; background:rgba(23,107,152,225); border:1px solid #2d9bd3;"
+        " border-radius:6px; padding:5px 12px; font-weight:600; }"
+        "QToolButton:hover { background:#268bc0; }"
+        "QToolButton:pressed { background:#125374; }"));
+    connect(channelChip_, &QToolButton::clicked, this, &ImageView::channelChipClicked);
+    channelChip_->hide();
     setRenderHint(QPainter::Antialiasing, true);
     setRenderHint(QPainter::SmoothPixmapTransform, true);
     setDragMode(QGraphicsView::ScrollHandDrag);
@@ -196,6 +208,14 @@ void ImageView::setChromeActions(QAction* toolbar)
     updateNavigationButtons();
 }
 
+void ImageView::setChannelChip(const QString& text)
+{
+    if (!channelChip_) { return; }
+    channelChip_->setText(text);
+    channelChip_->adjustSize();
+    updateNavigationButtons();
+}
+
 void ImageView::updateOpenButton()
 {
     if (!openButton_) { return; }
@@ -224,6 +244,14 @@ void ImageView::updateNavigationButtons()
 {
     if (!previousButton_ || !nextButton_) {
         return;
+    }
+    if (channelChip_) {
+        const bool bShowChip = !bMinimalMode_ && !channelChip_->text().isEmpty();
+        channelChip_->setVisible(bShowChip);
+        if (bShowChip) {
+            channelChip_->move(12, 8);
+            channelChip_->raise();
+        }
     }
     if (toolbarButton_) {
         toolbarButton_->setVisible(!bMinimalMode_ && !toolbarButton_->defaultAction()->isChecked());

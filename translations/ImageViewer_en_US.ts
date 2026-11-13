@@ -129,6 +129,22 @@
         <translation>Simplified Chinese</translation>
     </message>
     <message>
+        <source>%1 · 返回原图</source>
+        <translation>%1 · Back to original</translation>
+    </message>
+    <message>
+        <source>点击在主图查看 %1；再次点击返回原图</source>
+        <translation>Click to view %1 in the main view; click again to return to the original</translation>
+    </message>
+    <message>
+        <source>无效的通道编号</source>
+        <translation>Invalid channel index</translation>
+    </message>
+    <message>
+        <source>%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8%9</source>
+        <translation>%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8%9</translation>
+    </message>
+    <message>
         <source>最近打开</source>
         <translation>Recent files</translation>
     </message>
@@ -370,7 +386,7 @@ Supports cursor-anchored zoom, pixel grid, folder thumbnails, custom title bar, 
     </message>
     <message>
         <source>%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8</source>
-        <translation>%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8</translation>
+        <translation type="vanished">%1  |  %2/%3  |  %4  |  %5×%6  |  %7  |  %8</translation>
     </message>
     <message>
         <source>通道视图</source>
