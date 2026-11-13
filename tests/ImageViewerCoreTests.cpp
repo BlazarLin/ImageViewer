@@ -1685,6 +1685,105 @@ void testChannelMainImage(const QString& outputRoot)
     window.close();
 }
 
+void testMenuLayout(const QString& outputRoot)
+{
+    MainWindow window;
+    window.show();
+    window.showNormal();
+    window.resize(1280, 860);
+    QCoreApplication::processEvents();
+    QTemporaryDir menuDirectory(QDir(outputRoot).filePath(QString("menu-XXXXXX")));
+    QImage menuImage(32, 24, QImage::Format_RGB32);
+    menuImage.fill(QColor(40, 80, 120));
+    const QString menuPath = menuDirectory.filePath(QString("菜单.png"));
+    menuImage.save(menuPath);
+    window.openFile(menuPath);
+    waitUntil([&]() {
+        return window.findChild<ui::ImageView*>()->image().size() == menuImage.size();
+    });
+    QCoreApplication::processEvents();
+
+    const auto maxGap = [](QMenu* menu, const QImage& shot, QAction* action) {
+        const QRect rect = menu->actionGeometry(action);
+        if (rect.isEmpty() || rect.center().y() < 0 || rect.center().y() >= shot.height()) { return -1; }
+        int nGap = 0;
+        int nLastInk = -1;
+        for (int nX = rect.left(); nX <= rect.right(); ++nX) {
+            bool bInk = false;
+            for (int nY = rect.center().y() - 6; nY <= rect.center().y() + 6; ++nY) {
+                if (nY >= 0 && nY < shot.height() && qGray(shot.pixelColor(nX, nY).rgb()) > 90) {
+                    bInk = true;
+                    break;
+                }
+            }
+            if (bInk) {
+                if (nLastInk >= 0) { nGap = std::max(nGap, nX - nLastInk - 1); }
+                nLastInk = nX;
+            }
+        }
+        return nGap;
+    };
+
+    bool bOk = true;
+    QString details;
+    // 实际文件菜单：报告的刷新/另存两项必须与快捷键保留空白。
+    QMenu* fileMenu = window.findChild<QMenu*>(QString("FileMenu"));
+    if (fileMenu) {
+        fileMenu->popup(QPoint(40, 40));
+        QCoreApplication::processEvents();
+        if (auto* saveAction = window.findChild<QAction*>(QString("SaveResult"))) {
+            fileMenu->setActiveAction(saveAction);
+        }
+        QCoreApplication::processEvents();
+        const QImage shot = fileMenu->grab().toImage();
+        shot.save(QDir(outputRoot).filePath(QString("菜单布局复核.png")));
+        for (const QString& name : { QString("Refresh"), QString("SaveResult") }) {
+            auto* action = window.findChild<QAction*>(name);
+            const int nGap = action ? maxGap(fileMenu, shot, action) : -1;
+            details += QString("file/%1 gap=%2; ").arg(name).arg(nGap);
+            bOk = bOk && nGap >= 8;
+        }
+        fileMenu->hide();
+    } else {
+        bOk = false;
+    }
+
+    // 单独构造最长文案菜单，避免受屏幕高度滚动影响，直接回归样式叠加后的布局。
+    QMenu probe(&window);
+    auto* longAction = probe.addAction(QString::fromUtf8("刷新图像和目录"));
+    longAction->setShortcut(QKeySequence(Qt::Key_F5));
+    auto* longerAction = probe.addAction(QString::fromUtf8("另存当前结果…"));
+    longerAction->setShortcut(QKeySequence(QString("Ctrl+Shift+S")));
+    probe.popup(QPoint(60, 60));
+    QCoreApplication::processEvents();
+    const QImage probeShot = probe.grab().toImage();
+    probeShot.save(QDir(outputRoot).filePath(QString("菜单长项复核.png")));
+    for (QAction* action : { longAction, longerAction }) {
+        const int nGap = maxGap(&probe, probeShot, action);
+        details += QString("probe/%1 gap=%2; ").arg(action->text()).arg(nGap);
+        bOk = bOk && nGap >= 8;
+    }
+    probe.hide();
+
+    // 缩放子菜单（快捷键较短）保持同样约束。
+    if (QMenu* zoomMenu = window.findChild<QMenu*>(QString("ZoomMenu"))) {
+        zoomMenu->popup(QPoint(80, 80));
+        QCoreApplication::processEvents();
+        const QImage shot = zoomMenu->grab().toImage();
+        for (QAction* action : zoomMenu->actions()) {
+            if (action->shortcut().isEmpty()) { continue; }
+            const int nGap = maxGap(zoomMenu, shot, action);
+            details += QString("zoom/%1 gap=%2; ").arg(action->text()).arg(nGap);
+            bOk = bOk && nGap >= 8;
+        }
+        zoomMenu->hide();
+    }
+    if (!bOk) { qInfo().noquote() << "menu diag" << details; }
+    verify(bOk, QString("TEST-78"),
+        QString("菜单快捷键右对齐，长动作名与快捷键之间保留空白，不发生文字重叠"));
+    window.close();
+}
+
 void runPerformanceBenchmark(const QString& outputRoot)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("benchmark-XXXXXX")));
@@ -1824,6 +1923,7 @@ int main(int argc, char* argv[])
     testRecentFiles(outputRoot);
     testZoomNavigationAndChrome(outputRoot);
     testChannelMainImage(outputRoot);
+    testMenuLayout(outputRoot);
 
     util::waitForBackgroundWork();
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);

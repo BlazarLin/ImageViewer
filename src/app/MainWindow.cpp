@@ -363,7 +363,6 @@ void MainWindow::setupUi()
         "QWidget#CustomTitleBar QToolButton#MenuButton:checked { background:#176b98; color:white; }"
         "QWidget#CustomTitleBar QToolButton::menu-indicator { image:none; width:0; }"
         "QMenu { background:#282b30; color:#e4e8ed; border:1px solid #454a52; padding:5px; }"
-        "QMenu::item { padding:5px 24px 5px 10px; border-radius:4px; }"
         "QMenu::item:selected { background:#176b98; color:white; }"
         "QMenu::item:disabled { color:#747a83; }"
         "QMenu::separator { height:1px; background:#41464d; margin:5px 8px; }"
@@ -595,10 +594,12 @@ void MainWindow::setupActions()
     });
 
     actRefresh_ = new QAction(tr("刷新图像和目录"), this);
+    actRefresh_->setObjectName(QString("Refresh"));
     actRefresh_->setShortcut(QKeySequence(Qt::Key_F5));
     connect(actRefresh_, &QAction::triggered, this, &MainWindow::onRefresh);
 
     actSaveResult_ = new QAction(tr("另存当前结果…"), this);
+    actSaveResult_->setObjectName(QString("SaveResult"));
     actSaveResult_->setShortcut(QKeySequence(QString("Ctrl+Shift+S")));
     actSaveResult_->setEnabled(false);
     connect(actSaveResult_, &QAction::triggered, this, &MainWindow::onSaveResult);
@@ -743,6 +744,7 @@ void MainWindow::setupMenusAndToolbar()
 {
     // 菜单挂在标题栏的按钮上，按钮由 setupUi 创建。
     auto* fileMenu = new QMenu(this);
+    fileMenu->setObjectName(QString("FileMenu"));
     fileMenu->addAction(actNewWindow_);
     fileMenu->addAction(actOpen_);
     recentMenu_ = fileMenu->addMenu(tr("最近打开"));
@@ -756,6 +758,7 @@ void MainWindow::setupMenusAndToolbar()
     fileMenu->addAction(actExit_);
     if (auto* button = titleBar_->menuButton(0)) { button->setMenu(fileMenu); }
     auto* viewMenu = new QMenu(this);
+    viewMenu->setObjectName(QString("ViewMenu"));
     viewMenu->addAction(actFit_);
     viewMenu->addAction(actFitWidth_);
     viewMenu->addAction(actFitHeight_);
