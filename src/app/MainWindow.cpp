@@ -184,6 +184,8 @@ MainWindow::MainWindow(QWidget* parent)
     setupActions();
     setupMenusAndToolbar();
     setupStatusBar();
+    recentFiles_ = QSettings().value(QString("files/recent")).toStringList();
+    updateRecentMenu();
     connect(view_, &ui::ImageView::firstFramePainted, this, [this]() {
         if (bPerformanceTrace_ && requestTimer_.isValid() && !bLoading_) {
             qInfo() << "PERF first_frame_ms" << requestTimer_.elapsed()
@@ -217,8 +219,7 @@ MainWindow::MainWindow(QWidget* parent)
     updateChannelPanels();
     // 旧版 saveState 中工具栏默认可见，不覆盖本版独立的显隐设置。
     mainToolbar_->setVisible(actToggleToolbar_->isChecked());
-    thumbnailContainer_->show();
-    thumbnailBar_->setVisible(actToggleThumbnails_->isChecked());
+    updateThumbnailVisibility();
     updateFullScreenLayout();
     view_->setSelectionEnabled(false);
     updateNavigationActions();
@@ -452,6 +453,10 @@ void MainWindow::setupUi()
     connect(analysisPanel_, &ui::AnalysisPanel::analysisSourceChanged, this, &MainWindow::clearAnalysis);
     connect(view_, &ui::ImageView::fileDropped, this, [this](const QString& path) { openFiles({ path }); });
     connect(thumbnailBar_, &ui::ThumbnailBar::fileActivated, this, &MainWindow::openFile);
+    connect(view_, &ui::ImageView::openRequested, this, &MainWindow::onOpen);
+    thumbnailBar_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(thumbnailBar_, &QWidget::customContextMenuRequested,
+        this, &MainWindow::showThumbnailContextMenu);
     connect(preprocessPanel_, &ui::PreprocessPanel::parametersChanged,
         this, &MainWindow::onPreprocessParametersChanged);
     connect(preprocessPanel_, &ui::PreprocessPanel::resetRequested,
@@ -564,6 +569,16 @@ void MainWindow::setupActions()
         menu.addAction(actMirrorVertical_);
         menu.addAction(actSplitChannels_);
         menu.addSeparator();
+        auto* zoomMenu = menu.addMenu(tr("缩放"));
+        zoomMenu->addAction(actZoomIn_);
+        zoomMenu->addAction(actZoomOut_);
+        zoomMenu->addSeparator();
+        zoomMenu->addAction(actZoom25_);
+        zoomMenu->addAction(actZoom50_);
+        zoomMenu->addAction(actZoom100_);
+        zoomMenu->addAction(actZoom200_);
+        zoomMenu->addAction(actZoom400_);
+        menu.addSeparator();
         menu.addAction(actFullScreen_);
         menu.addSeparator();
         menu.addAction(actDeleteFile_);
@@ -584,19 +599,34 @@ void MainWindow::setupActions()
     connect(actLoadPreset_, &QAction::triggered, this, &MainWindow::onLoadPreset);
 
     actPrevious_ = new QAction(style()->standardIcon(QStyle::SP_ArrowBack), tr("上一张"), this);
-    actPrevious_->setShortcut(QKeySequence(Qt::Key_Left));
+    actPrevious_->setShortcuts({ QKeySequence(Qt::Key_Left), QKeySequence(Qt::Key_PageUp) });
     connect(actPrevious_, &QAction::triggered, this, &MainWindow::onPrevious);
     actPrevious_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     view_->addAction(actPrevious_);
     thumbnailBar_->addAction(actPrevious_);
 
     actNext_ = new QAction(style()->standardIcon(QStyle::SP_ArrowForward), tr("下一张"), this);
-    actNext_->setShortcut(QKeySequence(Qt::Key_Right));
+    actNext_->setShortcuts({ QKeySequence(Qt::Key_Right), QKeySequence(Qt::Key_PageDown) });
     connect(actNext_, &QAction::triggered, this, &MainWindow::onNext);
     actNext_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     view_->addAction(actNext_);
     thumbnailBar_->addAction(actNext_);
     view_->setNavigationActions(actPrevious_, actNext_);
+
+    actFirst_ = new QAction(tr("第一张"), this);
+    actFirst_->setObjectName(QString("FirstImage"));
+    actFirst_->setShortcut(QKeySequence(Qt::Key_Home));
+    actFirst_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(actFirst_, &QAction::triggered, this, &MainWindow::onFirst);
+    actLast_ = new QAction(tr("最后一张"), this);
+    actLast_->setObjectName(QString("LastImage"));
+    actLast_->setShortcut(QKeySequence(Qt::Key_End));
+    actLast_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(actLast_, &QAction::triggered, this, &MainWindow::onLast);
+    view_->addAction(actFirst_);
+    view_->addAction(actLast_);
+    thumbnailBar_->addAction(actFirst_);
+    thumbnailBar_->addAction(actLast_);
 
     actFit_ = new QAction(tr("适应窗口"), this);
     actFit_->setShortcut(QKeySequence(QString("Ctrl+0")));
@@ -608,6 +638,32 @@ void MainWindow::setupActions()
     actActualSize_ = new QAction(tr("实际大小"), this);
     actActualSize_->setShortcut(QKeySequence(QString("Ctrl+1")));
     connect(actActualSize_, &QAction::triggered, view_, &ui::ImageView::actualSize);
+
+    actZoomIn_ = new QAction(tr("放大"), this);
+    actZoomIn_->setObjectName(QString("ZoomIn"));
+    actZoomIn_->setShortcuts({ QKeySequence(QKeySequence::ZoomIn), QKeySequence(QString("Ctrl+=")) });
+    actZoomIn_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(actZoomIn_, &QAction::triggered, view_, &ui::ImageView::zoomIn);
+    view_->addAction(actZoomIn_);
+    actZoomOut_ = new QAction(tr("缩小"), this);
+    actZoomOut_->setObjectName(QString("ZoomOut"));
+    actZoomOut_->setShortcuts({ QKeySequence(QKeySequence::ZoomOut), QKeySequence(QString("Ctrl+-")) });
+    actZoomOut_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(actZoomOut_, &QAction::triggered, view_, &ui::ImageView::zoomOut);
+    view_->addAction(actZoomOut_);
+    const struct { QAction** action; int nPercent; const char* name; } zoomPresets[] = {
+        { &actZoom25_, 25, "Zoom25" }, { &actZoom50_, 50, "Zoom50" },
+        { &actZoom100_, 100, "Zoom100" }, { &actZoom200_, 200, "Zoom200" },
+        { &actZoom400_, 400, "Zoom400" }
+    };
+    for (const auto& preset : zoomPresets) {
+        auto* action = new QAction(QString("%1%").arg(preset.nPercent), this);
+        action->setObjectName(QString::fromLatin1(preset.name));
+        connect(action, &QAction::triggered, this, [this, percent = preset.nPercent]() {
+            view_->setZoomPercent(percent);
+        });
+        *preset.action = action;
+    }
 
     actTogglePreprocess_ = preprocessDock_->toggleViewAction();
     actTogglePreprocess_->setText(tr("图像预处理"));
@@ -621,8 +677,7 @@ void MainWindow::setupActions()
     actToggleThumbnails_->setShortcut(QKeySequence(QString("Ctrl+T")));
     connect(actToggleThumbnails_, &QAction::toggled, this, [this](bool bVisible) {
         // 标题栏常驻，只收起缩略图列表，保证折叠后仍有固定入口。
-        if (thumbnailContainer_) { thumbnailContainer_->setVisible(!isFullScreen()); }
-        if (thumbnailBar_) { thumbnailBar_->setVisible(bVisible && !isFullScreen()); }
+        updateThumbnailVisibility();
         if (thumbnailCollapseButton_) {
             thumbnailCollapseButton_->setArrowType(bVisible ? Qt::DownArrow : Qt::RightArrow);
         }
@@ -631,7 +686,7 @@ void MainWindow::setupActions()
     });
     const bool bThumbnails = QSettings().value(QString("ui/thumbnailsVisible"), true).toBool();
     actToggleThumbnails_->setChecked(bThumbnails);
-    thumbnailBar_->setVisible(bThumbnails);
+    updateThumbnailVisibility();
     thumbnailCollapseButton_->setArrowType(bThumbnails ? Qt::DownArrow : Qt::RightArrow);
     thumbnailCollapseButton_->setDefaultAction(actToggleThumbnails_);
     thumbnailCollapseButton_->setToolTip(tr("折叠缩略图（Ctrl+T）"));
@@ -658,6 +713,13 @@ void MainWindow::setupActions()
     actShowConsole_->setCheckable(true);
     actShowConsole_->setChecked(QSettings().value(QString("ui/showDebugConsole"), false).toBool());
     connect(actShowConsole_, &QAction::toggled, this, &MainWindow::setDebugConsoleVisible);
+    actClearRecent_ = new QAction(tr("清除最近记录"), this);
+    actClearRecent_->setObjectName(QString("ClearRecent"));
+    connect(actClearRecent_, &QAction::triggered, this, [this]() {
+        recentFiles_.clear();
+        QSettings().remove(QString("files/recent"));
+        updateRecentMenu();
+    });
     actOperationTips_ = new QAction(tr("操作提示…"), this);
     actOperationTips_->setObjectName(QString("OperationTips"));
     connect(actOperationTips_, &QAction::triggered, this, &MainWindow::onOperationTips);
@@ -674,6 +736,8 @@ void MainWindow::setupMenusAndToolbar()
     auto* fileMenu = new QMenu(this);
     fileMenu->addAction(actNewWindow_);
     fileMenu->addAction(actOpen_);
+    recentMenu_ = fileMenu->addMenu(tr("最近打开"));
+    recentMenu_->setObjectName(QString("RecentMenu"));
     fileMenu->addAction(actRefresh_);
     fileMenu->addAction(actSaveResult_);
     fileMenu->addSeparator();
@@ -687,6 +751,19 @@ void MainWindow::setupMenusAndToolbar()
     viewMenu->addAction(actFitWidth_);
     viewMenu->addAction(actFitHeight_);
     viewMenu->addAction(actActualSize_);
+    auto* zoomMenu = viewMenu->addMenu(tr("缩放"));
+    zoomMenu->setObjectName(QString("ZoomMenu"));
+    zoomMenu->addAction(actZoomIn_);
+    zoomMenu->addAction(actZoomOut_);
+    zoomMenu->addSeparator();
+    zoomMenu->addAction(actZoom25_);
+    zoomMenu->addAction(actZoom50_);
+    zoomMenu->addAction(actZoom100_);
+    zoomMenu->addAction(actZoom200_);
+    zoomMenu->addAction(actZoom400_);
+    viewMenu->addSeparator();
+    viewMenu->addAction(actFirst_);
+    viewMenu->addAction(actLast_);
     viewMenu->addSeparator();
     viewMenu->addAction(actRotateLeft_);
     viewMenu->addAction(actRotateRight_);
@@ -780,8 +857,7 @@ void MainWindow::updateFullScreenLayout()
         analysisDock_->hide();
     } else {
         mainToolbar_->setVisible(actToggleToolbar_->isChecked());
-        thumbnailContainer_->show();
-        thumbnailBar_->setVisible(actToggleThumbnails_->isChecked());
+        updateThumbnailVisibility();
         preprocessDock_->setVisible(bRestorePreprocess_);
         analysisDock_->setVisible(bRestoreAnalysis_);
     }
@@ -845,10 +921,15 @@ void MainWindow::updatePixelStatus(const QPoint& position, const QColor& color, 
 
 void MainWindow::onOpenContainingFolder()
 {
-    if (currentPath_.isEmpty()) {
+    openContainingFolderFor(currentPath_);
+}
+
+void MainWindow::openContainingFolderFor(const QString& path)
+{
+    if (path.isEmpty()) {
         return;
     }
-    const QString directory = QFileInfo(currentPath_).absolutePath();
+    const QString directory = QFileInfo(path).absolutePath();
     if (!QDir(directory).exists()
         || !QDesktopServices::openUrl(QUrl::fromLocalFile(directory))) {
         statusBar()->showMessage(tr("无法打开图像所在文件夹：%1").arg(directory), 6000);
@@ -866,14 +947,97 @@ void MainWindow::onNewWindow()
 
 void MainWindow::onCopyImageFile()
 {
-    if (currentPath_.isEmpty()) {
+    copyImageFileFor(currentPath_);
+}
+
+void MainWindow::copyImageFileFor(const QString& path)
+{
+    if (path.isEmpty()) {
         return;
     }
     // 以文件 URL 写入剪贴板，资源管理器中可直接粘贴复制该文件。
     auto* mimeData = new QMimeData();
-    mimeData->setUrls({ QUrl::fromLocalFile(currentPath_) });
+    mimeData->setUrls({ QUrl::fromLocalFile(path) });
     QApplication::clipboard()->setMimeData(mimeData);
-    statusBar()->showMessage(tr("已复制图像文件：%1").arg(QFileInfo(currentPath_).fileName()), 4000);
+    statusBar()->showMessage(tr("已复制图像文件：%1").arg(QFileInfo(path).fileName()), 4000);
+}
+
+void MainWindow::showThumbnailContextMenu(const QPoint& position)
+{
+    const QModelIndex index = thumbnailBar_->indexAt(position);
+    if (!index.isValid()) { return; }
+    const QString path = index.data(Qt::ToolTipRole).toString();
+    if (path.isEmpty()) { return; }
+    QMenu menu(this);
+    QAction* open = menu.addAction(tr("打开"));
+    menu.addSeparator();
+    QAction* folder = menu.addAction(tr("打开所在文件夹"));
+    QAction* copy = menu.addAction(tr("复制图像文件"));
+    QAction* chosen = menu.exec(thumbnailBar_->viewport()->mapToGlobal(position));
+    if (chosen == open) { openFile(path); }
+    else if (chosen == folder) { openContainingFolderFor(path); }
+    else if (chosen == copy) { copyImageFileFor(path); }
+}
+
+void MainWindow::addRecentFile(const QString& path)
+{
+    if (path.isEmpty()) { return; }
+    const QString absolute = QFileInfo(path).absoluteFilePath();
+    for (int nIndex = recentFiles_.size() - 1; nIndex >= 0; --nIndex) {
+        if (recentFiles_.at(nIndex).compare(absolute, Qt::CaseInsensitive) == 0) {
+            recentFiles_.removeAt(nIndex);
+        }
+    }
+    recentFiles_.prepend(absolute);
+    while (recentFiles_.size() > 10) { recentFiles_.removeLast(); }
+    QSettings().setValue(QString("files/recent"), recentFiles_);
+    updateRecentMenu();
+}
+
+void MainWindow::updateRecentMenu()
+{
+    if (!recentMenu_ || !actClearRecent_) { return; }
+    recentMenu_->clear();
+    for (const QString& path : recentFiles_) {
+        const QFileInfo info(path);
+        auto* action = recentMenu_->addAction(info.fileName());
+        action->setToolTip(path);
+        action->setData(path);
+        connect(action, &QAction::triggered, this, [this, path]() { openRecentFile(path); });
+    }
+    if (recentFiles_.isEmpty()) {
+        auto* emptyAction = recentMenu_->addAction(tr("（无最近记录）"));
+        emptyAction->setEnabled(false);
+    }
+    recentMenu_->addSeparator();
+    actClearRecent_->setEnabled(!recentFiles_.isEmpty());
+    recentMenu_->addAction(actClearRecent_);
+}
+
+void MainWindow::openRecentFile(const QString& path)
+{
+    if (!QFileInfo::exists(path)) {
+        recentFiles_.removeAll(path);
+        QSettings().setValue(QString("files/recent"), recentFiles_);
+        updateRecentMenu();
+        statusBar()->showMessage(tr("文件已不存在：%1").arg(path), 6000);
+        return;
+    }
+    openFile(path);
+}
+
+void MainWindow::onFirst()
+{
+    if (directoryModel_->count() > 0) {
+        openFile(directoryModel_->files().first());
+    }
+}
+
+void MainWindow::onLast()
+{
+    if (directoryModel_->count() > 0) {
+        openFile(directoryModel_->files().last());
+    }
 }
 
 void MainWindow::onDeleteImageFile()
@@ -941,6 +1105,7 @@ void MainWindow::onDeleteImageFile()
         util::cancel(directoryCanceled_);
         ++nDirectoryGeneration_;
         thumbnailBar_->setFiles(QStringList(), -1);
+        updateThumbnailVisibility();
         statusProcessing_->clear();
         updateNavigationActions();
         updateImageInformation();
@@ -1120,8 +1285,10 @@ void MainWindow::applyLoadedImage(const QString& path, const QImage& image)
     view_->setFocus();
     statusProcessing_->clear();
     QSettings().setValue(QString("files/lastDirectory"), QFileInfo(path).absolutePath());
+    addRecentFile(currentPath_);
 
     thumbnailBar_->setCurrentFileIndex(directoryModel_->currentIndex());
+    updateThumbnailVisibility();
     if (processingParameters_.bEnabled) {
         bProcessingPending_ = true;
         statusProcessing_->setText(tr("等待预处理…"));
@@ -1173,6 +1340,7 @@ void MainWindow::onDirectoryScanFinished()
         *directoryModel_ = result;
         if (bChanged) { thumbnailBar_->setFiles(result.files(), result.currentIndex()); }
         else { thumbnailBar_->setCurrentFileIndex(result.currentIndex()); }
+        updateThumbnailVisibility();
         updateNavigationActions();
         updateImageInformation();
         if (bReloadAfterDirectory_) {
@@ -1337,7 +1505,7 @@ void MainWindow::onRefresh()
 void MainWindow::onOperationTips()
 {
     QMessageBox::information(this, tr("操作提示"),
-        tr("滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单"));
+        tr("滚轮或 Ctrl+= / Ctrl+- 缩放；双击切换适配 / 100%；Home/End 首尾；PgUp/PgDn 翻图；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单"));
 }
 
 void MainWindow::onAbout()
@@ -1600,6 +1768,16 @@ QWidget* MainWindow::buildChannelPanel(QWidget* parent, bool bHsv)
     return panel;
 }
 
+void MainWindow::updateThumbnailVisibility()
+{
+    if (!thumbnailContainer_ || !thumbnailBar_ || !actToggleThumbnails_) { return; }
+    // 没有图片时不占用底部空间；有图时按用户折叠状态显示列表。
+    const bool bHasItems = thumbnailBar_->count() > 0 && !displayedImage_.isNull();
+    const bool bShowContainer = bHasItems && !isFullScreen();
+    thumbnailContainer_->setVisible(bShowContainer);
+    thumbnailBar_->setVisible(bShowContainer && actToggleThumbnails_->isChecked());
+}
+
 void MainWindow::updateChannelPanels()
 {
     const bool bVisible = bChannelSplitEnabled_ && !displayedImage_.isNull() && !isFullScreen();
@@ -1823,8 +2001,9 @@ void MainWindow::updateResultActions()
     }
     // 通道计算期间仍允许关闭通道视图，否则用户无法退出等待状态。
     actSplitChannels_->setEnabled(!displayedImage_.isNull() && !bLoading_ && !bOrienting_);
-    for (QAction* action : { actFit_, actFitWidth_, actFitHeight_, actActualSize_ }) {
-        action->setEnabled(!displayedImage_.isNull() && !bOrienting_);
+    for (QAction* action : { actFit_, actFitWidth_, actFitHeight_, actActualSize_,
+             actZoomIn_, actZoomOut_, actZoom25_, actZoom50_, actZoom100_, actZoom200_, actZoom400_ }) {
+        if (action) { action->setEnabled(!displayedImage_.isNull() && !bOrienting_); }
     }
 }
 
@@ -1855,6 +2034,8 @@ void MainWindow::updateNavigationActions()
     const int nIndex = nRequested >= 0 ? nRequested : directoryModel_->currentIndex();
     actPrevious_->setEnabled(nIndex > 0);
     actNext_->setEnabled(nIndex >= 0 && nIndex + 1 < directoryModel_->count());
+    actFirst_->setEnabled(directoryModel_->count() > 0 && nIndex != 0);
+    actLast_->setEnabled(directoryModel_->count() > 0 && nIndex != directoryModel_->count() - 1);
 }
 
 void MainWindow::updateImageInformation()

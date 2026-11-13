@@ -25,6 +25,7 @@ class QDialog;
 class QShowEvent;
 class QDockWidget;
 class QLabel;
+class QMenu;
 class QTimer;
 class QToolBar;
 class QToolButton;
@@ -67,6 +68,9 @@ protected:
 private slots:
     void onOpen();
     void onOpenContainingFolder();
+    void onFirst();
+    void onLast();
+    void openRecentFile(const QString& path);
     void onNewWindow();
     void onCopyImageFile();
     void onDeleteImageFile();
@@ -115,10 +119,16 @@ private:
     void updateWindowShape();
     QWidget* buildChannelPanel(QWidget* parent, bool bHsv);
     void updateChannelPanels();
+    void updateThumbnailVisibility();
     void updateChannelSource();
     void updatePixelStatus(const QPoint& position, const QColor& color, bool bValid);
     void updateImageInformation();
     void updateNavigationActions();
+    void addRecentFile(const QString& path);
+    void updateRecentMenu();
+    void openContainingFolderFor(const QString& path);
+    void copyImageFileFor(const QString& path);
+    void showThumbnailContextMenu(const QPoint& position);
     void showOriginalImage();
     QString formatTitleText() const;
     QString pixelFormatText(const QImage& image) const;
@@ -217,6 +227,7 @@ private:
     QAction* actOpen_ = nullptr;
     QAction* actOpenFolder_ = nullptr;
     QAction* actRefresh_ = nullptr;
+    QAction* actClearRecent_ = nullptr;
     QAction* actSaveResult_ = nullptr;
     QAction* actSavePreset_ = nullptr;
     QAction* actLoadPreset_ = nullptr;
@@ -226,6 +237,15 @@ private:
     QAction* actFitWidth_ = nullptr;
     QAction* actFitHeight_ = nullptr;
     QAction* actActualSize_ = nullptr;
+    QAction* actZoomIn_ = nullptr;
+    QAction* actZoomOut_ = nullptr;
+    QAction* actZoom25_ = nullptr;
+    QAction* actZoom50_ = nullptr;
+    QAction* actZoom100_ = nullptr;
+    QAction* actZoom200_ = nullptr;
+    QAction* actZoom400_ = nullptr;
+    QAction* actFirst_ = nullptr;
+    QAction* actLast_ = nullptr;
     QAction* actRotateLeft_ = nullptr;
     QAction* actRotateRight_ = nullptr;
     QAction* actMirrorHorizontal_ = nullptr;
@@ -250,6 +270,8 @@ private:
     QLabel* statusSize_ = nullptr;
     QLabel* statusZoom_ = nullptr;
     QLabel* statusProcessing_ = nullptr;
+    QMenu* recentMenu_ = nullptr;
+    QStringList recentFiles_;
 
     QString currentPath_;
 };

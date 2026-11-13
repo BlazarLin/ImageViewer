@@ -32,10 +32,15 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
+    void updateElidedText();
+
     QLabel* iconLabel_ = nullptr;
     QLabel* infoLabel_ = nullptr;
+    QString fullInfoText_;
+    QString fullInfoPath_;
     QVector<QToolButton*> menuButtons_;
     QToolButton* minimizeButton_ = nullptr;
     QToolButton* maximizeButton_ = nullptr;

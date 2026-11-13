@@ -5,8 +5,11 @@
 #include "AppIcon.h"
 
 #include <QApplication>
+#include <algorithm>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QResizeEvent>
 #include <QMouseEvent>
 #include <QStyle>
 #include <QToolButton>
@@ -90,8 +93,24 @@ QToolButton* TitleBar::menuButton(int nIndex) const
 
 void TitleBar::setInfoText(const QString& text, const QString& fullPath)
 {
-    infoLabel_->setText(text);
-    infoLabel_->setToolTip(fullPath);
+    fullInfoText_ = text;
+    fullInfoPath_ = fullPath;
+    infoLabel_->setToolTip(fullPath.isEmpty() ? text : fullPath + QString("\n") + text);
+    updateElidedText();
+}
+
+void TitleBar::updateElidedText()
+{
+    if (!infoLabel_) { return; }
+    const int nWidth = std::max(0, infoLabel_->width());
+    infoLabel_->setText(QFontMetrics(infoLabel_->font()).elidedText(
+        fullInfoText_, Qt::ElideRight, nWidth));
+}
+
+void TitleBar::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    updateElidedText();
 }
 
 void TitleBar::setMaximized(bool bMaximized)

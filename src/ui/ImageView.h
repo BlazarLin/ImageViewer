@@ -10,6 +10,7 @@ class QAction;
 class QLabel;
 class QToolButton;
 class QPainter;
+class QPushButton;
 class QGraphicsPixmapItem;
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -59,9 +60,13 @@ public slots:
     void fitToHeight();
     void actualSize();
     void clearSelection();
+    void zoomIn();
+    void zoomOut();
+    void setZoomPercent(int nPercent);
 
 signals:
     void zoomChanged(double factor);
+    void openRequested();
     void firstFramePainted();
     void pixelHovered(const QPoint& position, const QColor& color, bool bValid);
     void roiSelected(const QRect& region);
@@ -106,6 +111,7 @@ private:
     void onPyramidFinished();
     void applyPyramidLevel();
     void drawLoupe(QPainter& painter);
+    void updateOpenButton();
     void refreshLoupe();
     QRect navigationOverviewRect() const;
     void drawNavigationOverview(QPainter& painter);
@@ -115,6 +121,7 @@ private:
     QToolButton* nextButton_ = nullptr;
     QToolButton* toolbarButton_ = nullptr;
     QLabel* pixelHint_ = nullptr;
+    QPushButton* openButton_ = nullptr;
     bool bMinimalMode_ = false;
     bool bAwaitingFirstFrame_ = false;
     QGraphicsScene* scene_ = nullptr;

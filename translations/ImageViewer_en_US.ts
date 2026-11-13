@@ -129,6 +129,62 @@
         <translation>Simplified Chinese</translation>
     </message>
     <message>
+        <source>最近打开</source>
+        <translation>Recent files</translation>
+    </message>
+    <message>
+        <source>清除最近记录</source>
+        <translation>Clear recent files</translation>
+    </message>
+    <message>
+        <source>（无最近记录）</source>
+        <translation>(No recent files)</translation>
+    </message>
+    <message>
+        <source>文件已不存在：%1</source>
+        <translation>File no longer exists: %1</translation>
+    </message>
+    <message>
+        <source>打开所在文件夹</source>
+        <translation>Open containing folder</translation>
+    </message>
+    <message>
+        <source>缩放</source>
+        <translation>Zoom</translation>
+    </message>
+    <message>
+        <source>放大</source>
+        <translation>Zoom in</translation>
+    </message>
+    <message>
+        <source>缩小</source>
+        <translation>Zoom out</translation>
+    </message>
+    <message>
+        <source>第一张</source>
+        <translation>First image</translation>
+    </message>
+    <message>
+        <source>最后一张</source>
+        <translation>Last image</translation>
+    </message>
+    <message>
+        <source>打开图像（Ctrl+O）</source>
+        <translation>Open image (Ctrl+O)</translation>
+    </message>
+    <message>
+        <source>支持 PNG / JPEG / BMP / TIFF / WebP / GIF</source>
+        <translation>Supports PNG / JPEG / BMP / TIFF / WebP / GIF</translation>
+    </message>
+    <message>
+        <source>滚轮或 Ctrl+= / Ctrl+- 缩放；双击切换适配 / 100%；Home/End 首尾；PgUp/PgDn 翻图；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单</source>
+        <translation>Wheel or Ctrl+= / Ctrl+- to zoom; double-click to toggle fit / 100%; Home/End for first/last; PgUp/PgDn to navigate; Shift + drag selects ROI when the analysis panel is visible; Esc clears the selection or exits full screen; right-click opens the action menu</translation>
+    </message>
+    <message>
+        <source>滚轮缩放；双击切换适配 / 100%；显示分析面板后 Shift + 拖动选择 ROI；Esc 清除选区或退出全屏；右键打开操作菜单</source>
+        <translation type="vanished">Wheel to zoom; double-click to toggle fit / 100%; Shift + drag selects ROI when the analysis panel is visible; Esc clears the selection or exits full screen; right-click opens the action menu</translation>
+    </message>
+    <message>
         <source>操作提示…</source>
         <translation>Operation tips…</translation>
     </message>

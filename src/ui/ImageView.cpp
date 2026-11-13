@@ -18,6 +18,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QUrl>
@@ -98,6 +99,17 @@ ImageView::ImageView(QWidget* parent)
     pixelHint_->setAttribute(Qt::WA_TransparentForMouseEvents);
     pixelHint_->setStyleSheet(QString("QLabel { color:#f4f7fa; background:rgba(24,28,34,235); border:1px solid #647586; border-radius:5px; padding:5px 8px; }"));
     pixelHint_->hide();
+    openButton_ = new QPushButton(tr("打开图像（Ctrl+O）"), viewport());
+    openButton_->setObjectName(QString("OpenImageButton"));
+    openButton_->setCursor(Qt::PointingHandCursor);
+    openButton_->setFocusPolicy(Qt::NoFocus);
+    openButton_->setFixedSize(180, 34);
+    openButton_->setStyleSheet(QString(
+        "QPushButton { color:white; background:#176b98; border:1px solid #2d9bd3; border-radius:6px; font-weight:600; }"
+        "QPushButton:hover { background:#268bc0; }"
+        "QPushButton:pressed { background:#125374; }"));
+    connect(openButton_, &QPushButton::clicked, this, &ImageView::openRequested);
+    openButton_->hide();
     setRenderHint(QPainter::Antialiasing, true);
     setRenderHint(QPainter::SmoothPixmapTransform, true);
     setDragMode(QGraphicsView::ScrollHandDrag);
@@ -184,9 +196,25 @@ void ImageView::setChromeActions(QAction* toolbar)
     updateNavigationButtons();
 }
 
+void ImageView::updateOpenButton()
+{
+    if (!openButton_) { return; }
+    if (!current_.isNull() || bMinimalMode_ || viewport()->width() <= 0 || viewport()->height() <= 0) {
+        openButton_->hide();
+        return;
+    }
+    const int nCardWidth = std::min(520, viewport()->width() - 32);
+    const QRect card(QPoint((viewport()->width() - nCardWidth) / 2,
+        (viewport()->height() - 180) / 2), QSize(nCardWidth, 180));
+    openButton_->move(card.center().x() - openButton_->width() / 2, card.top() + 82);
+    openButton_->show();
+    openButton_->raise();
+}
+
 void ImageView::setMinimalMode(bool bMinimal)
 {
     bMinimalMode_ = bMinimal;
+    updateOpenButton();
     setHorizontalScrollBarPolicy(bMinimal ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(bMinimal ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
     updateNavigationButtons();
@@ -251,6 +279,7 @@ void ImageView::setImage(const QImage& img, bool bResetView)
     current_ = img;
     bAwaitingFirstFrame_ = !img.isNull();
     updateNavigationButtons();
+    updateOpenButton();
     original_ = QImage();
     processed_ = QImage();
     bComparisonEnabled_ = false;
@@ -289,6 +318,7 @@ void ImageView::setComparisonImages(const QImage& original, const QImage& proces
     processed_ = processed;
     current_ = processed_.isNull() ? original_ : processed_;
     updateNavigationButtons();
+    updateOpenButton();
     bComparisonEnabled_ = bEnabled && !original_.isNull() && !processed_.isNull()
         && original_.size() == processed_.size();
     requestNavigationOverview();
@@ -378,6 +408,27 @@ void ImageView::fitToHeight()
     applyViewMode();
 }
 
+void ImageView::zoomIn()
+{
+    if (current_.isNull()) { return; }
+    viewMode_ = ViewMode::Manual;
+    setZoomFactor(zoomFactor() * 1.25, viewport()->rect().center());
+}
+
+void ImageView::zoomOut()
+{
+    if (current_.isNull()) { return; }
+    viewMode_ = ViewMode::Manual;
+    setZoomFactor(zoomFactor() / 1.25, viewport()->rect().center());
+}
+
+void ImageView::setZoomPercent(int nPercent)
+{
+    if (current_.isNull()) { return; }
+    viewMode_ = ViewMode::Manual;
+    setZoomFactor(std::clamp(nPercent / 100.0, 0.01, 64.0), viewport()->rect().center());
+}
+
 void ImageView::actualSize()
 {
     if (current_.isNull()) {
@@ -407,6 +458,7 @@ void ImageView::resizeEvent(QResizeEvent* event)
 {
     QGraphicsView::resizeEvent(event);
     updateNavigationButtons();
+    updateOpenButton();
     if (viewMode_ != ViewMode::Manual) {
         applyViewMode();
     }
@@ -617,7 +669,7 @@ void ImageView::paintEvent(QPaintEvent* event)
     titleFont.setWeight(QFont::DemiBold);
     painter.setFont(titleFont);
     painter.setPen(QColor(226, 230, 235));
-    painter.drawText(centeredCard.adjusted(20, 35, -20, -64),
+    painter.drawText(centeredCard.adjusted(20, 26, -20, -104),
         Qt::AlignCenter, tr("打开或拖放图像"));
 
     QFont hintFont = painter.font();
@@ -625,8 +677,8 @@ void ImageView::paintEvent(QPaintEvent* event)
     hintFont.setWeight(QFont::Normal);
     painter.setFont(hintFont);
     painter.setPen(QColor(151, 158, 168));
-    painter.drawText(centeredCard.adjusted(20, 78, -20, -28),
-        Qt::AlignCenter | Qt::TextWordWrap, tr("支持 PNG / JPEG / BMP / TIFF / WebP / GIF  ·  Ctrl+O"));
+    painter.drawText(centeredCard.adjusted(20, 132, -20, -16),
+        Qt::AlignCenter | Qt::TextWordWrap, tr("支持 PNG / JPEG / BMP / TIFF / WebP / GIF"));
 }
 
 void ImageView::refreshLoupe()

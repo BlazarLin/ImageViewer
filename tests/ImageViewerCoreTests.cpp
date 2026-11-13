@@ -18,6 +18,7 @@
 #include <QKeyEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QMenu>
 #include <QMimeData>
 #include <QSettings>
 #include <QStandardPaths>
@@ -49,6 +50,7 @@
 #include "ui/AnalysisPanel.h"
 #include "ui/PreprocessPanel.h"
 #include "ui/ThumbnailBar.h"
+#include "ui/TitleBar.h"
 #include "core/loader/ImageLoader.h"
 #include <QDebug>
 #include <QDir>
@@ -935,6 +937,13 @@ void testViewingPresentation(const QString& outputRoot)
     auto* collapse = window.findChild<QToolButton*>(QString("CollapseToolbarButton"));
     auto* thumbToggle = window.findChild<QToolButton*>(QString("CollapseThumbnailsButton"));
     auto* strip = window.findChild<ui::ThumbnailBar*>();
+    QTemporaryDir presentationDirectory(QDir(outputRoot).filePath(QString("presentation-XXXXXX")));
+    QImage presentationImage(40, 30, QImage::Format_RGB32);
+    presentationImage.fill(QColor(80, 90, 100));
+    const QString presentationPath = presentationDirectory.filePath(QString("导航.png"));
+    presentationImage.save(presentationPath);
+    window.openFile(presentationPath);
+    waitUntil([&]() { return strip->count() == 1 && strip->isVisible(); });
     bool bControls = toolbar->isHidden() && thumbs->isVisible() && expand->isVisible()
         && thumbToggle && strip->isVisible();
     expand->click();
@@ -1458,6 +1467,135 @@ void testWindowChrome(const QString& outputRoot)
     window.close();
 }
 
+void testRecentFiles(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("recent-XXXXXX")));
+    QImage image(16, 16, QImage::Format_RGB32);
+    image.fill(QColor(30, 60, 90));
+    const QString first = directory.filePath(QString("最近 A.png"));
+    const QString second = directory.filePath(QString("最近 B.png"));
+    image.save(first);
+    image.save(second);
+    MainWindow window;
+    window.show();
+    window.openFile(first);
+    const bool bFirst = waitUntil([&]() {
+        return window.findChild<ui::ImageView*>()->image().size() == image.size();
+    });
+    window.openFile(second);
+    const bool bSecond = waitUntil([&]() {
+        return window.findChild<ui::ImageView*>()->image().size() == image.size()
+            && window.findChild<QLabel*>(QString("StatusFile"))->text() == QFileInfo(second).fileName();
+    });
+    auto* menu = window.findChild<QMenu*>(QString("RecentMenu"));
+    bool bOrder = menu != nullptr;
+    QAction* missingAction = nullptr;
+    if (menu) {
+        const auto actions = menu->actions();
+        bOrder = actions.size() >= 2 && actions.at(0)->data().toString() == second
+            && actions.at(1)->data().toString() == first;
+        for (QAction* action : actions) {
+            if (action->data().toString() == first) { missingAction = action; }
+        }
+    }
+    // 新窗口从设置恢复最近列表。
+    if (menu) {
+        menu->popup(QPoint(80, 80));
+        QCoreApplication::processEvents();
+        menu->grab().save(QDir(outputRoot).filePath(QString("成熟度最近菜单.png")));
+        menu->hide();
+    }
+    MainWindow restored;
+    restored.show();
+    auto* restoredMenu = restored.findChild<QMenu*>(QString("RecentMenu"));
+    const bool bPersisted = restoredMenu && !restoredMenu->actions().isEmpty()
+        && restoredMenu->actions().first()->data().toString() == second;
+    // 文件被删除后触发该项会给出提示并从列表移除。
+    QFile::remove(first);
+    QAction* restoredMissing = nullptr;
+    for (QAction* action : restoredMenu->actions()) {
+        if (action->data().toString() == first) { restoredMissing = action; }
+    }
+    if (restoredMissing) { restoredMissing->trigger(); }
+    const bool bMissingRemoved = waitUntil([&]() {
+        bool bFound = false;
+        for (QAction* action : restoredMenu->actions()) {
+            if (action->data().toString() == first) { bFound = true; }
+        }
+        return !bFound;
+    });
+    restored.findChild<QAction*>(QString("ClearRecent"))->trigger();
+    const bool bCleared = QSettings().value(QString("files/recent")).toStringList().isEmpty();
+    (void)missingAction;
+    verify(bFirst && bSecond && bOrder && bPersisted && bMissingRemoved && bCleared,
+        QString("TEST-75"), QString("最近打开按最新排序并持久化，缺失文件自动剔除，可一键清除"));
+    window.close();
+    restored.close();
+}
+
+void testZoomNavigationAndChrome(const QString& outputRoot)
+{
+    QTemporaryDir directory(QDir(outputRoot).filePath(QString("zoom-XXXXXX")));
+    QImage first(400, 300, QImage::Format_RGB32);
+    first.fill(QColor(20, 60, 100));
+    QImage second(first.size(), first.format());
+    second.fill(QColor(100, 60, 20));
+    const QString firstPath = directory.filePath(QString("缩放 1.png"));
+    const QString secondPath = directory.filePath(QString("缩放 2.png"));
+    first.save(firstPath);
+    second.save(secondPath);
+    MainWindow window;
+    window.show();
+    window.showNormal();
+    QCoreApplication::processEvents();
+    auto* view = window.findChild<ui::ImageView*>();
+    auto* openButton = view->findChild<QPushButton*>(QString("OpenImageButton"));
+    const bool bEmptyOpen = openButton && openButton->isVisible();
+    if (bEmptyOpen) {
+        window.grab().save(QDir(outputRoot).filePath(QString("成熟度空状态.png")));
+    }
+    // 超长标题应省略显示，悬浮提示保留完整路径。
+    auto* titleBar = window.findChild<ui::TitleBar*>();
+    titleBar->setInfoText(QString("very-long-file-name-") + QString(120, QChar('x')), QString("C:/full/path/image.png"));
+    auto* info = titleBar->findChild<QLabel*>(QString("TitleInfo"));
+    const bool bElided = info && info->text().endsWith(QChar(0x2026))
+        && info->toolTip().contains(QString("C:/full/path/image.png"));
+    QCoreApplication::processEvents();
+    window.grab().save(QDir(outputRoot).filePath(QString("成熟度长标题.png")));
+    window.openFile(firstPath);
+    waitUntil([&]() { return view->image() == first; });
+    window.findChild<QAction*>(QString("Zoom200"))->trigger();
+    bool bZoom = std::abs(view->zoomFactor() - 2.0) < 0.001;
+    window.findChild<QAction*>(QString("ZoomIn"))->trigger();
+    bZoom = bZoom && std::abs(view->zoomFactor() - 2.5) < 0.001;
+    window.findChild<QAction*>(QString("ZoomOut"))->trigger();
+    bZoom = bZoom && std::abs(view->zoomFactor() - 2.0) < 0.001;
+    window.findChild<QAction*>(QString("Zoom50"))->trigger();
+    bZoom = bZoom && std::abs(view->zoomFactor() - 0.5) < 0.001;
+    // Home/End 跳转首尾（等待目录扫描完成后再触发）。
+    auto* thumbnails = window.findChild<ui::ThumbnailBar*>();
+    window.openFile(secondPath);
+    waitUntil([&]() { return view->image() == second && thumbnails->count() == 2; });
+    window.findChild<QAction*>(QString("FirstImage"))->trigger();
+    const bool bFirst = waitUntil([&]() { return view->image() == first; });
+    window.findChild<QAction*>(QString("LastImage"))->trigger();
+    const bool bLast = waitUntil([&]() { return view->image() == second; });
+    const bool bOpenHidden = openButton && !openButton->isVisible();
+    const bool bThumbMenu = thumbnails
+        && thumbnails->contextMenuPolicy() == Qt::CustomContextMenu;
+    if (auto* zoomMenu = window.findChild<QMenu*>(QString("ZoomMenu"))) {
+        zoomMenu->popup(QPoint(120, 120));
+        QCoreApplication::processEvents();
+        zoomMenu->grab().save(QDir(outputRoot).filePath(QString("成熟度缩放菜单.png")));
+        zoomMenu->hide();
+    }
+    verify(bEmptyOpen && bElided && bZoom && bFirst && bLast && bOpenHidden && bThumbMenu,
+        QString("TEST-76"),
+        QString("空图显示打开按钮，超长标题省略，缩放预设/放大缩小、Home/End 跳转与缩略图右键菜单可用"));
+    window.grab().save(QDir(outputRoot).filePath(QString("成熟度界面复核.png")));
+    window.close();
+}
+
 void runPerformanceBenchmark(const QString& outputRoot)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("benchmark-XXXXXX")));
@@ -1594,6 +1732,8 @@ int main(int argc, char* argv[])
     testOrientationChannelsAndStableView(outputRoot);
     testThumbnailCardLayout(outputRoot);
     testWindowChrome(outputRoot);
+    testRecentFiles(outputRoot);
+    testZoomNavigationAndChrome(outputRoot);
 
     util::waitForBackgroundWork();
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
