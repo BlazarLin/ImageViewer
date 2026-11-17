@@ -3,7 +3,8 @@
 # Linux(Ubuntu) 构建/测试脚本，与 scripts/build.ps1 对应。
 # 依赖（Ubuntu 20.04+，Qt 5.15 可获得完整的边缘缩放/拖动体验）：
 #   sudo apt install build-essential cmake qtbase5-dev libqt5svg5-dev \
-#                    libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev
+#                    libqt5concurrent5 libqt5opengl5-desktop-dev \
+#                    qttools5-dev qttools5-dev-tools libopencv-dev
 # 用法：
 #   ./scripts/build.sh              # Release 构建
 #   ./scripts/build.sh Debug        # Debug 构建

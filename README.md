@@ -84,7 +84,7 @@ VS 工程支持两种 OpenCV 4.5.5 布局：`include/lib/bin` 平铺结构，或
 
 ```bash
 sudo apt install build-essential cmake qtbase5-dev libqt5svg5-dev \
-                 libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev
+                 libqt5concurrent5 libqt5opengl5-desktop-dev \n                 qttools5-dev qttools5-dev-tools libopencv-dev
 ```
 
 OpenCV 使用系统安装（`libopencv-dev`，按 core/imgproc/imgcodecs 组件链接，无需 `opencv_world`）：

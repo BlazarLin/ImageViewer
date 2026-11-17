@@ -22,7 +22,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake qtbase5-dev libqt5svg5-dev \
-            libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev
+            libqt5concurrent5 libqt5opengl5-desktop-dev \
+            qttools5-dev qttools5-dev-tools libopencv-dev
       - name: 配置
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: 构建

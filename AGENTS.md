@@ -25,7 +25,7 @@ Ubuntu（实验性）：
 
 ```bash
 sudo apt install build-essential cmake qtbase5-dev libqt5svg5-dev \
-                 libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev
+                 libqt5concurrent5 libqt5opengl5-desktop-dev \n                 qttools5-dev qttools5-dev-tools libopencv-dev
 ./scripts/build.sh Debug --test
 ./scripts/build.sh Release --test
 ```
