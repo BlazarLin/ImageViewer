@@ -21,6 +21,15 @@ cmake -S . -B build -G "Visual Studio 16 2019" -A x64 -DCMAKE_PREFIX_PATH="$env:
 cmake --build build --config Release
 ```
 
+Ubuntu（实验性）：
+
+```bash
+sudo apt install build-essential cmake qtbase5-dev libqt5svg5-dev \
+                 libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev
+./scripts/build.sh Debug --test
+./scripts/build.sh Release --test
+```
+
 The build script compiles the VS2019 `x64` solution and deploys required Qt/OpenCV DLLs. Run the matching Debug and Release test executables before release. `check-bom.ps1` verifies source encoding. Launch locally with `bin\Debug\ImageViewer.exe [image-path]`.
 
 ## Coding Style & Naming Conventions

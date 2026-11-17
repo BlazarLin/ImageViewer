@@ -47,7 +47,7 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 平台 | Windows 10/11 x64 |
+| 平台 | Windows 10/11 x64；Ubuntu 20.04+ x64（实验性） |
 | 语言 | C++17 |
 | 本地已验证 | VS2019 v142、Qt 5.14.2 MSVC2017 x64、OpenCV 4.5.5 |
 | CI 配置 | Windows 2022 runner、VS2022、Qt 5.15.2 MSVC2019 x64、OpenCV 4.5.5 源码构建 |
@@ -76,6 +76,23 @@ VS 工程支持两种 OpenCV 4.5.5 布局：`include/lib/bin` 平铺结构，或
 .\scripts\build.ps1 -Cfg Release
 .\bin\Tests\Release\ImageViewerCoreTests.exe
 .\scripts\check-bom.ps1
+```
+
+### Ubuntu 构建与测试（实验性）
+
+安装系统依赖（Qt 5.15 可获得完整的边缘缩放/拖动体验）：
+
+```bash
+sudo apt install build-essential cmake qtbase5-dev libqt5svg5-dev \
+                 libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev
+```
+
+OpenCV 使用系统安装（`libopencv-dev`，按 core/imgproc/imgcodecs 组件链接，无需 `opencv_world`）：
+
+```bash
+./scripts/build.sh Debug --test
+./scripts/build.sh Release --test
+./build/linux/ImageViewer [image-path]
 ```
 
 或打开 `ImageViewer.sln`，选择 `Debug | x64`，将 ImageViewer 设为启动项目后按 F5。构建脚本自动发现 VS2019，部署 Qt/OpenCV DLL 和图片插件。

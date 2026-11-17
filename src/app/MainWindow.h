@@ -30,6 +30,7 @@ class QTimer;
 class QToolBar;
 class QToolButton;
 class WindowFrameOverlay;
+class WindowResizeGrip;
 template <typename T>
 class QFutureWatcher;
 
@@ -155,6 +156,7 @@ private:
     QToolBar* mainToolbar_ = nullptr;
     QToolButton* thumbnailCollapseButton_ = nullptr;
     WindowFrameOverlay* frameOverlay_ = nullptr;
+    WindowResizeGrip* resizeGrips_[8] = {};
     QWidget* channelLeftPanel_ = nullptr;
     QWidget* channelRightPanel_ = nullptr;
     QLabel* channelCardImages_[6] = {};

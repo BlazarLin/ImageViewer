@@ -58,12 +58,83 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrentRun>
 
+#ifdef Q_OS_WIN
 #include <Windows.h>
+#endif
+#include <QWindow>
 
 #include <vector>
 #include <QImageReader>
 #include <QSet>
 #include <algorithm>
+
+// 2026-12-11：非 Windows 平台的窗口边缘热区。无边框窗口缺少 WM_NCHITTEST，
+// 用 8 个 6px 边缘条 + startSystemResize 实现拖拽缩放(与 Windows 原生行为对齐)。
+class WindowResizeGrip final : public QWidget {
+public:
+    explicit WindowResizeGrip(Qt::Edges edges, QWidget* parent)
+        : QWidget(parent)
+        , edges_(edges)
+    {
+        // 与 WM_NCHITTEST 相同的光标映射，给用户一致的边缘反馈。
+        const bool bHorizontal = (edges_ & (Qt::LeftEdge | Qt::RightEdge))
+            && !(edges_ & (Qt::TopEdge | Qt::BottomEdge));
+        const bool bVertical = (edges_ & (Qt::TopEdge | Qt::BottomEdge))
+            && !(edges_ & (Qt::LeftEdge | Qt::RightEdge));
+        if (bHorizontal) {
+            setCursor(Qt::SizeHorCursor);
+        } else if (bVertical) {
+            setCursor(Qt::SizeVerCursor);
+        } else if (edges_ == (Qt::TopEdge | Qt::LeftEdge) || edges_ == (Qt::BottomEdge | Qt::RightEdge)) {
+            setCursor(Qt::SizeFDiagCursor);
+        } else {
+            setCursor(Qt::SizeBDiagCursor);
+        }
+    }
+
+    void setGripGeometry(const QRect& windowRect)
+    {
+        constexpr int nBorder = 6;
+        QRect grip;
+        if (edges_ & Qt::LeftEdge) {
+            grip.setLeft(windowRect.left());
+        }
+        if (edges_ & Qt::RightEdge) {
+            grip.setRight(windowRect.right());
+        }
+        if (edges_ & Qt::TopEdge) {
+            grip.setTop(windowRect.top());
+        }
+        if (edges_ & Qt::BottomEdge) {
+            grip.setBottom(windowRect.bottom());
+        }
+        if (!(edges_ & Qt::LeftEdge) && !(edges_ & Qt::RightEdge)) {
+            grip.setLeft(windowRect.left() + nBorder);
+            grip.setRight(windowRect.right() - nBorder);
+        }
+        if (!(edges_ & Qt::TopEdge) && !(edges_ & Qt::BottomEdge)) {
+            grip.setTop(windowRect.top() + nBorder);
+            grip.setBottom(windowRect.bottom() - nBorder);
+        }
+        setGeometry(grip);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+#if !defined(Q_OS_WIN) && QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        if (event->button() == Qt::LeftButton && window()->windowHandle()
+            && window()->windowHandle()->startSystemResize(edges_)) {
+            event->accept();
+            return;
+        }
+#endif
+        QWidget::mousePressEvent(event);
+    }
+
+private:
+    Qt::Edges edges_;
+};
 
 // 2026-10-27：无边框窗口顶层描边层。子控件会覆盖主窗口自身绘制的边框，
 // 因此用透明且不接收鼠标的覆盖层统一绘制外框，保证四边一致可见。
@@ -305,6 +376,22 @@ void MainWindow::setupUi()
     frameOverlay_ = new WindowFrameOverlay(this);
     frameOverlay_->setGeometry(rect());
     frameOverlay_->raise();
+#ifndef Q_OS_WIN
+    // Windows 用 WM_NCHITTEST 原生实现边缘缩放；其余平台用边缘热区。
+    const Qt::Edges gripEdges[] = {
+        Qt::TopEdge | Qt::LeftEdge,
+        Qt::TopEdge,
+        Qt::TopEdge | Qt::RightEdge,
+        Qt::LeftEdge,
+        Qt::RightEdge,
+        Qt::BottomEdge | Qt::LeftEdge,
+        Qt::BottomEdge,
+        Qt::BottomEdge | Qt::RightEdge,
+    };
+    for (int i = 0; i < 8; ++i) {
+        resizeGrips_[i] = new WindowResizeGrip(gripEdges[i], this);
+    }
+#endif
 
     const auto installDockTitleBar = [this](QDockWidget* dock, const QString& title) {
         auto* titleBar = new QWidget(dock);
@@ -1142,6 +1229,16 @@ void MainWindow::updateWindowShape()
         frameOverlay_->setVisible(bFramed);
         if (bFramed) { frameOverlay_->raise(); }
     }
+#ifndef Q_OS_WIN
+    for (auto* grip : resizeGrips_) {
+        if (!grip) { continue; }
+        grip->setVisible(bFramed);
+        if (bFramed) {
+            grip->setGripGeometry(rect());
+            grip->raise();
+        }
+    }
+#endif
     if (!bFramed) {
         clearMask();
         return;
@@ -1164,7 +1261,14 @@ bool MainWindow::event(QEvent* event)
     // 布局变化（工具栏/面板/缩略图显隐）可能把新控件抬到描边层之上。
     if (frameOverlay_ && event->type() == QEvent::LayoutRequest) {
         frameOverlay_->setGeometry(rect());
-        if (!isMaximized() && !isFullScreen()) { frameOverlay_->raise(); }
+        if (!isMaximized() && !isFullScreen()) {
+            frameOverlay_->raise();
+#ifndef Q_OS_WIN
+            for (auto* grip : resizeGrips_) {
+                if (grip) { grip->raise(); }
+            }
+#endif
+        }
     }
     return bHandled;
 }
@@ -2303,6 +2407,7 @@ void MainWindow::changeEvent(QEvent* event)
 
 bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, long* result)
 {
+#ifdef Q_OS_WIN
     Q_UNUSED(eventType)
     MSG* msg = static_cast<MSG*>(message);
     if (msg && msg->message == WM_NCHITTEST && !isMaximized() && !isFullScreen()) {
@@ -2322,5 +2427,10 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, long* r
         if (bTop) { *result = HTTOP; return true; }
         if (bBottom) { *result = HTBOTTOM; return true; }
     }
+#else
+    Q_UNUSED(eventType)
+    Q_UNUSED(message)
+    Q_UNUSED(result)
+#endif
     return QMainWindow::nativeEvent(eventType, message, result);
 }

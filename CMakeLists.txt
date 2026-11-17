@@ -1,6 +1,7 @@
 # =============================================================================
 # 图像查看器(ImageViewer) - CMake 配置
-# 目标: Windows / Qt 5.14 / OpenCV 4.5.5 / C++17 / VS2019
+# 目标: Windows(VS2019) / Linux(GCC/Clang) / Qt 5.14+ / OpenCV 4.x / C++17
+# Linux 依赖: qtbase5-dev libqt5svg5-dev libqt5concurrent5 libopencv-dev
 # =============================================================================
 
 cmake_minimum_required(VERSION 3.20)
@@ -18,13 +19,17 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-# ---------- Windows 平台设置 ----------
+# ---------- 编译器平台设置 ----------
 if(MSVC)
     add_compile_options(/W4 /permissive- /Zc:__cplusplus /Zi /FS
         /source-charset:utf-8 /execution-charset:utf-8)
     add_link_options(/DEBUG /ignore:4099)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
     set(CMAKE_WIN32_EXECUTABLE ON)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # 源文件带 UTF-8 BOM，GCC/Clang 直接识别；关闭多余告警避免与 MSVC /W4 风格冲突。
+    add_compile_options(-Wall -Wextra -Wno-unknown-pragmas -Wno-unused-parameter
+        -g -fno-omit-frame-pointer)
 endif()
 
 # ---------- 依赖查找 ----------
@@ -38,12 +43,13 @@ find_package(Qt5 5.14 REQUIRED COMPONENTS
     LinguistTools
 )
 
-# OpenCV 4.5.5：优先使用本工程的平铺 include/lib/bin 结构。
+# OpenCV：Windows 优先使用本工程的平铺 include/lib/bin 结构(opencv_world)；
+# Linux 走系统安装的 OpenCV(apt: libopencv-dev)，按组件链接。
 set(LOCAL_OPENCV_ROOT "$ENV{OPENCV_DIR}")
 if(NOT LOCAL_OPENCV_ROOT)
     set(LOCAL_OPENCV_ROOT "${CMAKE_SOURCE_DIR}/3rdpart/opencv")
 endif()
-if(NOT OpenCV_DIR AND EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
+if(EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
     set(OpenCV_INCLUDE_DIRS "${LOCAL_OPENCV_ROOT}/include")
     add_library(opencv_world SHARED IMPORTED)
     set_target_properties(opencv_world PROPERTIES
@@ -57,7 +63,13 @@ if(NOT OpenCV_DIR AND EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
         IMPORTED_LOCATION_MINSIZEREL "${LOCAL_OPENCV_ROOT}/bin/opencv_world455.dll"
     )
 else()
-    find_package(OpenCV 4.5.5 REQUIRED HINTS "${LOCAL_OPENCV_ROOT}")
+    find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs)
+    # 工程统一链接 opencv_world 目标；非 Windows 下用接口别名映射到系统组件。
+    add_library(opencv_world INTERFACE IMPORTED)
+    set_target_properties(opencv_world PROPERTIES
+        INTERFACE_LINK_LIBRARIES "${OpenCV_LIBS}"
+        INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}"
+    )
 endif()
 
 # ---------- 可执行目标 ----------
@@ -108,13 +120,14 @@ set(APP_UI
     src/app/MainWindow.ui
 )
 
-add_executable(ImageViewer WIN32
+add_executable(ImageViewer
     ${APP_SOURCES}
     ${APP_HEADERS}
     ${APP_UI}
 )
 
 if(WIN32)
+    set_target_properties(ImageViewer PROPERTIES WIN32_EXECUTABLE TRUE)
     target_sources(ImageViewer PRIVATE resources/ImageViewer.rc)
     target_include_directories(ImageViewer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
 endif()
@@ -156,12 +169,18 @@ add_custom_command(TARGET ImageViewer POST_BUILD
         "$<TARGET_FILE_DIR:ImageViewer>/translations"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${APP_TRANSLATIONS} "$<TARGET_FILE_DIR:ImageViewer>/translations"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
-        $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
-        $<TARGET_FILE:Qt5::Svg> $<TARGET_FILE:opencv_world>
-        "$<TARGET_FILE_DIR:ImageViewer>"
 )
+
+if(WIN32)
+    # Windows 需要随 EXE 部署 Qt/OpenCV DLL；Linux 使用系统库，无需拷贝。
+    add_custom_command(TARGET ImageViewer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
+            $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
+            $<TARGET_FILE:Qt5::Svg> $<TARGET_FILE:opencv_world>
+            "$<TARGET_FILE_DIR:ImageViewer>"
+    )
+endif()
 
 # ---------- 部署 ----------
 if(WIN32)
@@ -203,26 +222,31 @@ if(BUILD_TESTING)
         ${OpenCV_INCLUDE_DIRS}
     )
     target_link_libraries(ImageViewerCoreTests PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Concurrent Qt5::Network opencv_world)
-    add_custom_command(TARGET ImageViewerCoreTests POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
-            $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
-            $<TARGET_FILE:opencv_world>
-            "$<TARGET_FILE_DIR:ImageViewerCoreTests>"
-    )
+    if(WIN32)
+        add_custom_command(TARGET ImageViewerCoreTests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
+                $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
+                $<TARGET_FILE:opencv_world>
+                "$<TARGET_FILE_DIR:ImageViewerCoreTests>"
+        )
+    endif()
     add_test(NAME ImageViewerCoreTests COMMAND ImageViewerCoreTests)
 endif()
 
-# Qt 平台与图片插件必须随 EXE 部署，避免构建成功却无法启动或打开 JPEG。
-get_target_property(QT_QMAKE_EXECUTABLE Qt5::qmake IMPORTED_LOCATION)
-execute_process(COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
-    OUTPUT_VARIABLE QT_PLUGINS_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-foreach(runtime_target ImageViewer ImageViewerCoreTests ImageViewerIconGenerator)
-    if(TARGET ${runtime_target})
-        add_custom_command(TARGET ${runtime_target} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_PLUGINS_DIR}/platforms"
-                "$<TARGET_FILE_DIR:${runtime_target}>/platforms"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_PLUGINS_DIR}/imageformats"
-                "$<TARGET_FILE_DIR:${runtime_target}>/imageformats")
-    endif()
-endforeach()
+# Windows 下 Qt 平台与图片插件必须随 EXE 部署，避免构建成功却无法启动或打开 JPEG；
+# Linux 使用系统插件路径(qtbase5-dev 提供)，无需拷贝。
+if(WIN32)
+    get_target_property(QT_QMAKE_EXECUTABLE Qt5::qmake IMPORTED_LOCATION)
+    execute_process(COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
+        OUTPUT_VARIABLE QT_PLUGINS_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+    foreach(runtime_target ImageViewer ImageViewerCoreTests ImageViewerIconGenerator)
+        if(TARGET ${runtime_target})
+            add_custom_command(TARGET ${runtime_target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_PLUGINS_DIR}/platforms"
+                    "$<TARGET_FILE_DIR:${runtime_target}>/platforms"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_PLUGINS_DIR}/imageformats"
+                    "$<TARGET_FILE_DIR:${runtime_target}>/imageformats")
+        endif()
+    endforeach()
+endif()

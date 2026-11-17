@@ -2,6 +2,9 @@
 
 ## 未发布 — 成熟度提升
 
+- 新增 Ubuntu（Linux）实验性支持：CMake 支持系统 Qt/OpenCV（按组件链接，不再强制 `opencv_world`），新增 `scripts/build.sh` 与 Linux CI 工作流；控制台 API、进程内存测量等平台相关代码改为 `Q_OS_WIN` 分支，Linux 用 `getrusage` 等价实现。
+- 非 Windows 平台的无边框窗口：标题栏拖动改用 `startSystemMove`（兼容 Wayland），新增 8 个边缘热区配合 `startSystemResize` 实现拖拽缩放，Windows 继续走 `WM_NCHITTEST` 原生路径，行为不变。
+
 - 新增“最近打开”（最多 10 项，持久化、失效文件自动剔除、可清除），并在空状态提供“打开图像（Ctrl+O）”按钮。
 - 新增 25%/50%/100%/200%/400% 缩放预设，Ctrl+= / Ctrl+- 放大缩小；Home/End 跳转首尾，PgUp/PgDn 翻图。
 - 标题栏长文件名与信息自动省略，悬浮提示保留完整路径，避免窄窗口/高 DPI 下文字硬截断。
@@ -10,6 +13,12 @@
 - 修复自定义菜单样式导致长动作名与快捷键重叠（如“刷新图像和目录 F5”“另存当前结果… Ctrl+Shift+S”）。
 - 帮助菜单的操作提示补充新快捷键；README 功能与快捷键、发布说明同步更新。
 - 回归增至 78 项，新增最近文件、缩放/首尾跳转、空状态、标题省略、通道主图与菜单布局用例。
+
+### Linux 适配说明
+
+- 依赖：`build-essential cmake qtbase5-dev libqt5svg5-dev libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev`（Qt ≥ 5.15 可获得完整的边缘缩放/拖动体验）。
+- 调试终端在 Linux 下为无操作（从终端启动时输出天然可用，桌面启动时静默丢弃）。
+- 构建：`./scripts/build.sh Release --test`，产物在 `build/linux/`。
 
 ## 2.4.1 — 2026-11-11
 

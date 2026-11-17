@@ -1,8 +1,15 @@
 ﻿// 2026-09-06
 // 功能：独立验证目录导航与 OpenCV 预处理核心行为。
 // 目的：在不启动主窗口的情况下提供可重复的中文业务验收输出。
+// 2026-12-11
+// 变更：Linux 适配。控制台 API、内存峰值测量改用平台分支，Linux 用 getrusage。
+#include <QtGlobal>
+#ifdef Q_OS_WIN
 #include <Windows.h>
 #include <psapi.h>
+#else
+#include <sys/resource.h>
+#endif
 #include <algorithm>
 #include <QApplication>
 #include <QtConcurrent/QtConcurrentRun>
@@ -1841,12 +1848,23 @@ void runPerformanceBenchmark(const QString& outputRoot)
             << "phase_decodes" << cache->decodeCount() - nInitialDecodes
             << "phase_cache_hits" << cache->hitCount() - nInitialHits;
     }
+    double dPeakWorkingSetMib = 0.0;
+    double dPrivateMib = 0.0;
+#ifdef Q_OS_WIN
     PROCESS_MEMORY_COUNTERS_EX memory{};
     memory.cb = sizeof(memory);
     GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory), sizeof(memory));
+    dPeakWorkingSetMib = memory.PeakWorkingSetSize / (1024.0 * 1024.0);
+    dPrivateMib = memory.PrivateUsage / (1024.0 * 1024.0);
+#else
+    // Linux: ru_maxrss 单位为 KB；无私有提交量概念，记 0 保持日志字段一致。
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    dPeakWorkingSetMib = usage.ru_maxrss / 1024.0;
+#endif
     qInfo() << "BENCH max_heartbeat_gap_ms" << nMaxHeartbeatGap
-        << "peak_working_set_mib" << memory.PeakWorkingSetSize / (1024.0 * 1024.0)
-        << "private_mib_at_end" << memory.PrivateUsage / (1024.0 * 1024.0)
+        << "peak_working_set_mib" << dPeakWorkingSetMib
+        << "private_mib_at_end" << dPrivateMib
         << "decodes" << core::cache::ImageCache::shared()->decodeCount()
         << "cache_hits" << core::cache::ImageCache::shared()->hitCount();
     window.close();
@@ -1859,10 +1877,14 @@ int main(int argc, char* argv[])
     qInstallMessageHandler([](QtMsgType, const QMessageLogContext&, const QString& message) {
         std::fprintf(stderr, "%s\n", message.toUtf8().constData());
     });
+#ifdef Q_OS_WIN
     SetConsoleOutputCP(CP_UTF8);
+#endif
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
     qputenv("QT_QPA_PLATFORM", "offscreen");
+#ifdef Q_OS_WIN
     qputenv("QT_QPA_FONTDIR", QDir(qEnvironmentVariable("WINDIR")).filePath(QString("Fonts")).toUtf8());
+#endif
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);

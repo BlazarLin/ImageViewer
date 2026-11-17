@@ -1,6 +1,9 @@
 // 2026-09-06
 // 功能：实现自定义标题栏布局、窗口按钮和拖动交互。
 // 目的：保留 Windows 常用窗口操作的同时提高图像信息密度。
+// 2026-12-11
+// 变更：Linux 适配。Wayland 下禁止应用层移动窗口，需用 startSystemMove 交给
+// 窗口管理器；X11 下两者皆可，优先走系统级拖动以获得一致的交互体验。
 #include "TitleBar.h"
 #include "AppIcon.h"
 
@@ -122,6 +125,14 @@ void TitleBar::setMaximized(bool bMaximized)
 void TitleBar::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && !window()->isMaximized() && !window()->isFullScreen()) {
+#ifndef Q_OS_WIN
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        if (window()->windowHandle() && window()->windowHandle()->startSystemMove()) {
+            event->accept();
+            return;
+        }
+#endif
+#endif
         dragOffset_ = event->globalPos() - window()->frameGeometry().topLeft();
         bDragging_ = true;
         event->accept();

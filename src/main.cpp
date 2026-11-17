@@ -3,7 +3,11 @@
 // 目标:VS2019 + Qt 5.14 + OpenCV 4.5.5 / Windows / x64 / Unicode
 // =============================================================================
 
+#include <QtGlobal>
+#ifdef Q_OS_WIN
 #include <Windows.h>
+#endif
+
 #include <QApplication>
 #include <QMessageBox>
 #include <QDir>
@@ -24,9 +28,11 @@
 
 int main(int argc, char* argv[])
 {
+#ifdef Q_OS_WIN
     // 控制台输出 UTF-8,避免中文路径/日志乱码(GUI 子系统也保留以读取 qDebug)
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+#endif
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
 
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);

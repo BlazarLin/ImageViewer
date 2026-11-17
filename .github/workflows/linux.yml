@@ -1,0 +1,31 @@
+name: Linux build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: 安装 Qt 与 OpenCV
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake qtbase5-dev libqt5svg5-dev \
+            libqt5concurrent5 libqt5opengl5-desktop-dev libopencv-dev
+      - name: 配置
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: 构建
+        run: cmake --build build --config Release --parallel
+      - name: 测试
+        run: ./build/ImageViewerCoreTests
