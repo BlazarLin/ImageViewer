@@ -8,6 +8,7 @@
 #include "AppIcon.h"
 
 #include <QApplication>
+#include <QWindow>
 #include <algorithm>
 #include <QFontMetrics>
 #include <QHBoxLayout>

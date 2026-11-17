@@ -43,13 +43,16 @@ find_package(Qt5 5.14 REQUIRED COMPONENTS
     LinguistTools
 )
 
-# OpenCV：Windows 优先使用本工程的平铺 include/lib/bin 结构(opencv_world)；
-# Linux 走系统安装的 OpenCV(apt: libopencv-dev)，按组件链接。
+# OpenCV：优先级为 显式 OpenCV_DIR(CI 源码构建) > 本地平铺结构 > 系统安装。
+# - Windows CI 传入 -DOpenCV_DIR=... → find_package 得到真实 opencv_world 目标，
+#   DLL 从构建树拷贝；
+# - 本机开发无 OpenCV_DIR 且 3rdpart 平铺库存在 → 导入 opencv_world(本机 DLL)；
+# - Linux 走 apt: libopencv-dev，按组件链接。
 set(LOCAL_OPENCV_ROOT "$ENV{OPENCV_DIR}")
 if(NOT LOCAL_OPENCV_ROOT)
     set(LOCAL_OPENCV_ROOT "${CMAKE_SOURCE_DIR}/3rdpart/opencv")
 endif()
-if(EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
+if(NOT OpenCV_DIR AND EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
     set(OpenCV_INCLUDE_DIRS "${LOCAL_OPENCV_ROOT}/include")
     add_library(opencv_world SHARED IMPORTED)
     set_target_properties(opencv_world PROPERTIES
@@ -64,12 +67,15 @@ if(EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
     )
 else()
     find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs)
-    # 工程统一链接 opencv_world 目标；非 Windows 下用接口别名映射到系统组件。
-    add_library(opencv_world INTERFACE IMPORTED)
-    set_target_properties(opencv_world PROPERTIES
-        INTERFACE_LINK_LIBRARIES "${OpenCV_LIBS}"
-        INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}"
-    )
+    # 工程统一链接 opencv_world 目标；仅当 find_package 未提供该目标时
+    # (Linux 组件链接)用接口别名映射，保留 $<TARGET_FILE:opencv_world> 可用性。
+    if(NOT TARGET opencv_world)
+        add_library(opencv_world INTERFACE IMPORTED)
+        set_target_properties(opencv_world PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${OpenCV_LIBS}"
+            INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}"
+        )
+    endif()
 endif()
 
 # ---------- 可执行目标 ----------
