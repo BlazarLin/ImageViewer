@@ -1,9 +1,12 @@
 ﻿// 2026-09-06
 // 功能：扫描、自然排序并导航当前目录的图像文件。
 // 目的：将文件系统逻辑与图形界面分离。
+// 2026-12-11
+// 变更：Linux 适配。QCollator 的 numericMode 依赖平台 ICU/locale，在部分
+// Linux 环境（如 locale=C）下不生效，导致 img10 排在 img2 前；改为自带
+// 确定性自然排序，数字段按数值、其余字符按码点忽略大小写，各平台结果一致。
 #include "DirectoryModel.h"
 
-#include <QCollator>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -11,9 +14,52 @@
 #include <QSet>
 
 #include <algorithm>
-#include <vector>
 
 namespace core::navigation {
+
+namespace {
+
+// 自然排序比较：数字段按数值比较（img2 在 img10 前），其余字符忽略大小写
+// 按码点比较；长度相同且逐字符相等的输入视为相等。返回 -1/0/1。
+int compareNatural(const QString& left, const QString& right)
+{
+    int i = 0;
+    int j = 0;
+    const int nLeft = left.size();
+    const int nRight = right.size();
+    while (i < nLeft && j < nRight) {
+        const bool bDigitLeft = left.at(i).isDigit();
+        const bool bDigitRight = right.at(j).isDigit();
+        if (bDigitLeft && bDigitRight) {
+            int iEnd = i;
+            int jEnd = j;
+            while (iEnd < nLeft && left.at(iEnd).isDigit()) { ++iEnd; }
+            while (jEnd < nRight && right.at(jEnd).isDigit()) { ++jEnd; }
+            // 跳过前导零，剩余位数多者数值更大；位数相同则逐位比较。
+            while (iEnd - i > 1 && left.at(i) == QLatin1Char('0')) { ++i; }
+            while (jEnd - j > 1 && right.at(j) == QLatin1Char('0')) { ++j; }
+            if (iEnd - i != jEnd - j) { return iEnd - i < jEnd - j ? -1 : 1; }
+            for (int k = 0; i + k < iEnd; ++k) {
+                if (left.at(i + k) != right.at(j + k)) {
+                    return left.at(i + k).unicode() < right.at(j + k).unicode() ? -1 : 1;
+                }
+            }
+            i = iEnd;
+            j = jEnd;
+        } else {
+            const char16_t chLeft = left.at(i).toLower().unicode();
+            const char16_t chRight = right.at(j).toLower().unicode();
+            if (chLeft != chRight) { return chLeft < chRight ? -1 : 1; }
+            ++i;
+            ++j;
+        }
+    }
+    if (i < nLeft) { return 1; }
+    if (j < nRight) { return -1; }
+    return 0;
+}
+
+} // namespace
 
 void DirectoryModel::setFileList(const QStringList& paths, const QString& currentPath, const util::Cancellation& canceled)
 {
@@ -85,22 +131,11 @@ bool DirectoryModel::loadForFile(const QString& path, bool bRefresh, const util:
         if (bCurrentFileExists && !paths.contains(currentInfo.absoluteFilePath(), Qt::CaseInsensitive)) {
             paths.push_back(currentInfo.absoluteFilePath());
         }
-        QCollator collator;
-        collator.setNumericMode(true);
-        collator.setCaseSensitivity(Qt::CaseInsensitive);
-        struct Entry { QString path; QCollatorSortKey key; };
-        std::vector<Entry> sorted;
-        sorted.reserve(paths.size());
-        for (const QString& entry : paths) {
-            if (util::canceled(canceled)) { return false; }
-            sorted.push_back({ entry, collator.sortKey(QFileInfo(entry).fileName()) });
-        }
-        std::sort(sorted.begin(), sorted.end(), [](const Entry& left, const Entry& right) {
-            return left.key.compare(right.key) < 0;
-        });
         if (util::canceled(canceled)) { return false; }
-        paths.clear();
-        for (const auto& entry : sorted) { paths.append(entry.path); }
+        // 稳定排序保证等值键（如 img01 与 img1）保持扫描顺序相邻。
+        std::stable_sort(paths.begin(), paths.end(), [](const QString& left, const QString& right) {
+            return compareNatural(QFileInfo(left).fileName(), QFileInfo(right).fileName()) < 0;
+        });
 
         directoryPath_ = directoryPath;
         files_ = std::move(paths);

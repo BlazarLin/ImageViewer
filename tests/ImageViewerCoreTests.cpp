@@ -98,6 +98,9 @@ void testDirectoryNavigation(const QString& outputRoot)
     QDir().mkpath(directoryPath);
     QImage(4, 4, QImage::Format_RGB32).save(QDir(directoryPath).filePath(QString("img2.png")));
     QImage(4, 4, QImage::Format_RGB32).save(QDir(directoryPath).filePath(QString("img10.png")));
+    // 前导零不影响数值比较：img01 与 img1 视为同序，其余按 img1 < img2 < img10。
+    QImage(4, 4, QImage::Format_RGB32).save(QDir(directoryPath).filePath(QString("img01.png")));
+    QImage(4, 4, QImage::Format_RGB32).save(QDir(directoryPath).filePath(QString("img1.png")));
     QFile textFile(QDir(directoryPath).filePath(QString("readme.txt")));
     textFile.open(QIODevice::WriteOnly);
     textFile.write("not an image");
@@ -105,9 +108,12 @@ void testDirectoryNavigation(const QString& outputRoot)
 
     core::navigation::DirectoryModel model;
     const bool bLoaded = model.loadForFile(QDir(directoryPath).filePath(QString("img10.png")));
+    const int nIndex1 = model.files().indexOf(QDir(directoryPath).filePath(QString("img1.png")));
+    const int nIndex01 = model.files().indexOf(QDir(directoryPath).filePath(QString("img01.png")));
     const int nIndex2 = model.files().indexOf(QDir(directoryPath).filePath(QString("img2.png")));
     const int nIndex10 = model.files().indexOf(QDir(directoryPath).filePath(QString("img10.png")));
-    verify(bLoaded && nIndex2 >= 0 && nIndex10 > nIndex2,
+    verify(bLoaded && nIndex1 >= 0 && nIndex01 >= 0 && nIndex2 >= 0 && nIndex10 >= 0
+        && nIndex1 < nIndex2 && nIndex2 < nIndex10 && qAbs(nIndex01 - nIndex1) == 1,
         QString("TEST-01"), QString("验证目录图像过滤与数字自然排序"));
 }
 
