@@ -52,7 +52,7 @@ set(LOCAL_OPENCV_ROOT "$ENV{OPENCV_DIR}")
 if(NOT LOCAL_OPENCV_ROOT)
     set(LOCAL_OPENCV_ROOT "${CMAKE_SOURCE_DIR}/3rdpart/opencv")
 endif()
-if(NOT OpenCV_DIR AND EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
+if(WIN32 AND NOT OpenCV_DIR AND EXISTS "${LOCAL_OPENCV_ROOT}/lib/opencv_world455.lib")
     set(OpenCV_INCLUDE_DIRS "${LOCAL_OPENCV_ROOT}/include")
     add_library(opencv_world SHARED IMPORTED)
     set_target_properties(opencv_world PROPERTIES
