@@ -1,9 +1,13 @@
 ﻿# 更新记录
 
-## 未发布 — 成熟度提升
+## 2.5.0 — 2026-11-18
 
-- 新增 Ubuntu（Linux）实验性支持：CMake 支持系统 Qt/OpenCV（按组件链接，不再强制 `opencv_world`），新增 `scripts/build.sh` 与 Linux CI 工作流；控制台 API、进程内存测量等平台相关代码改为 `Q_OS_WIN` 分支，Linux 用 `getrusage` 等价实现。
+### 新增功能（自 v2.4.1）
+
+- 新增 Ubuntu（Linux）支持：CMake 支持系统 Qt/OpenCV（按组件链接，不再强制 `opencv_world`），新增 `scripts/build.sh` 与 Linux CI 工作流；控制台 API、进程内存测量等平台相关代码改为 `Q_OS_WIN` 分支，Linux 用 `getrusage` 等价实现。
+- 新增 Ubuntu DEB 安装包（目标 Ubuntu 22.04+），发布页与 Windows 版同页提供；随包安装桌面菜单项与图标，依赖系统 Qt/OpenCV 运行库。
 - 非 Windows 平台的无边框窗口：标题栏拖动改用 `startSystemMove`（兼容 Wayland），新增 8 个边缘热区配合 `startSystemResize` 实现拖拽缩放，Windows 继续走 `WM_NCHITTEST` 原生路径，行为不变。
+- 目录自然排序改为确定性实现（数字段按数值、其余字符按码点忽略大小写），不再依赖平台 ICU/locale，Windows/Linux 排序一致。
 
 - 新增“最近打开”（最多 10 项，持久化、失效文件自动剔除、可清除），并在空状态提供“打开图像（Ctrl+O）”按钮。
 - 新增 25%/50%/100%/200%/400% 缩放预设，Ctrl+= / Ctrl+- 放大缩小；Home/End 跳转首尾，PgUp/PgDn 翻图。

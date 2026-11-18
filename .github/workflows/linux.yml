@@ -3,11 +3,13 @@ name: Linux build and test
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # 标签发布时需要向 Release 上传 Ubuntu 包。
+  contents: write
 
 jobs:
   linux:
@@ -30,3 +32,27 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: 测试
         run: ./build/ImageViewerCoreTests
+      - name: 读取版本号
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          APP_VERSION=$(grep -oP 'QString\("\K\d+\.\d+\.\d+(?="\))' src/app/AppVersion.h)
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+      - name: 打包 DEB
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ./scripts/package-deb.sh -b build -v "$APP_VERSION" -o dist
+      - name: 上传到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Release 与发布说明由 Windows 工作流创建；此处等待就绪后补充 Ubuntu 包。
+          for i in $(seq 1 60); do
+            if gh release view "v$APP_VERSION" > /dev/null 2>&1; then
+              gh release upload "v$APP_VERSION" --clobber \
+                "dist/ImageViewer-$APP_VERSION-ubuntu-amd64.deb"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "等待 30 分钟后 Release v$APP_VERSION 仍未创建" >&2
+          exit 1

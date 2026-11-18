@@ -1,11 +1,11 @@
 # ImageViewer
 
-面向日常看图与工业视觉调试的 Windows 桌面图像查看器。打开本地图片，快速缩放、翻图、查看像素值，并通过 OpenCV 预处理与 ROI 分析观察图像。
+面向日常看图与工业视觉调试的桌面图像查看器（Windows / Ubuntu）。打开本地图片，快速缩放、翻图、查看像素值，并通过 OpenCV 预处理与 ROI 分析观察图像。
 
 [![Windows 构建与测试](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml/badge.svg)](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**当前版本：v2.4.1。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.4.1/ImageViewer-2.4.1-windows-x64.zip) · [下载安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.4.1/ImageViewer-2.4.1-windows-x64-setup.exe) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.4.1)。安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式，可随时在系统设置中卸载；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。
+**当前版本：v2.5.0。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.0/ImageViewer-2.5.0-windows-x64.zip) · [下载 Windows 安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.0/ImageViewer-2.5.0-windows-x64-setup.exe) · [下载 Ubuntu DEB](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.0/ImageViewer-2.5.0-ubuntu-amd64.deb) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.5.0)。Windows 安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。Ubuntu 包目标 22.04+，安装时自动补齐系统 Qt/OpenCV 运行库依赖并创建桌面菜单项。
 
 ![小缩略图与统一分析面板](docs/images/260908首版界面.png)
 
@@ -176,7 +176,7 @@ docs/             开发记录、截图和发布说明
 - 大图解码峰值内存取决于原始图像；金字塔仅优化解码后的显示。
 - 文件转发仅在同一用户会话内进行；目标窗口无响应时显示超时提示。首次升级到支持转发的版本需退出旧版窗口。
 - 损坏图片会在状态栏提示并保留原图/索引，不自动跳过。
-- 提供 Windows x64 安装 EXE 与便携 ZIP；尚无代码签名或自动更新。
+- 提供 Windows x64 安装 EXE/便携 ZIP 与 Ubuntu DEB；尚无代码签名或自动更新。
 
 ## 作者
 

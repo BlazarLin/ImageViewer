@@ -1,10 +1,13 @@
 // 2026-09-08
 // 功能：将应用内绘制的图标导出为多尺寸 Windows ICO。
 // 目的：让 EXE、资源管理器与标题栏使用相同图标，并可重复生成资源。
+// 2026-11-18
+// 变更：支持输出单个 256px PNG（.png 后缀），供 Linux DEB 包与桌面图标使用。
 #include "ui/AppIcon.h"
 
 #include <QBuffer>
 #include <QDataStream>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QSaveFile>
 #include <QVector>
@@ -17,6 +20,16 @@ int main(int argc, char* argv[])
         return 1;
     }
     const QIcon icon = ui::createAppIcon();
+    const QString outputPath = QString::fromLocal8Bit(argv[1]);
+    if (outputPath.endsWith(QString(".png"), Qt::CaseInsensitive)) {
+        // 单尺寸 PNG：供 Linux .desktop 桌面项与 hicolor 图标使用。
+        QSaveFile file(outputPath);
+        if (!file.open(QIODevice::WriteOnly)) {
+            return 3;
+        }
+        const bool bSaved = icon.pixmap(256, 256).save(&file, "PNG");
+        return bSaved && file.commit() ? 0 : 5;
+    }
     const QVector<int> sizes = { 16, 24, 32, 48, 64, 128, 256 };
     QVector<QByteArray> frames;
     for (int nSize : sizes) {
