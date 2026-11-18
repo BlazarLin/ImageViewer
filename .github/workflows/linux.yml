@@ -25,7 +25,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake qtbase5-dev libqt5svg5-dev \
             libqt5concurrent5 libqt5opengl5-desktop-dev \
-            qttools5-dev qttools5-dev-tools libopencv-dev
+            qttools5-dev qttools5-dev-tools libopencv-dev patchelf xvfb
       - name: 配置
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: 构建
@@ -33,13 +33,17 @@ jobs:
       - name: 测试
         run: ./build/ImageViewerCoreTests
       - name: 读取版本号
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           APP_VERSION=$(grep -oP 'QString\("\K\d+\.\d+\.\d+(?="\))' src/app/AppVersion.h)
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
-      - name: 打包 DEB
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: 打包 DEB（内置全部运行库）
         run: ./scripts/package-deb.sh -b build -v "$APP_VERSION" -o dist
+      - name: 上传安装包产物
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ImageViewer-${{ env.APP_VERSION }}-linux-x64.deb
+          path: dist/*.deb
+          retention-days: 14
       - name: 上传到 Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -49,7 +53,7 @@ jobs:
           for i in $(seq 1 60); do
             if gh release view "v$APP_VERSION" > /dev/null 2>&1; then
               gh release upload "v$APP_VERSION" --clobber \
-                "dist/ImageViewer-$APP_VERSION-ubuntu-amd64.deb"
+                "dist/ImageViewer-$APP_VERSION-linux-x64.deb"
               exit 0
             fi
             sleep 30

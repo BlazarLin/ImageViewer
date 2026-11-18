@@ -1,5 +1,13 @@
 ﻿# 更新记录
 
+## 2.5.1 — 2026-11-18
+
+- Ubuntu DEB 包改为内置运行库：ldd 递归收集 Qt/OpenCV 及其依赖（含 ICU、X/GL 栈）并随包安装，
+  patchelf 设定 RPATH + 自带 qt.conf 与平台/图片插件，目标机器无需预先安装 Qt/OpenCV；
+  `Depends` 仅保留 glibc 基线，最低要求 Ubuntu 22.04（glibc 2.35）。CI 增加 xvfb 冒烟验证安装后的主程序可启动。
+- 发布产物命名统一为 `ImageViewer-<版本>-<平台>-x64.<扩展名>`：Ubuntu 包更名为 `ImageViewer-<版本>-linux-x64.deb`。
+- 发布标签改为附注标签，与历史版本格式一致（`ImageViewer vX.Y.Z · 说明`）。
+
 ## 2.5.0 — 2026-11-18
 
 ### 新增功能（自 v2.4.1）

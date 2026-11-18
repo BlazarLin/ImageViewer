@@ -5,7 +5,7 @@
 [![Windows 构建与测试](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml/badge.svg)](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**当前版本：v2.5.0。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.0/ImageViewer-2.5.0-windows-x64.zip) · [下载 Windows 安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.0/ImageViewer-2.5.0-windows-x64-setup.exe) · [下载 Ubuntu DEB](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.0/ImageViewer-2.5.0-ubuntu-amd64.deb) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.5.0)。Windows 安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。Ubuntu 包目标 22.04+，安装时自动补齐系统 Qt/OpenCV 运行库依赖并创建桌面菜单项。
+**当前版本：v2.5.1。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.1/ImageViewer-2.5.1-windows-x64.zip) · [下载 Windows 安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.1/ImageViewer-2.5.1-windows-x64-setup.exe) · [下载 Ubuntu DEB](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.1/ImageViewer-2.5.1-linux-x64.deb) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.5.1)。Windows 安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。Ubuntu DEB 内置全部 Qt/OpenCV 运行库，目标机器无需预装依赖，安装后自动创建桌面菜单项；要求 Ubuntu 22.04 及以上（glibc >= 2.35）。
 
 ![小缩略图与统一分析面板](docs/images/260908首版界面.png)
 
@@ -47,7 +47,7 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 平台 | Windows 10/11 x64；Ubuntu 20.04+ x64（实验性） |
+| 平台 | Windows 10/11 x64；Ubuntu 22.04+ x64 |
 | 语言 | C++17 |
 | 本地已验证 | VS2019 v142、Qt 5.14.2 MSVC2017 x64、OpenCV 4.5.5 |
 | CI 配置 | Windows 2022 runner、VS2022、Qt 5.15.2 MSVC2019 x64、OpenCV 4.5.5 源码构建 |
