@@ -76,6 +76,9 @@ public:
         : QWidget(parent)
         , edges_(edges)
     {
+        // 供回归测试按名称查找热区并校验其几何，避免边缘热区覆盖内容区。
+        setObjectName(QString("WindowResizeGrip"));
+        setProperty("resizeEdges", static_cast<int>(edges));
         // 与 WM_NCHITTEST 相同的光标映射，给用户一致的边缘反馈。
         const bool bHorizontal = (edges_ & (Qt::LeftEdge | Qt::RightEdge))
             && !(edges_ & (Qt::TopEdge | Qt::BottomEdge));
@@ -95,26 +98,22 @@ public:
     void setGripGeometry(const QRect& windowRect)
     {
         constexpr int nBorder = 6;
-        QRect grip;
-        if (edges_ & Qt::LeftEdge) {
-            grip.setLeft(windowRect.left());
+        // 热区必须是“贴着某条边的一条窄带”，而不是把窗口其余部分也圈进来：
+        // 只按被包含的边收缩对应方向，另一方向保持整幅跨度（边条）或同样收缩（角块）。
+        QRect grip = windowRect;
+        const bool bLeft = (edges_ & Qt::LeftEdge) != 0;
+        const bool bRight = (edges_ & Qt::RightEdge) != 0;
+        const bool bTop = (edges_ & Qt::TopEdge) != 0;
+        const bool bBottom = (edges_ & Qt::BottomEdge) != 0;
+        if (bLeft && !bRight) {
+            grip.setRight(windowRect.left() + nBorder - 1);
+        } else if (bRight && !bLeft) {
+            grip.setLeft(windowRect.right() - nBorder + 1);
         }
-        if (edges_ & Qt::RightEdge) {
-            grip.setRight(windowRect.right());
-        }
-        if (edges_ & Qt::TopEdge) {
-            grip.setTop(windowRect.top());
-        }
-        if (edges_ & Qt::BottomEdge) {
-            grip.setBottom(windowRect.bottom());
-        }
-        if (!(edges_ & Qt::LeftEdge) && !(edges_ & Qt::RightEdge)) {
-            grip.setLeft(windowRect.left() + nBorder);
-            grip.setRight(windowRect.right() - nBorder);
-        }
-        if (!(edges_ & Qt::TopEdge) && !(edges_ & Qt::BottomEdge)) {
-            grip.setTop(windowRect.top() + nBorder);
-            grip.setBottom(windowRect.bottom() - nBorder);
+        if (bTop && !bBottom) {
+            grip.setBottom(windowRect.top() + nBorder - 1);
+        } else if (bBottom && !bTop) {
+            grip.setTop(windowRect.bottom() - nBorder + 1);
         }
         setGeometry(grip);
     }

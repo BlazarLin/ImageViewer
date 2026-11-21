@@ -1797,6 +1797,58 @@ void testMenuLayout(const QString& outputRoot)
     window.close();
 }
 
+void testResizeGripGeometry()
+{
+#ifdef Q_OS_WIN
+    // Windows 走 WM_NCHITTEST 原生热区，没有 Qt 侧热区控件，本用例不适用。
+    return;
+#else
+    // 回归目标：Linux 无边框窗口的边缘热区必须只是贴着边的窄带；
+    // 曾经因只收缩非边缘方向，上/下/左/右四条热区几乎覆盖整窗，
+    // 导致鼠标在窗口中部也显示缩放光标且点击被热区吃掉。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    const bool bShown = waitUntil([&]() { return window.isVisible() && window.width() > 100; });
+    const QRect windowRect = window.rect();
+    const QList<QWidget*> grips = window.findChildren<QWidget*>(QString("WindowResizeGrip"));
+    bool bOk = bShown && grips.size() == 8;
+    QString details;
+    for (QWidget* grip : grips) {
+        const QRect gripRect = grip->geometry();
+        const int nEdges = grip->property("resizeEdges").toInt();
+        const bool bLeft = (nEdges & Qt::LeftEdge) != 0;
+        const bool bRight = (nEdges & Qt::RightEdge) != 0;
+        const bool bTop = (nEdges & Qt::TopEdge) != 0;
+        const bool bBottom = (nEdges & Qt::BottomEdge) != 0;
+        // 宽度：带左右边时只能是 6px 窄带，否则应横跨整幅；高度同理。
+        const int nExpectWidth = (bLeft || bRight) ? 6 : windowRect.width();
+        const int nExpectHeight = (bTop || bBottom) ? 6 : windowRect.height();
+        const bool bSizeOk = gripRect.width() == nExpectWidth && gripRect.height() == nExpectHeight;
+        const bool bAnchorOk = (!bLeft || gripRect.left() == windowRect.left())
+            && (!bRight || gripRect.right() == windowRect.right())
+            && (!bTop || gripRect.top() == windowRect.top())
+            && (!bBottom || gripRect.bottom() == windowRect.bottom());
+        if (!(bSizeOk && bAnchorOk)) {
+            details += QString("edges=%1 rect=%2,%3 %4x%5; ")
+                .arg(nEdges).arg(gripRect.x()).arg(gripRect.y())
+                .arg(gripRect.width()).arg(gripRect.height());
+        }
+        bOk = bOk && bSizeOk && bAnchorOk;
+    }
+    // 关键回归：窗口中心点不能被任何边缘热区命中。
+    const QPoint center = windowRect.center();
+    const QWidget* centerWidget = window.childAt(center);
+    const bool bCenterFree = centerWidget != nullptr
+        && centerWidget->objectName() != QString("WindowResizeGrip");
+    bOk = bOk && bCenterFree;
+    if (!bOk) { qInfo().noquote() << "grip diag" << details << "centerFree" << bCenterFree; }
+    verify(bOk, QString("TEST-79"),
+        QString("Linux 边缘缩放热区只贴边 6px，窗口中部仍可点击内容"));
+    window.close();
+#endif
+}
+
 void runPerformanceBenchmark(const QString& outputRoot)
 {
     QTemporaryDir directory(QDir(outputRoot).filePath(QString("benchmark-XXXXXX")));
@@ -1952,6 +2004,7 @@ int main(int argc, char* argv[])
     testZoomNavigationAndChrome(outputRoot);
     testChannelMainImage(outputRoot);
     testMenuLayout(outputRoot);
+    testResizeGripGeometry();
 
     util::waitForBackgroundWork();
     qInfo().noquote() << QString("测试完成：失败 %1 项").arg(nFailedTests);
