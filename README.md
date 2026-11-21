@@ -5,7 +5,7 @@
 [![Windows 构建与测试](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml/badge.svg)](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**当前版本：v2.5.1。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.1/ImageViewer-2.5.1-windows-x64.zip) · [下载 Windows 安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.1/ImageViewer-2.5.1-windows-x64-setup.exe) · [下载 Ubuntu DEB](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.1/ImageViewer-2.5.1-linux-x64.deb) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.5.1)。Windows 安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。Ubuntu DEB 内置全部 Qt/OpenCV 运行库，目标机器无需预装依赖，安装后自动创建桌面菜单项；要求 Ubuntu 22.04 及以上（glibc >= 2.35）。
+**当前版本：v2.5.2。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.2/ImageViewer-2.5.2-windows-x64.zip) · [下载 Windows 安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.2/ImageViewer-2.5.2-windows-x64-setup.exe) · [下载 Ubuntu DEB](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.2/ImageViewer-2.5.2-linux-x64.deb) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.5.2)。Windows 安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。Ubuntu DEB 内置 Qt/OpenCV 运行库（显示/显卡库仍用系统版本，以便匹配显卡驱动），目标机器无需预装 Qt/OpenCV，安装后自动创建桌面菜单项；要求 Ubuntu 22.04 及以上（glibc >= 2.35）。
 
 ![小缩略图与统一分析面板](docs/images/260908首版界面.png)
 
@@ -30,6 +30,8 @@
 
 解压完整便携包后运行 `ImageViewer.exe`，或使用安装版直接安装。请保留同目录 DLL、`platforms`、`imageformats` 和 `translations`；只复制 EXE 无法运行。
 
+Ubuntu：`sudo dpkg -i ImageViewer-<版本>-linux-x64.deb`（或用 `./scripts/install-local.sh` 一条命令完成构建、安装与固定到快捷启动栏），安装后从应用列表或启动栏启动；命令行 `ImageViewer <图片路径>` 同样可用。
+
 1. 空状态可直接点击“打开图像（Ctrl+O）”，或用“文件 → 打开”、Ctrl+O、拖入图片，也可从“文件 → 最近打开”继续上次浏览。工具栏默认隐藏，点击图像区右上角箭头展开，展开后可从工具栏最右侧收起。首次打开后，下方展示同目录缩略图。
 2. 滚轮缩放、左键拖动平移；点击图像两侧箭头，或在图像区/缩略图区按左右方向键翻图；到达首尾不会平移图像。
 3. 鼠标移到图像上查看状态栏像素值。分析默认隐藏，打开面板、换图和处理完成均不自动统计。`Ctrl+I` 打开分析面板，`Shift + 左键拖动` 选择 ROI；像素、直方图和 ROI 统计在同一面板内显示，也可点击“分析整张图”。
@@ -47,13 +49,13 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 平台 | Windows 10/11 x64；Ubuntu 22.04+ x64 |
+| 平台 | Windows 10/11 x64；Ubuntu 22.04+ x64（本地验证 24.04 + Qt 5.15.13 + OpenCV 4.14） |
 | 语言 | C++17 |
 | 本地已验证 | VS2019 v142、Qt 5.14.2 MSVC2017 x64、OpenCV 4.5.5 |
 | CI 配置 | Windows 2022 runner、VS2022、Qt 5.15.2 MSVC2019 x64、OpenCV 4.5.5 源码构建 |
 | CMake | 3.20 或更新版本 |
 
-Qt 需要 Core、Gui、Widgets、Concurrent、Network、Svg、LinguistTools 及图片格式插件；OpenCV 需要共享 `opencv_world` 库。**不需要 Qt VS Tools 插件。** Qt/OpenCV 旧版本用于兼容已有环境，公开发布前应评估升级，见 [安全说明](SECURITY.md)。
+Qt 需要 Core、Gui、Widgets、Concurrent、Network（Svg 与 LinguistTools 可选）；OpenCV 需 core/imgproc/imgcodecs。**不需要 Qt VS Tools 插件。** Qt/OpenCV 旧版本用于兼容已有环境，公开发布前应评估升级，见 [安全说明](SECURITY.md)。
 
 ### 配置依赖
 
@@ -78,24 +80,37 @@ VS 工程支持两种 OpenCV 4.5.5 布局：`include/lib/bin` 平铺结构，或
 .\scripts\check-bom.ps1
 ```
 
-### Ubuntu 构建与测试（实验性）
+也可打开 `ImageViewer.sln`，选择 `Debug | x64`，将 ImageViewer 设为启动项目后按 F5。构建脚本自动发现 VS2019，部署 Qt/OpenCV DLL 和图片插件。
 
-安装系统依赖（Qt 5.15 可获得完整的边缘缩放/拖动体验）：
+### Ubuntu 构建、测试与打包
+
+依赖安装（Ubuntu 22.04 / 24.04 已验证，Qt 5.15 可获得完整的边缘缩放/拖动体验）：
 
 ```bash
-sudo apt install build-essential cmake qtbase5-dev libqt5svg5-dev \
-                 libqt5concurrent5 libqt5opengl5-desktop-dev \n                 qttools5-dev qttools5-dev-tools libopencv-dev
+./scripts/install-deps.sh            # 必需依赖 + 可选依赖（翻译/Svg/额外图片格式/打包工具）
+./scripts/install-deps.sh --minimal  # 只装必需依赖：build-essential cmake qtbase5-dev libopencv-dev
 ```
 
-OpenCV 使用系统安装（`libopencv-dev`，按 core/imgproc/imgcodecs 组件链接，无需 `opencv_world`）：
+OpenCV 使用系统安装（按 core/imgproc/imgcodecs 组件链接）。若本机 OpenCV 是 `opencv_world` 单库构建（如 `BUILD_opencv_world=ON`），CMake 自动通过接口别名映射，无需修改工程：
 
 ```bash
 ./scripts/build.sh Debug --test
-./scripts/build.sh Release --test
+./scripts/build.sh Release --test     # 无显示服务时自动使用 offscreen 平台跑测试
 ./build/linux/ImageViewer [image-path]
 ```
 
-或打开 `ImageViewer.sln`，选择 `Debug | x64`，将 ImageViewer 设为启动项目后按 F5。构建脚本自动发现 VS2019，部署 Qt/OpenCV DLL 和图片插件。
+可选依赖中的 `qt5-image-formats-plugins` 提供 Qt 原生 TIFF/WebP/TGA 解码；缺少时 TIFF/WebP 仍可通过 OpenCV 回退加载，其余格式不受影响。
+
+生成并安装 DEB（内置 Qt/OpenCV 运行库，显示/显卡库使用系统版本以匹配驱动）：
+
+```bash
+./scripts/package-deb.sh -b build/linux -o dist   # 版本号默认读取 src/app/AppVersion.h
+# → dist/ImageViewer-<版本>-linux-x64.deb 与同名 .sha256
+./scripts/install-local.sh                        # 构建 + 打包 + sudo dpkg -i + 固定到 GNOME 快捷启动栏
+./scripts/install-local.sh --uninstall            # 卸载并从启动栏移除
+```
+
+DEB 安装布局：主程序 `/opt/ImageViewer/ImageViewer`，内置库 `lib/`，Qt 插件 `plugins/`，翻译 `translations/`，命令行入口 `/usr/bin/ImageViewer`，桌面项 `/usr/share/applications/ImageViewer.desktop`。体积随构建机的 OpenCV 构建方式变化：`opencv_world` 全模块构建约 96 MB，系统 `libopencv-dev` 组件构建更小。
 
 ### CMake 构建与测试
 

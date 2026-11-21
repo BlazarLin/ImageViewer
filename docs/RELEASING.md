@@ -1,8 +1,17 @@
-﻿# Windows 便携版发布流程
+﻿# Windows / Ubuntu 发布流程
 
 首个公开版本为 v2.2.0。维护者按本流程构建、核验并发布；CI 上传的产物需核验后再放入 GitHub Releases。
 
-## 构建与验收
+## Ubuntu 构建、打包与验收
+
+1. 依赖：`./scripts/install-deps.sh`（必需 `build-essential cmake qtbase5-dev libopencv-dev`，可选 `qttools5-dev` 提供 lrelease、`qt5-image-formats-plugins` 提供 TIFF/WebP、`patchelf xvfb` 供打包与冒烟）。
+2. 构建与回归：`./scripts/build.sh Release --test`；无显示服务时脚本自动使用 `QT_QPA_PLATFORM=offscreen`。发布前 Debug/Release 均需通过（78 项核心回归）。
+3. 打包：`./scripts/package-deb.sh -b build/linux -o dist`，版本号默认取 `src/app/AppVersion.h`，产物为 `ImageViewer-<版本>-linux-x64.deb` 与 `.sha256`。脚本会递归收集除 glibc/显卡 ABI 库以外的全部依赖、校验 `ldd` 无 `not found`，并用 xvfb（或 offscreen）启动打包后的主程序做冒烟验证。
+4. 本机安装验收：`./scripts/install-local.sh` 完成打包、`dpkg -i` 安装和 GNOME 快捷启动栏固定；确认应用列表图标、启动栏图标、`ImageViewer <图片路径>` 命令行入口均可用，中文路径与 fcitx5/ibus 中文输入正常，TIFF/WebP 可打开。
+5. 干净机验收：在未安装 Qt/OpenCV 的 Ubuntu 22.04 上安装 DEB 并打开 PNG/JPEG/TIFF；确认 `Depends` 中的 glibc、`libgl1`/`libegl1` 等系统库由 apt 满足，不出现库不匹配。
+6. CI：`linux.yml` 在 `ubuntu-22.04` 上构建测试并打包（保证 glibc 2.35 兼容基线），标签推送后将 DEB 上传到与标签同名的 Release；本地在 24.04 构建的包不能用做 22.04 兼容性依据。
+
+## Windows 构建与验收
 
 1. 在 `src/app/AppVersion.h` 更新版本，并在 `CHANGELOG.md` 增加对应 `## X.Y.Z` 段落。标签应为同版本 `vX.Y.Z`。该段落会被发布工作流自动提取为 GitHub Release 公告，请写成面向用户的新增功能与修复清单。
 2. 使用干净检出和受支持的依赖执行 Debug、Release 构建、回归以及编码检查。Windows Actions 从官方固定 OpenCV 提交构建共享库，使用 Qt 5.15.2；发布时核对远端工作流状态与提交 SHA。

@@ -1,5 +1,18 @@
 ﻿# 更新记录
 
+## 2.5.2 — 2026-11-21
+
+### 修复与改进
+
+- Ubuntu 构建不再强依赖 QtSvg 与 LinguistTools：两者改为可选组件，只装 `qtbase5-dev` 也能构建；缺少 `lrelease` 时跳过翻译编译并保留英文原文，避免因缺包直接配置失败。
+- 新增 `scripts/install-deps.sh`：一条命令安装构建依赖（必需/可选分层，兼容 Ubuntu 24.04 起的 t64 包名，缺包不中断）。新增 `scripts/install-local.sh`：构建 → 打包 DEB → 安装 → 固定到 GNOME 快捷启动栏全流程，支持 `--skip-build`、`--no-pin`、`--uninstall`。
+- 无显示服务（CI/SSH）时，`scripts/build.sh --test` 与打包冒烟测试自动回退到 `QT_QPA_PLATFORM=offscreen`，不再要求安装 xvfb。
+- DEB 打包：版本号默认读取 `src/app/AppVersion.h`（可 `-v` 覆盖），输出同名 `.sha256`；插件扩展为平台、图片格式、输入法、GL 集成、图标引擎与样式（含 fcitx5/ibus 输入法插件，中文输入可用）；新增 `postinst`/`postrm` 刷新图标缓存与桌面数据库；桌面项补充 `TryExec`/`Keywords`/`StartupWMClass`。
+- **修复 DEB 实际未使用内置运行库**：V2.5.0/2.5.1 只拷贝了库的真实文件名（如 `libQt5Core.so.5.15.13`、`libopencv_world.so.4.14.0`），而加载器查找的是 SONAME（`libQt5Core.so.5`、`libopencv_world.so.414`），于是静默回退到构建机的系统 Qt/OpenCV——“内置运行库”只在已装依赖的机器上成立。现为每个库补建 SONAME 软链，并给每个内置库设置 `RUNPATH=$ORIGIN`（`DT_RUNPATH` 不传递给传递依赖），冒烟测试改用 `LD_DEBUG=libs` 断言主程序的每个非系统依赖确实从包内目录加载。
+- DEB 打包前清除 `LD_LIBRARY_PATH`/`LD_PRELOAD`，避免把个人环境（如 CUDA）的库当成依赖收进包内。
+- DEB 不再内置显卡/显示 ABI 库（`libGL`/`libEGL`/`libdrm`/`libgbm`/`libvulkan` 等），改由 `Depends` 从系统加载，避免构建机的 Mesa 与目标机 NVIDIA 专有驱动冲突。
+- README 的 Ubuntu 依赖与安装说明修正（原命令含错误的 `\n` 换行字面量），补充 TIFF/WebP 需要 `qt5-image-formats-plugins` 或在构建机存在时随包内置。
+
 ## 2.5.1 — 2026-11-18
 
 - Ubuntu DEB 包改为内置运行库：ldd 递归收集 Qt/OpenCV 及其依赖（含 ICU、X/GL 栈）并随包安装，
