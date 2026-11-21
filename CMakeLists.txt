@@ -1,7 +1,7 @@
 # =============================================================================
 # 图像查看器(ImageViewer) - CMake 配置
 # 目标: Windows(VS2019) / Linux(GCC/Clang) / Qt 5.14+ / OpenCV 4.x / C++17
-# Linux 依赖: qtbase5-dev libqt5svg5-dev libqt5concurrent5 libopencv-dev
+# Linux 依赖: qtbase5-dev libopencv-dev（可选: libqt5svg5-dev qttools5-dev 用于 Svg/翻译）
 # =============================================================================
 
 cmake_minimum_required(VERSION 3.20)
@@ -33,14 +33,16 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # ---------- 依赖查找 ----------
+# Svg 与 LinguistTools 为可选组件：当前代码未直接使用 QtSvg（应用图标由 QPainter 绘制），
+# 缺少 libqt5svg5-dev 也能构建；缺少 qttools5-dev(LinguistTools) 时跳过 .qm 编译，
+# 界面回退为英文原文，不影响功能。
 find_package(Qt5 5.14 REQUIRED COMPONENTS
     Core
     Gui
     Widgets
     Concurrent
     Network
-    Svg
-    LinguistTools
+    OPTIONAL_COMPONENTS Svg LinguistTools
 )
 
 # OpenCV：优先级为 显式 OpenCV_DIR(CI 源码构建) > 本地平铺结构 > 系统安装。
@@ -148,11 +150,17 @@ add_custom_command(TARGET ImageViewerIconGenerator POST_BUILD
         $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
         "$<TARGET_FILE_DIR:ImageViewerIconGenerator>")
 
-qt5_add_translation(APP_TRANSLATIONS
-    translations/ImageViewer_en_US.ts
-)
-add_custom_target(ImageViewerTranslations ALL DEPENDS ${APP_TRANSLATIONS})
-add_dependencies(ImageViewer ImageViewerTranslations)
+# 翻译：有 lrelease 时编译 .qm 并随构建产物部署；没有时跳过，避免配置期硬性依赖。
+set(APP_TRANSLATIONS "")
+if(Qt5LinguistTools_FOUND)
+    qt5_add_translation(APP_TRANSLATIONS
+        translations/ImageViewer_en_US.ts
+    )
+    add_custom_target(ImageViewerTranslations ALL DEPENDS ${APP_TRANSLATIONS})
+    add_dependencies(ImageViewer ImageViewerTranslations)
+else()
+    message(STATUS "未找到 Qt5LinguistTools：跳过翻译编译，界面回退为英文原文")
+endif()
 
 # ---------- 链接 ----------
 target_include_directories(ImageViewer PRIVATE
@@ -166,24 +174,35 @@ target_link_libraries(ImageViewer PRIVATE
     Qt5::Widgets
     Qt5::Concurrent
     Qt5::Network
-    Qt5::Svg
     opencv_world
 )
+if(TARGET Qt5::Svg)
+    target_link_libraries(ImageViewer PRIVATE Qt5::Svg)
+endif()
 
-add_custom_command(TARGET ImageViewer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:ImageViewer>/translations"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${APP_TRANSLATIONS} "$<TARGET_FILE_DIR:ImageViewer>/translations"
+# Windows 需要随 EXE 部署的 Qt/OpenCV 运行库清单（Linux 使用系统库，无需拷贝）。
+set(APP_RUNTIME_LIBS
+    $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
+    $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
+    $<TARGET_FILE:opencv_world>
 )
+if(TARGET Qt5::Svg)
+    list(APPEND APP_RUNTIME_LIBS $<TARGET_FILE:Qt5::Svg>)
+endif()
+
+if(APP_TRANSLATIONS)
+    add_custom_command(TARGET ImageViewer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:ImageViewer>/translations"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${APP_TRANSLATIONS} "$<TARGET_FILE_DIR:ImageViewer>/translations"
+    )
+endif()
 
 if(WIN32)
-    # Windows 需要随 EXE 部署 Qt/OpenCV DLL；Linux 使用系统库，无需拷贝。
     add_custom_command(TARGET ImageViewer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
-            $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
-            $<TARGET_FILE:Qt5::Svg> $<TARGET_FILE:opencv_world>
+            ${APP_RUNTIME_LIBS}
             "$<TARGET_FILE_DIR:ImageViewer>"
     )
 endif()
@@ -231,9 +250,7 @@ if(BUILD_TESTING)
     if(WIN32)
         add_custom_command(TARGET ImageViewerCoreTests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
-                $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
-                $<TARGET_FILE:opencv_world>
+                ${APP_RUNTIME_LIBS}
                 "$<TARGET_FILE_DIR:ImageViewerCoreTests>"
         )
     endif()
