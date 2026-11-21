@@ -5,7 +5,7 @@
 ## Ubuntu 构建、打包与验收
 
 1. 依赖：`./scripts/install-deps.sh`（必需 `build-essential cmake qtbase5-dev libopencv-dev`，可选 `qttools5-dev` 提供 lrelease、`qt5-image-formats-plugins` 提供 TIFF/WebP、`patchelf xvfb` 供打包与冒烟）。
-2. 构建与回归：`./scripts/build.sh Release --test`；无显示服务时脚本自动使用 `QT_QPA_PLATFORM=offscreen`。发布前 Debug/Release 均需通过（78 项核心回归）。
+2. 构建与回归：`./scripts/build.sh Release --test`；无显示服务时脚本自动使用 `QT_QPA_PLATFORM=offscreen`。发布前 Debug/Release 均需通过（79 项核心回归）。
 3. 打包：`./scripts/package-deb.sh -b build/linux -o dist`，版本号默认取 `src/app/AppVersion.h`，产物为 `ImageViewer-<版本>-linux-x64.deb` 与 `.sha256`。脚本会递归收集除 glibc/显卡 ABI 库以外的全部依赖、校验 `ldd` 无 `not found`，并用 xvfb（或 offscreen）启动打包后的主程序做冒烟验证。
 4. 本机安装验收：`./scripts/install-local.sh` 完成打包、`dpkg -i` 安装和 GNOME 快捷启动栏固定；确认应用列表图标、启动栏图标、`ImageViewer <图片路径>` 命令行入口均可用，中文路径与 fcitx5/ibus 中文输入正常，TIFF/WebP 可打开。
 5. 干净机验收：在未安装 Qt/OpenCV 的 Ubuntu 22.04 上安装 DEB 并打开 PNG/JPEG/TIFF；确认 `Depends` 中的 glibc、`libgl1`/`libegl1` 等系统库由 apt 满足，不出现库不匹配。

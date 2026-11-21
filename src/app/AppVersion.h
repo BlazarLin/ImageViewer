@@ -9,7 +9,7 @@ namespace app {
 
 inline QString version()
 {
-    return QString("2.5.2");
+    return QString("2.5.3");
 }
 
 } // namespace app
