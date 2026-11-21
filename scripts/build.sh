@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Linux(Ubuntu) 构建/测试脚本，与 scripts/build.ps1 对应。
-# 依赖（Ubuntu 20.04+，Qt 5.15 可获得完整的边缘缩放/拖动体验）：
-#   sudo apt install build-essential cmake qtbase5-dev libqt5svg5-dev \
-#                    libqt5concurrent5 libqt5opengl5-desktop-dev \
-#                    qttools5-dev qttools5-dev-tools libopencv-dev
+# 依赖（Ubuntu 22.04+ / 24.04，Qt 5.15 可获得完整的边缘缩放/拖动体验）：
+#   必需：build-essential cmake qtbase5-dev libopencv-dev
+#   可选：libqt5svg5-dev（QtSvg）、qttools5-dev（lrelease 编译翻译）
+#   一键安装：./scripts/install-deps.sh
 # 用法：
 #   ./scripts/build.sh              # Release 构建
 #   ./scripts/build.sh Debug        # Debug 构建
@@ -31,7 +31,15 @@ cmake --build "$BUILD_DIR" --config "$CFG" --parallel "$(nproc)"
 
 if $RUN_TESTS; then
     echo "==> 运行核心测试"
-    "$BUILD_DIR/ImageViewerCoreTests"
+    # 桌面测试用例会创建真实窗口；无显示服务（CI/SSH）时改用 offscreen 平台。
+    if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+        echo "    未检测到显示服务，使用 QT_QPA_PLATFORM=offscreen"
+        QT_QPA_PLATFORM=offscreen "$BUILD_DIR/ImageViewerCoreTests"
+    else
+        "$BUILD_DIR/ImageViewerCoreTests"
+    fi
 fi
 
 echo "==> 完成：$BUILD_DIR/ImageViewer"
+echo "    启动：$BUILD_DIR/ImageViewer [图片路径]"
+echo "    打包：./scripts/package-deb.sh -b $BUILD_DIR"
