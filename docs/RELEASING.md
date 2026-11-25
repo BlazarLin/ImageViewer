@@ -9,7 +9,8 @@
 3. 打包：`./scripts/package-deb.sh -b build/linux -o dist`，版本号默认取 `src/app/AppVersion.h`，产物为 `ImageViewer-<版本>-linux-x64.deb` 与 `.sha256`。脚本会递归收集除 glibc/显卡 ABI 库以外的全部依赖、校验 `ldd` 无 `not found`，并用 xvfb（或 offscreen）启动打包后的主程序做冒烟验证。
 4. 本机安装验收：`./scripts/install-local.sh` 完成打包、`dpkg -i` 安装和 GNOME 快捷启动栏固定；确认应用列表图标、启动栏图标、`ImageViewer <图片路径>` 命令行入口均可用，中文路径与 fcitx5/ibus 中文输入正常，TIFF/WebP 可打开。
 5. 干净机验收：在未安装 Qt/OpenCV 的 Ubuntu 22.04 上安装 DEB 并打开 PNG/JPEG/TIFF；确认 `Depends` 中的 glibc、`libgl1`/`libegl1` 等系统库由 apt 满足，不出现库不匹配。
-6. CI：`linux.yml` 在 `ubuntu-22.04` 上构建测试并打包（保证 glibc 2.35 兼容基线），标签推送后将 DEB 上传到与标签同名的 Release；本地在 24.04 构建的包不能用做 22.04 兼容性依据。
+6. CI：`linux.yml` 默认在 `ubuntu-22.04` 上构建测试并打包（glibc 2.35 兼容基线，产物同时可在 24.04 运行），标签推送后将 DEB 上传到与标签同名的 Release；本地在 24.04 构建的包不能用作 22.04 兼容性依据。若确需与开发机一致的 24.04 产物，在 Actions 里手动 `Run workflow` 并选择 `ubuntu_version=24.04`——该产物只能在 24.04+ 运行，不要作为正式发布资产。
+7. 体积核对：DEB 约 60 MB（自包含 Qt5/OpenCV/ICU/X11 栈，已 strip + `xz -9`，并去掉了未使用的 QtNetwork/QtSvg）。若要临时缩小体积，可改用组件版 OpenCV（见 README “Ubuntu 构建、测试与打包”）；用 `opencv_world` 全模块构建时 `opencv_world` 会连带 GTK/FFmpeg，包体约 82 MB。
 
 ## Windows 构建与验收
 

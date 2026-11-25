@@ -1,5 +1,14 @@
 ﻿# 更新记录
 
+## 2.5.4 — 2026-11-21
+
+### 优化
+
+- 去掉实际未使用的 QtNetwork 与 QtSvg（项目内没有 QNetwork/QLocalSocket/QSvg 调用），打包时同时跳过 SVG 图标引擎与 SVG 图片插件，不再连带 SSL/krb5、Qt5Svg 等运行库。
+- DEB 打包瘦身：内置库统一 `strip --strip-unneeded`（发行版库本就是剥离的，本机自建 OpenCV 可省约 10 MB），主程序只剥调试段以保留符号表；改用 `xz -9` 最高压缩级别。本机 `opencv_world` 构建的包由 95.5 MB 降到 82 MB。
+- Linux CI 默认仍以 `ubuntu-22.04`（glibc 2.35）为发布基线，产物可同时运行在 22.04/24.04；新增 `workflow_dispatch` 输入 `ubuntu_version`，可选 24.04 生成与开发机一致的手动验证包（该产物不用于正式发布），并记录构建基线的 glibc 版本。
+- README/RELEASING 补充 DEB 体积构成、Windows 与 Linux 体积差异原因，以及用系统组件版 OpenCV 得到更小包体的方法。
+
 ## 2.5.3 — 2026-11-21
 
 ### 修复

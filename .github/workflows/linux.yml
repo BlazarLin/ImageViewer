@@ -6,6 +6,15 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      ubuntu_version:
+        description: "构建基线（22.04 兼容面最广；24.04 产物不能在 22.04 上运行）"
+        required: false
+        default: "22.04"
+        type: choice
+        options:
+          - "22.04"
+          - "24.04"
 
 permissions:
   # 标签发布时需要向 Release 上传 Ubuntu 包。
@@ -13,7 +22,9 @@ permissions:
 
 jobs:
   linux:
-    runs-on: ubuntu-22.04
+    # 默认 22.04：glibc 2.35 基线可同时覆盖 22.04/24.04，反向不成立。
+    # 需要与开发机一致的 24.04 产物时，用 workflow_dispatch 选 24.04 手动跑一次。
+    runs-on: ubuntu-${{ github.event.inputs.ubuntu_version || '22.04' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -27,6 +38,11 @@ jobs:
             libqt5concurrent5 libqt5opengl5-desktop-dev \
             qttools5-dev qttools5-dev-tools libopencv-dev \
             qt5-image-formats-plugins patchelf xvfb
+      - name: 记录构建基线
+        run: |
+          # DEB 的 glibc 下限由 runner 决定，发布后需按此行核对最低系统版本。
+          lsb_release -ds || true
+          ldd --version | head -1
       - name: 配置
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: 构建

@@ -5,7 +5,7 @@
 [![Windows 构建与测试](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml/badge.svg)](https://github.com/BlazarLin/ImageViewer/actions/workflows/windows.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**当前版本：v2.5.3。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.3/ImageViewer-2.5.3-windows-x64.zip) · [下载 Windows 安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.3/ImageViewer-2.5.3-windows-x64-setup.exe) · [下载 Ubuntu DEB](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.3/ImageViewer-2.5.3-linux-x64.deb) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.5.3)。Windows 安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。Ubuntu DEB 内置 Qt/OpenCV 运行库（显示/显卡库仍用系统版本，以便匹配显卡驱动），目标机器无需预装 Qt/OpenCV，安装后自动创建桌面菜单项；要求 Ubuntu 22.04 及以上（glibc >= 2.35）。
+**当前版本：v2.5.4。** [下载 Windows x64 便携版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.4/ImageViewer-2.5.4-windows-x64.zip) · [下载 Windows 安装版](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.4/ImageViewer-2.5.4-windows-x64-setup.exe) · [下载 Ubuntu DEB](https://github.com/BlazarLin/ImageViewer/releases/download/v2.5.4/ImageViewer-2.5.4-linux-x64.deb) · [版本说明与 SHA-256](https://github.com/BlazarLin/ImageViewer/releases/tag/v2.5.4)。Windows 安装版默认按当前用户安装（无需管理员），自动创建开始菜单/桌面快捷方式；便携版解压后即可运行，两者均无需安装 Qt/OpenCV。Ubuntu DEB 内置 Qt/OpenCV 运行库（显示/显卡库仍用系统版本，以便匹配显卡驱动），目标机器无需预装 Qt/OpenCV，安装后自动创建桌面菜单项；要求 Ubuntu 22.04 及以上（glibc >= 2.35）。
 
 ![小缩略图与统一分析面板](docs/images/260908首版界面.png)
 
@@ -110,7 +110,23 @@ OpenCV 使用系统安装（按 core/imgproc/imgcodecs 组件链接）。若本�
 ./scripts/install-local.sh --uninstall            # 卸载并从启动栏移除
 ```
 
-DEB 安装布局：主程序 `/opt/ImageViewer/ImageViewer`，内置库 `lib/`，Qt 插件 `plugins/`，翻译 `translations/`，命令行入口 `/usr/bin/ImageViewer`，桌面项 `/usr/share/applications/ImageViewer.desktop`。体积随构建机的 OpenCV 构建方式变化：`opencv_world` 全模块构建约 96 MB，系统 `libopencv-dev` 组件构建更小。
+DEB 安装布局：主程序 `/opt/ImageViewer/ImageViewer`，内置库 `lib/`，Qt 插件 `plugins/`，翻译 `translations/`，命令行入口 `/usr/bin/ImageViewer`，桌面项 `/usr/share/applications/ImageViewer.desktop`。
+
+体积与“必须随包携带什么”有关，实测参考：
+
+| 构建环境 | DEB 体积 | 说明 |
+| --- | --- | --- |
+| 官方发布（CI，ubuntu-22.04 + 发行版 `libopencv-dev`，仅 core/imgproc/imgcodecs） | 约 60 MB | 自包含 Qt5 + OpenCV + ICU + X11 栈 |
+| 本机开发目录（`/usr/local` 的 `opencv_world` 全模块构建） | 约 82 MB | `opencv_world` 连带 GTK/FFmpeg 等依赖 |
+
+包内已不包含未使用的 QtNetwork/QtSvg，内置库统一 `strip` 并用 `xz -9` 压缩。Linux 无法压到 Windows 便携包（约 20 MB）的量级：Windows 版 Qt 不依赖 ICU/glib/X11/XCB，也没有整套 X 客户端库要随包携带；而 Linux 版必须把它们打进包里才能做到“目标机不装任何依赖”。若本机希望得到更接近发布包的体积，可改用系统组件版 OpenCV：
+
+```bash
+sudo apt install libopencv-dev
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON \
+      -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4
+./scripts/package-deb.sh -b build/linux -o dist
+```
 
 ### CMake 构建与测试
 
