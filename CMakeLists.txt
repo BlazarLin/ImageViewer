@@ -36,12 +36,14 @@ endif()
 # Svg 与 LinguistTools 为可选组件：当前代码未直接使用 QtSvg（应用图标由 QPainter 绘制），
 # 缺少 libqt5svg5-dev 也能构建；缺少 qttools5-dev(LinguistTools) 时跳过 .qm 编译，
 # 界面回退为英文原文，不影响功能。
+# 仅保留实际使用的模块：项目没有使用 QtNetwork（无 QNetwork/QLocalSocket 等），
+# 也不链接 QtSvg（图标由 QPainter 绘制），少一个模块就少一整串随包运行库
+# （libQt5Network 会带入 SSL/krb5 等）。Svg 仍按可选探测，供未来使用。
 find_package(Qt5 5.14 REQUIRED COMPONENTS
     Core
     Gui
     Widgets
     Concurrent
-    Network
     OPTIONAL_COMPONENTS Svg LinguistTools
 )
 
@@ -173,22 +175,17 @@ target_link_libraries(ImageViewer PRIVATE
     Qt5::Gui
     Qt5::Widgets
     Qt5::Concurrent
-    Qt5::Network
     opencv_world
 )
-if(TARGET Qt5::Svg)
-    target_link_libraries(ImageViewer PRIVATE Qt5::Svg)
-endif()
 
 # Windows 需要随 EXE 部署的 Qt/OpenCV 运行库清单（Linux 使用系统库，无需拷贝）。
+# 不含 QtSvg：应用未链接该模块；如需恢复 SVG 支持，在此加入 $<TARGET_FILE:Qt5::Svg>
+# 并链接 Qt5::Svg。
 set(APP_RUNTIME_LIBS
     $<TARGET_FILE:Qt5::Core> $<TARGET_FILE:Qt5::Gui>
-    $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent> $<TARGET_FILE:Qt5::Network>
+    $<TARGET_FILE:Qt5::Widgets> $<TARGET_FILE:Qt5::Concurrent>
     $<TARGET_FILE:opencv_world>
 )
-if(TARGET Qt5::Svg)
-    list(APPEND APP_RUNTIME_LIBS $<TARGET_FILE:Qt5::Svg>)
-endif()
 
 if(APP_TRANSLATIONS)
     add_custom_command(TARGET ImageViewer POST_BUILD
@@ -246,7 +243,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${OpenCV_INCLUDE_DIRS}
     )
-    target_link_libraries(ImageViewerCoreTests PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Concurrent Qt5::Network opencv_world)
+    target_link_libraries(ImageViewerCoreTests PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Concurrent opencv_world)
     if(WIN32)
         add_custom_command(TARGET ImageViewerCoreTests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different

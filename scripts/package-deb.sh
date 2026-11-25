@@ -125,6 +125,8 @@ collect_dependencies() {
             # 每个内置库都要有自己的 RUNPATH=$ORIGIN：DT_RUNPATH 不传递给传递依赖，
             # 不在每个库上设置时，Qt/OpenCV 的二级依赖仍会去系统路径找。
             patchelf --set-rpath '$ORIGIN' "$STAGE_LIB_DIR/$real_base"
+            # 发行版库通常已剥离；本机自建 OpenCV/Qt 带符号，剥离可减体积。
+            strip --strip-unneeded "$STAGE_LIB_DIR/$real_base" 2>/dev/null || true
             collect_dependencies "$STAGE_LIB_DIR/$real_base"
         fi
         # 关键：ELF 查找文件名用的是 SONAME（如 libopencv_world.so.414、
@@ -185,6 +187,8 @@ mkdir -p "$STAGE/DEBIAN" "$STAGE_LIB_DIR" \
 # ---- 主程序与运行库 ----
 install -m 755 "$BINARY" "$STAGE_APP_DIR/ImageViewer"
 patchelf --set-rpath '$ORIGIN/lib' "$STAGE_APP_DIR/ImageViewer"
+# 只剥离调试段（-g 产生的 DWARF），保留符号表，现场 gdb/backtrace 仍可读函数名。
+strip --strip-debug "$STAGE_APP_DIR/ImageViewer" 2>/dev/null || true
 collect_dependencies "$STAGE_APP_DIR/ImageViewer"
 
 # ---- Qt 插件：平台/图片格式/输入法/GL 集成，随包提供并由 qt.conf 指向 ----
@@ -192,6 +196,14 @@ collect_dependencies "$STAGE_APP_DIR/ImageViewer"
 # 自动回退到 Fusion，不影响使用。
 QT_PLUGINS_DIR="$(qmake -query QT_INSTALL_PLUGINS)"
 PLUGIN_GROUPS="platforms imageformats platforminputcontexts xcbglintegrations iconengines styles"
+# SVG 图标引擎与 SVG 图片插件不打包：应用未链接 QtSvg，打包它们只会额外带入
+# libQt5Svg 及依赖。其他图片格式（JPEG/PNG/TIFF/WebP/TGA…）照常内置。
+is_skipped_plugin() {
+    case "$(basename "$1")" in
+        libqsvg.so|libqsvgicon.so) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 for plugin_group in $PLUGIN_GROUPS; do
     if [[ ! -d "$QT_PLUGINS_DIR/$plugin_group" ]]; then
         echo "跳过不存在的插件目录: $plugin_group" >&2
@@ -201,9 +213,14 @@ for plugin_group in $PLUGIN_GROUPS; do
     cp -L "$QT_PLUGINS_DIR/$plugin_group/"*.so* "$STAGE_APP_DIR/plugins/$plugin_group/" 2>/dev/null || true
     for plugin in "$STAGE_APP_DIR/plugins/$plugin_group/"*; do
         [[ -e "$plugin" ]] || continue
+        if is_skipped_plugin "$plugin"; then
+            rm -f "$plugin"
+            continue
+        fi
         # 插件在 plugins/<group>/ 下，距 lib/ 是两级，必须是 $ORIGIN/../../lib。
         patchelf --set-rpath '$ORIGIN/../../lib' "$plugin"
         chmod 644 "$plugin"
+        strip --strip-unneeded "$plugin" 2>/dev/null || true
         collect_dependencies "$plugin"
     done
 done
@@ -358,7 +375,8 @@ EOF
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT="$OUTPUT_DIR/ImageViewer-$VERSION-linux-x64.deb"
-dpkg-deb --build --root-owner-group "$STAGE" "$OUTPUT"
+# xz -9：Qt/ICU/OpenCV 体积大且重复模式多，最高压缩级别可再省几个百分点。
+dpkg-deb --build --root-owner-group -Zxz -z9 "$STAGE" "$OUTPUT"
 ( cd "$OUTPUT_DIR" && sha256sum "$(basename "$OUTPUT")" > "$(basename "$OUTPUT").sha256" )
 echo "已生成: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
 echo "校验文件: $OUTPUT.sha256"
